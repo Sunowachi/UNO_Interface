@@ -1,0 +1,246 @@
+body {
+    font-family: sans-serif;
+    background: #f4f4f4;
+    padding: 20px;
+}
+
+h1 {
+    color: #333;
+}
+
+#mainLayout {
+    width: 1100px;
+    margin: 0 auto;
+}
+
+.row {
+    display: flex;
+    gap: 50px;
+    align-items: flex-start;
+}
+
+canvas {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+
+/* ===== Layout ===== */
+
+.charts-area {
+    width: 900px;
+}
+
+.charts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.time-range-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.time-input {
+    width: 60px;
+}
+
+.card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    padding: 20px;
+}
+
+#sensorPanel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+/* ===== Buttons & inputs ===== */
+
+.btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #f0f0f0;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: #4caf50;
+    color: white;
+    border-color: #4caf50;
+}
+
+.btn-danger {
+    background: #f44336;
+    color: white;
+    border-color: #f44336;
+}
+
+.btn-full {
+    width: 100%;
+}
+
+.input-full {
+    width: 100%;
+}
+
+.margin-top {
+    margin-top: 15px;
+}
+
+.margin-right-auto {
+    margin-right: auto;
+}
+
+/* ===== Lists ===== */
+
+.list-reset {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* ===== Modals ===== */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.modal-backdrop.show {
+    display: flex;
+}
+
+.modal {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    width: 400px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.3);
+}
+
+.modal-footer {
+    margin-top: 15px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.var-settings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* ===== Login ===== */
+
+.login-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+}
+
+.login-backdrop.show {
+    display: flex;
+}
+
+.login-box {
+    background: #222;
+    padding: 20px;
+    border-radius: 8px;
+    width: 260px;
+    color: white;
+}
+
+.login-box input {
+    width: 94%;
+    margin-bottom: 10px;
+    padding: 6px;
+}
+
+/* ===== Alerts ===== */
+
+@keyframes pulse-blue {
+    0% { box-shadow: inset 0 0 0 rgba(50,150,255,0); }
+    50% { box-shadow: inset 0 0 12px rgba(33,150,243,0.35); }
+    100% { box-shadow: inset 0 0 0 rgba(33,150,243,0); }
+}
+
+@keyframes pulse-yellow {
+    0% { box-shadow: inset 0 0 0 rgba(255,200,0,0); }
+    50% { box-shadow: inset 0 0 14px rgba(255,193,7,0.4); }
+    100% { box-shadow: inset 0 0 0 rgba(255,193,7,0); }
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: inset 0 0 0 rgba(255,0,0,0); }
+    50% { box-shadow: inset 0 0 18px rgba(244,67,54,0.45); }
+    100% { box-shadow: inset 0 0 0 rgba(244,67,54,0); }
+}
+
+.blink-blue {
+    background: #f5faff !important;
+    animation: pulse-blue 2.2s ease-in-out infinite;
+}
+
+.blink-yellow {
+    background: #fffbea !important;
+    animation: pulse-yellow 1.8s ease-in-out infinite;
+}
+
+.blink-red {
+    background: #fff5f5 !important;
+    animation: pulse-red 1.4s ease-in-out infinite;
+}
+
+/* ===== Toast ===== */
+
+.toast {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background: #4caf50;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    font-size: 15px;
+    z-index: 2000;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.5s ease;
+}
+
+.toast.toast-show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ===== Device panel ===== */
+
+.device-panel {
+    margin-top: 40px;
+    background: #f0f0f0;
+    padding: 10px;
+    border-top: 1px solid #ddd;
+}
