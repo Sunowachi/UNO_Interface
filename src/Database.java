@@ -8,33 +8,50 @@ public class Database {
     public static final String GREEN = "\u001B[32m";
     public static final String YELLOW = "\u001B[33m";
 
+    // === НАСТРОЙКИ POSTGRESQL ===
+    private static final String DB_URL =
+            "jdbc:postgresql://localhost:8080/sensors";
+    private static final String DB_USER = "postgres";
+    private static final String DB_PASS = "1";
+
     static Connection db;
+
+    /* ===== USER MODEL ===== */
 
     static class User {
         final String passwordHash;
         final String role;
+
         User(String p, String r) {
             passwordHash = p;
             role = r;
         }
     }
 
+    /* ===== INIT ===== */
+
     static void init() {
         try {
-            Class.forName("org.sqlite.JDBC");
-            db = DriverManager.getConnection("jdbc:sqlite:sensors.db");
+            Class.forName("org.postgresql.Driver");
 
-            try (Statement st = db.createStatement()) {
-                st.execute("PRAGMA foreign_keys = ON");
-                st.execute("PRAGMA journal_mode = WAL");
-                st.execute("PRAGMA busy_timeout = 5000");
-            }
+            db = DriverManager.getConnection(
+                    DB_URL,
+                    DB_USER,
+                    DB_PASS
+            );
+
+            db.setAutoCommit(true);
 
             initTables();
+
+            System.out.println(GREEN + "✔ Connected to PostgreSQL" + WHITE);
+
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Database init failed", e);
         }
     }
+
+    /* ===== TABLES ===== */
 
     static void initTables() throws SQLException {
         try (Statement st = db.createStatement()) {
@@ -44,28 +61,32 @@ public class Database {
                     username TEXT PRIMARY KEY,
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL
-                )""");
+                )
+            """);
 
             st.execute("""
                 CREATE TABLE IF NOT EXISTS history(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id BIGSERIAL PRIMARY KEY,
                     sensor_id TEXT NOT NULL,
                     var_name TEXT NOT NULL,
-                    ts INTEGER NOT NULL,
-                    value REAL NOT NULL
-                )""");
+                    ts BIGINT NOT NULL,
+                    value DOUBLE PRECISION NOT NULL
+                )
+            """);
 
             st.execute("""
                 CREATE INDEX IF NOT EXISTS idx_history_ts
                 ON history(ts)
-                """);
+            """);
 
             st.execute("""
                 CREATE INDEX IF NOT EXISTS idx_history_sensor_var
                 ON history(sensor_id, var_name)
-                """);
+            """);
         }
     }
+
+    /* ===== USERS ===== */
 
     static User findUser(String username) {
         if (username == null || username.length() > 64) return null;
@@ -74,14 +95,21 @@ public class Database {
                 "SELECT password_hash, role FROM users WHERE username=?")) {
 
             ps.setString(1, username);
+
             ResultSet rs = ps.executeQuery();
             if (!rs.next()) return null;
 
-            return new User(rs.getString(1), rs.getString(2));
+            return new User(
+                    rs.getString("password_hash"),
+                    rs.getString("role")
+            );
+
         } catch (Exception e) {
             return null;
         }
     }
+
+    /* ===== DEFAULT DEVELOPER ===== */
 
     static void ensureDefaultDeveloper() {
 
