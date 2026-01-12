@@ -22,6 +22,15 @@ public class DataStore {
 
         if ("POST".equalsIgnoreCase(method)) {
 
+            String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
+
+            if (sensorId != null) {
+                // === SENSOR POST ===
+                handlePostData(ex);
+                return;
+            }
+
+            // === USER POST ===
             Security.Session s = Security.peekSession(ex);
             if (s != null) {
                 if (!Security.checkCsrf(ex, s)) return;
@@ -32,7 +41,7 @@ public class DataStore {
                 return;
             }
 
-            handlePostData(ex, ip);
+            HttpUtil.sendError(ex, 400, "invalid_post_target");
             return;
         }
 
@@ -76,9 +85,9 @@ public class DataStore {
         });
     }
 
-    /* ====== internals ====== */
+    /* ====== SENSOR POST ====== */
 
-    private static void handlePostData(HttpExchange ex, String ip) throws IOException {
+    private static void handlePostData(HttpExchange ex) throws IOException {
 
         int created = 0;
 
@@ -110,8 +119,8 @@ public class DataStore {
         }
 
         String body = new String(bodyBytes).trim();
-
         body = body.replaceAll("[{}\" ]", "");
+
         for (String pair : body.split(",")) {
             if (!pair.contains(":")) continue;
             String[] kv = pair.split(":", 2);
@@ -229,7 +238,6 @@ public class DataStore {
     static class SensorCache {
 
         volatile long lastSeen;
-
         final Deque<Point> points = new ArrayDeque<>();
 
         synchronized void add(double v, long t) {
