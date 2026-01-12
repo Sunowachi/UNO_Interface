@@ -1,15 +1,19 @@
 import java.sql.*;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public class Database {
 
-    public static final String WHITE = "\u001B[0m";
-    public static final String RED = "\u001B[31m";
-    public static final String GREEN = "\u001B[32m";
+    /* ========= CONSOLE ========= */
+
+    public static final String WHITE  = "\u001B[0m";
+    public static final String RED    = "\u001B[31m";
+    public static final String GREEN  = "\u001B[32m";
     public static final String YELLOW = "\u001B[33m";
 
-    // ===== POSTGRESQL CONFIG =====
+    /* ========= POSTGRES ========= */
+
     private static final String DB_URL =
             System.getenv().getOrDefault(
                     "DB_URL",
@@ -22,11 +26,14 @@ public class Database {
     private static final String DB_PASS =
             System.getenv().getOrDefault("DB_PASS", "1");
 
-    // ===== POOL CONFIG =====
+    /* ========= POOL ========= */
+
     private static final int POOL_SIZE = 10;
+    private static final int BORROW_TIMEOUT_MS = 3000;
+
     private static ArrayBlockingQueue<Connection> pool;
 
-    /* ===== USER MODEL ===== */
+    /* ========= USER MODEL ========= */
 
     static class User {
         final String passwordHash;
@@ -38,27 +45,26 @@ public class Database {
         }
     }
 
-    /* ===== INIT ===== */
+    /* ========= INIT ========= */
 
     static void init() {
         try {
             Class.forName("org.postgresql.Driver");
 
             pool = new ArrayBlockingQueue<>(POOL_SIZE);
+
             for (int i = 0; i < POOL_SIZE; i++) {
                 pool.add(createConnection());
             }
 
-            Connection c = borrow();
-            try (Statement st = c.createStatement()) {
+            try (Connection c = borrow();
+                 Statement st = c.createStatement()) {
                 initTables(st);
-            } finally {
-                release(c);
             }
 
             System.out.println(GREEN +
-                    "✔ PostgreSQL connected (pool=" + POOL_SIZE + ")"
-                    + WHITE);
+                    "✔ PostgreSQL connected (pool=" + POOL_SIZE + ")" +
+                    WHITE);
 
         } catch (Exception e) {
             throw new RuntimeException("Database init failed", e);
@@ -73,11 +79,15 @@ public class Database {
 
     static Connection borrow() {
         try {
-            Connection c = pool.take();
+            Connection c = pool.poll(BORROW_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (c == null)
+                throw new SQLException("DB pool exhausted");
+
             if (c.isClosed() || !c.isValid(2)) {
                 return createConnection();
             }
             return c;
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to borrow DB connection", e);
         }
@@ -86,11 +96,13 @@ public class Database {
     static void release(Connection c) {
         if (c == null) return;
         try {
-            if (!c.isClosed()) pool.offer(c);
+            if (!c.isClosed() && !pool.offer(c)) {
+                c.close();
+            }
         } catch (SQLException ignored) {}
     }
 
-    /* ===== TABLES ===== */
+    /* ========= TABLES ========= */
 
     private static void initTables(Statement st) throws SQLException {
 
@@ -98,15 +110,16 @@ public class Database {
             CREATE TABLE IF NOT EXISTS users(
                 username TEXT PRIMARY KEY,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL
+                role TEXT NOT NULL CHECK (role IN ('developer','admin','observer','worker'))
             )
         """);
 
         st.execute("""
             CREATE TABLE IF NOT EXISTS sensors(
                 sensor_id TEXT PRIMARY KEY,
-                token TEXT NOT NULL,
-                created_at BIGINT NOT NULL
+                token_hash TEXT NOT NULL,
+                created_at BIGINT NOT NULL,
+                last_seen BIGINT
             )
         """);
 
@@ -116,66 +129,69 @@ public class Database {
                 sensor_id TEXT NOT NULL,
                 var_name TEXT NOT NULL,
                 ts BIGINT NOT NULL,
-                value DOUBLE PRECISION NOT NULL
+                value DOUBLE PRECISION NOT NULL CHECK (value = value)
             )
         """);
 
         st.execute("""
-            CREATE INDEX IF NOT EXISTS idx_history_ts
-            ON history(ts)
+            CREATE TABLE IF NOT EXISTS failed_logins(
+                username TEXT NOT NULL,
+                ip TEXT NOT NULL,
+                count INT NOT NULL,
+                last_fail BIGINT NOT NULL,
+                blocked_until BIGINT NOT NULL,
+                PRIMARY KEY (username, ip)
+            )
         """);
 
-        st.execute("""
-            CREATE INDEX IF NOT EXISTS idx_history_sensor_var
-            ON history(sensor_id, var_name)
-        """);
+        st.execute("CREATE INDEX IF NOT EXISTS idx_history_ts ON history(ts)");
+        st.execute("CREATE INDEX IF NOT EXISTS idx_history_sensor_var ON history(sensor_id, var_name)");
+        st.execute("CREATE INDEX IF NOT EXISTS idx_failed_logins ON failed_logins(username, ip)");
     }
 
-    /* ===== USERS ===== */
+    /* ========= USERS ========= */
 
     static User findUser(String username) {
         if (username == null || username.length() > 64) return null;
 
-        Connection c = null;
-        try {
-            c = borrow();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT password_hash, role FROM users WHERE username=?")) {
-                ps.setString(1, username);
-                ResultSet rs = ps.executeQuery();
-                if (!rs.next()) return null;
-                return new User(
-                        rs.getString("password_hash"),
-                        rs.getString("role")
-                );
-            }
+        try (Connection c = borrow();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT password_hash, role FROM users WHERE username=?")) {
+
+            ps.setString(1, username);
+            ResultSet rs = ps.executeQuery();
+            if (!rs.next()) return null;
+
+            return new User(
+                    rs.getString(1),
+                    rs.getString(2)
+            );
+
         } catch (Exception e) {
             return null;
-        } finally {
-            release(c);
         }
     }
 
+    /* ========= DEFAULT DEVELOPER ========= */
+
     static void ensureDefaultDeveloper() {
+
         if (findUser("developer") != null) return;
 
         String password = UUID.randomUUID().toString();
         String hash = Security.hashPassword(password);
 
-        Connection c = null;
-        try {
-            c = borrow();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
-                ps.setString(1, "developer");
-                ps.setString(2, hash);
-                ps.setString(3, "developer");
-                ps.executeUpdate();
-            }
+        try (Connection c = borrow();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
+
+            ps.setString(1, "developer");
+            ps.setString(2, hash);
+            ps.setString(3, "developer");
+            ps.executeUpdate();
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to create developer account", e);
-        } finally {
-            release(c);
         }
 
         System.out.println(YELLOW + """
@@ -185,7 +201,7 @@ public class Database {
         🔑 Username: developer
         🔑 Password: """ + RED + password + YELLOW + """
         
-        ⚠️ СОХРАНИТЕ ПАРОЛЬ — он больше не покажется!
+        ⚠️ СОХРАНИТЕ ПАРОЛЬ — он больше не будет показан!
         ===========================================================
         """ + WHITE);
     }
