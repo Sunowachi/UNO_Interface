@@ -62,6 +62,38 @@
       "vars": "",
       "deleted": false,
       "varSettings": []
+    },
+    {
+      "id": "2",
+      "name": "Датчик 2",
+      "vars": "temperature, humidity",
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "temperature",
+          "label": "temperature",
+          "color": "#ff0000",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "humidity",
+          "label": "humidity",
+          "color": "#0000ff",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        }
+      ]
     }
   ]
 }
