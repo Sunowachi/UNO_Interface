@@ -25,12 +25,10 @@ public class DataStore {
             String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
 
             if (sensorId != null) {
-                // === SENSOR POST ===
-                handlePostData(ex);
+                handleSensorPost(ex);
                 return;
             }
 
-            // === USER POST ===
             Security.Session s = Security.peekSession(ex);
             if (s != null) {
                 if (!Security.checkCsrf(ex, s)) return;
@@ -66,30 +64,9 @@ public class DataStore {
         ex.sendResponseHeaders(405, -1);
     }
 
-    static void cleanupCache() {
-        cache.entrySet().removeIf(e -> !e.getValue().isAlive());
-        try (var ps = Database.db.prepareStatement(
-                "DELETE FROM history WHERE ts < ?")) {
-
-            // История старше 7 дней удаляется
-            ps.setLong(1, System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000);
-            ps.executeUpdate();
-        } catch (Exception ignored) {}
-    }
-
-    static void warmupCacheFromDb() {
-        loadFromDb(0).forEach((k, pts) -> {
-            SensorCache c = new SensorCache();
-            for (Point p : pts) c.add(p.value, p.ts);
-            cache.put(k, c);
-        });
-    }
-
     /* ====== SENSOR POST ====== */
 
-    private static void handlePostData(HttpExchange ex) throws IOException {
-
-        int created = 0;
+    private static void handleSensorPost(HttpExchange ex) throws IOException {
 
         if (ex.getRequestHeaders().getFirst("Content-Type") == null ||
                 !ex.getRequestHeaders().getFirst("Content-Type")
@@ -100,6 +77,29 @@ public class DataStore {
         }
 
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
+
+        /* === SENSOR REGISTRATION === */
+
+        String regKey = ex.getRequestHeaders().getFirst("X-Sensor-Register");
+        if (regKey != null) {
+
+            if (!Security.checkSensorRegisterKey(regKey)) {
+                HttpUtil.sendError(ex, 403, "invalid_register_key");
+                return;
+            }
+
+            if (Security.isSensorRegistered(sensorId)) {
+                HttpUtil.sendError(ex, 409, "sensor_exists");
+                return;
+            }
+
+            String token = Security.registerSensor(sensorId);
+            HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
+            return;
+        }
+
+        /* === NORMAL SENSOR DATA === */
+
         String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
         if (sensorId == null || token == null) {
@@ -120,6 +120,8 @@ public class DataStore {
 
         String body = new String(bodyBytes).trim();
         body = body.replaceAll("[{}\" ]", "");
+
+        int created = 0;
 
         for (String pair : body.split(",")) {
             if (!pair.contains(":")) continue;
@@ -145,6 +147,8 @@ public class DataStore {
         HttpUtil.sendJson(ex, "{\"status\":\"OK\"}");
     }
 
+    /* ====== STORAGE ====== */
+
     private static void recordValue(String sensor, String var, double value) {
         long ts = System.currentTimeMillis();
         cache.computeIfAbsent(sensor + "_" + var,
@@ -163,7 +167,15 @@ public class DataStore {
         } catch (Exception ignored) {}
     }
 
-    /* ====== DB load ====== */
+    /* ====== DB LOAD ====== */
+
+    static void warmupCacheFromDb() {
+        loadFromDb(0).forEach((k, pts) -> {
+            SensorCache c = new SensorCache();
+            for (Point p : pts) c.add(p.value, p.ts);
+            cache.put(k, c);
+        });
+    }
 
     private static Map<String, List<Point>> loadFromDb(long fromTs) {
         Map<String, List<Point>> m = new LinkedHashMap<>();
@@ -233,10 +245,9 @@ public class DataStore {
         return "{\"values\":" + v + "],\"times\":" + t + "]}";
     }
 
-    /* ====== cache ====== */
+    /* ====== CACHE ====== */
 
     static class SensorCache {
-
         volatile long lastSeen;
         final Deque<Point> points = new ArrayDeque<>();
 
