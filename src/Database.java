@@ -11,9 +11,16 @@ public class Database {
 
     // ===== POSTGRESQL CONFIG =====
     private static final String DB_URL =
-            "jdbc:postgresql://localhost:8080/sensors";
-    private static final String DB_USER = "postgres";
-    private static final String DB_PASS = "1";
+            System.getenv().getOrDefault(
+                    "DB_URL",
+                    "jdbc:postgresql://localhost:8080/sensors"
+            );
+
+    private static final String DB_USER =
+            System.getenv().getOrDefault("DB_USER", "postgres");
+
+    private static final String DB_PASS =
+            System.getenv().getOrDefault("DB_PASS", "1");
 
     // ===== POOL CONFIG =====
     private static final int POOL_SIZE = 10;
@@ -40,17 +47,15 @@ public class Database {
             pool = new ArrayBlockingQueue<>(POOL_SIZE);
 
             for (int i = 0; i < POOL_SIZE; i++) {
-                Connection c = DriverManager.getConnection(
-                        DB_URL, DB_USER, DB_PASS
-                );
-                c.setAutoCommit(true);
-                pool.add(c);
+                pool.add(createConnection());
             }
 
-            try (Connection c = borrow();
-                 Statement st = c.createStatement()) {
-
-                initTables(st);
+            Connection c = borrow();
+            try {
+                try (Statement st = c.createStatement()) {
+                    initTables(st);
+                }
+            } finally {
                 release(c);
             }
 
@@ -63,14 +68,40 @@ public class Database {
         }
     }
 
+    /* ===== CONNECTION FACTORY ===== */
+
+    private static Connection createConnection() throws SQLException {
+        Connection c = DriverManager.getConnection(
+                DB_URL, DB_USER, DB_PASS
+        );
+        c.setAutoCommit(true);
+        return c;
+    }
+
     /* ===== POOL API ===== */
 
-    static Connection borrow() throws InterruptedException {
-        return pool.take();
+    static Connection borrow() {
+        try {
+            Connection c = pool.take();
+
+            if (c.isClosed() || !c.isValid(2)) {
+                return createConnection();
+            }
+
+            return c;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to borrow DB connection", e);
+        }
     }
 
     static void release(Connection c) {
-        if (c != null) pool.offer(c);
+        if (c == null) return;
+
+        try {
+            if (!c.isClosed()) {
+                pool.offer(c);
+            }
+        } catch (SQLException ignored) {}
     }
 
     /* ===== TABLES ===== */
