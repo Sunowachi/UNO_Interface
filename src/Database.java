@@ -11,15 +11,34 @@ public class Database {
 
     // ===== POSTGRESQL CONFIG =====
     private static final String DB_URL =
-            System.getenv().getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/sensors");
+            System.getenv().getOrDefault(
+                    "DB_URL",
+                    "jdbc:postgresql://localhost:5432/sensors"
+            );
+
     private static final String DB_USER =
             System.getenv().getOrDefault("DB_USER", "postgres");
+
     private static final String DB_PASS =
             System.getenv().getOrDefault("DB_PASS", "1");
 
     // ===== POOL CONFIG =====
     private static final int POOL_SIZE = 10;
     private static ArrayBlockingQueue<Connection> pool;
+
+    /* ===== USER MODEL ===== */
+
+    static class User {
+        final String passwordHash;
+        final String role;
+
+        User(String p, String r) {
+            passwordHash = p;
+            role = r;
+        }
+    }
+
+    /* ===== INIT ===== */
 
     static void init() {
         try {
@@ -30,18 +49,16 @@ public class Database {
                 pool.add(createConnection());
             }
 
-            try (Connection c = borrow();
-                 Statement st = c.createStatement()) {
-
+            Connection c = borrow();
+            try (Statement st = c.createStatement()) {
                 initTables(st);
-
             } finally {
-                // nothing
+                release(c);
             }
 
             System.out.println(GREEN +
-                    "✔ PostgreSQL connected (pool=" + POOL_SIZE + ")" +
-                    WHITE);
+                    "✔ PostgreSQL connected (pool=" + POOL_SIZE + ")"
+                    + WHITE);
 
         } catch (Exception e) {
             throw new RuntimeException("Database init failed", e);
@@ -73,6 +90,8 @@ public class Database {
         } catch (SQLException ignored) {}
     }
 
+    /* ===== TABLES ===== */
+
     private static void initTables(Statement st) throws SQLException {
 
         st.execute("""
@@ -87,8 +106,7 @@ public class Database {
             CREATE TABLE IF NOT EXISTS sensors(
                 sensor_id TEXT PRIMARY KEY,
                 token TEXT NOT NULL,
-                created_at BIGINT NOT NULL,
-                last_seen BIGINT
+                created_at BIGINT NOT NULL
             )
         """);
 
@@ -113,14 +131,7 @@ public class Database {
         """);
     }
 
-    static class User {
-        final String passwordHash;
-        final String role;
-        User(String p, String r) {
-            passwordHash = p;
-            role = r;
-        }
-    }
+    /* ===== USERS ===== */
 
     static User findUser(String username) {
         if (username == null || username.length() > 64) return null;
@@ -130,13 +141,12 @@ public class Database {
             c = borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT password_hash, role FROM users WHERE username=?")) {
-
                 ps.setString(1, username);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return null;
                 return new User(
-                        rs.getString(1),
-                        rs.getString(2)
+                        rs.getString("password_hash"),
+                        rs.getString("role")
                 );
             }
         } catch (Exception e) {
@@ -157,14 +167,13 @@ public class Database {
             c = borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
-
                 ps.setString(1, "developer");
                 ps.setString(2, hash);
                 ps.setString(3, "developer");
                 ps.executeUpdate();
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to create developer account", e);
         } finally {
             release(c);
         }
