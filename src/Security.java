@@ -28,14 +28,38 @@ public class Security {
             "worker", EnumSet.of(Permission.VIEW_DATA)
     );
 
-    static final Map<String, String> SENSOR_TOKENS = Map.of(
-            "sensor1", "CHANGE_ME",
-            "sensor2", "CHANGE_ME"
-    );
+    /* ==== SENSOR SECURITY ==== */
+
+    // мастер-ключ для первичной регистрации датчиков
+    // должен быть зашит в прошивку MCU
+    static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
+
+    // динамическое хранилище токенов датчиков
+    static final Map<String, String> SENSOR_TOKENS = new ConcurrentHashMap<>();
 
     static boolean checkSensorToken(String id, String token) {
+        if (id == null || token == null) return false;
         return token.equals(SENSOR_TOKENS.get(id));
     }
+
+    static boolean isSensorRegistered(String id) {
+        return SENSOR_TOKENS.containsKey(id);
+    }
+
+    static boolean checkSensorRegisterKey(String key) {
+        return SENSOR_REGISTER_KEY.equals(key);
+    }
+
+    static String registerSensor(String sensorId) {
+        if (sensorId == null || SENSOR_TOKENS.containsKey(sensorId)) {
+            return null;
+        }
+        String token = UUID.randomUUID().toString().replace("-", "");
+        SENSOR_TOKENS.put(sensorId, token);
+        return token;
+    }
+
+    /* ==== SESSION ==== */
 
     static class Session {
         final String username;
@@ -127,6 +151,8 @@ public class Security {
         return true;
     }
 
+    /* ==== PASSWORDS ==== */
+
     static String hashPassword(String password) {
         try {
             byte[] salt = new byte[16];
@@ -170,6 +196,8 @@ public class Security {
     static void ensureDefaultDeveloper() {
         Database.ensureDefaultDeveloper();
     }
+
+    /* ==== FAILED LOGIN ==== */
 
     static class FailedLogin {
         int count;
