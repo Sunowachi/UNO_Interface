@@ -10,11 +10,13 @@ import javax.crypto.spec.PBEKeySpec;
 
 public class Security {
 
-    static final long SESSION_TIMEOUT_MS = 1 * 60 * 1000; // Время сессии 1 минута без активности
-    static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000; // Максимум активной сессии
+    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;        // 10 минут без активности
+    static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
 
     static final int ITERATIONS = 120_000;
     static final int KEY_LENGTH = 256;
+
+    static final int MAX_SESSIONS = 1000;
 
     enum Permission {
         VIEW_DATA,
@@ -31,10 +33,9 @@ public class Security {
     /* ==== SENSOR SECURITY ==== */
 
     // мастер-ключ для первичной регистрации датчиков
-    // должен быть зашит в прошивку MCU
     static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
 
-    // динамическое хранилище токенов датчиков
+    // ВАЖНО: токены хранятся в памяти и теряются при рестарте сервера
     static final Map<String, String> SENSOR_TOKENS = new ConcurrentHashMap<>();
 
     static boolean checkSensorToken(String id, String token) {
@@ -129,7 +130,6 @@ public class Security {
 
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
         String token = ex.getRequestHeaders().getFirst("X-CSRF-Token");
-
         if (token == null || !token.equals(s.csrfToken)) {
             HttpUtil.sendError(ex, 403, "csrf");
             return false;
@@ -140,12 +140,12 @@ public class Security {
     static boolean require(Session s, HttpExchange ex, Permission p) throws IOException {
         if (!ROLE_PERMS.getOrDefault(s.role, Set.of()).contains(p)) {
             HttpUtil.sendError(ex, 403, "forbidden");
-            String ip = ex.getRemoteAddress()
-                    .getAddress()
-                    .getHostAddress();
 
-            Audit.log(s.username, "ACCESS_DENIED", ip);
-
+            Audit.log(
+                    s.username,
+                    "ACCESS_DENIED",
+                    ex.getRemoteAddress().getAddress().getHostAddress()
+            );
             return false;
         }
         return true;
@@ -231,21 +231,24 @@ public class Security {
     /* ==== handlers ==== */
 
     static void handleLogin(HttpExchange ex) throws IOException {
+
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        String ua = ex.getRequestHeaders().getFirst("User-Agent");
+        if (sessions.size() > MAX_SESSIONS) {
+            HttpUtil.sendError(ex, 503, "too_many_sessions");
+            return;
+        }
 
+        String ua = ex.getRequestHeaders().getFirst("User-Agent");
         if (ua == null || ua.matches(".*(Android|iPhone|Mobile).*")) {
             HttpUtil.sendError(ex, 403, "forbidden_device");
             return;
         }
 
-        String ip = ex.getRemoteAddress()
-                .getAddress()
-                .getHostAddress();
+        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
 
         var data = HttpUtil.parseJson(ex);
         var user = data.get("username");
@@ -254,10 +257,7 @@ public class Security {
 
         String key = user + "|" + ip;
         if (isBlocked(key)) {
-            ex.sendResponseHeaders(403, 0);
-            HttpUtil.sendJson(ex,
-                    "{\"error\":\"blocked\",\"message\":\"Too many failed attempts. Try again later.\"}"
-            );
+            HttpUtil.sendError(ex, 403, "blocked");
             return;
         }
 
@@ -268,13 +268,15 @@ public class Security {
             f.lastFail = System.currentTimeMillis();
 
             if (f.count >= 5) {
-                f.blockedUntil = System.currentTimeMillis() + 1 * 60 * 1000;   // Блокируем аккаунт на 1 минуту
+                f.blockedUntil = System.currentTimeMillis() + 60_000;
             }
 
             Audit.log(user, "LOGIN_FAIL", ip);
-            HttpUtil.sendJson(ex, "{\"error\":\"invalid_login\"}");
+            HttpUtil.sendError(ex, 401, "invalid_login");
             return;
         }
+
+        failed.remove(key);
 
         String oldSid = HttpUtil.getCookie(ex, "SESSION");
         if (oldSid != null) {
@@ -282,10 +284,7 @@ public class Security {
             HttpUtil.clearCookie(ex, "SESSION");
         }
 
-        failed.remove(key);
-
         String sid = UUID.randomUUID().toString();
-
         sessions.put(sid, new Session(user, dbUser.role, ua));
         HttpUtil.setCookie(ex, "SESSION", sid);
 
@@ -305,12 +304,15 @@ public class Security {
 
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
+
         String sid = HttpUtil.getCookie(ex, "SESSION");
         if (sid != null) sessions.remove(sid);
+
         HttpUtil.clearCookie(ex, "SESSION");
         HttpUtil.sendJson(ex, "{\"status\":\"logged_out\"}");
+
         Audit.log(
-                s != null ? s.username : "unknown",
+                s.username,
                 "LOGOUT",
                 ex.getRemoteAddress().getAddress().getHostAddress()
         );
@@ -333,36 +335,25 @@ public class Security {
 
     static void handleAuthPing(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
-        if (s == null) {
-            HttpUtil.sendError(ex, 401, "unauthorized");
-            return;
-        }
-        if (!checkCsrf(ex, s)) return;
+        if (s == null || !checkCsrf(ex, s)) return;
 
         long now = System.currentTimeMillis();
         if (now - s.lastPing < 1000) {
             HttpUtil.sendError(ex, 429, "too_many_requests");
             return;
         }
-        s.lastPing = now;
 
+        s.lastPing = now;
         s.touch();
         s.rotateCsrf();
+
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
     static void handleConfigLoad(HttpExchange ex) throws IOException {
-
         Session s = getSession(ex);
-        if (s == null) {
-            HttpUtil.sendError(ex, 401, "unauthorized");
-            return;
-        }
-
-        if (!checkCsrf(ex, s)) return;
-
+        if (s == null || !checkCsrf(ex, s)) return;
         if (!require(s, ex, Permission.VIEW_DATA)) return;
-
         HttpUtil.sendConfig(ex);
     }
 
@@ -370,7 +361,6 @@ public class Security {
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
         if (!require(s, ex, Permission.EDIT_CONFIG)) return;
-
         s.rotateCsrf();
         HttpUtil.saveConfig(ex);
     }
