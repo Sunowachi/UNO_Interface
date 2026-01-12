@@ -18,6 +18,13 @@ public class Database {
         try {
             Class.forName("org.sqlite.JDBC");
             db = DriverManager.getConnection("jdbc:sqlite:sensors.db");
+
+            try (Statement st = db.createStatement()) {
+                st.execute("PRAGMA foreign_keys = ON");
+                st.execute("PRAGMA journal_mode = WAL");
+                st.execute("PRAGMA busy_timeout = 5000");
+            }
+
             initTables();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -26,70 +33,82 @@ public class Database {
 
     static void initTables() throws SQLException {
         try (Statement st = db.createStatement()) {
+
             st.execute("""
                 CREATE TABLE IF NOT EXISTS users(
-                    username TEXT UNIQUE NOT NULL,
+                    username TEXT PRIMARY KEY,
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL
                 )""");
+
             st.execute("""
                 CREATE TABLE IF NOT EXISTS history(
-                    id INTEGER PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sensor_id TEXT NOT NULL,
                     var_name TEXT NOT NULL,
                     ts INTEGER NOT NULL,
                     value REAL NOT NULL
                 )""");
+
+            st.execute("""
+                CREATE INDEX IF NOT EXISTS idx_history_ts
+                ON history(ts)
+                """);
+
+            st.execute("""
+                CREATE INDEX IF NOT EXISTS idx_history_sensor_var
+                ON history(sensor_id, var_name)
+                """);
         }
     }
 
     static User findUser(String username) {
+        if (username == null || username.length() > 64) return null;
+
         try (PreparedStatement ps = db.prepareStatement(
                 "SELECT password_hash, role FROM users WHERE username=?")) {
+
             ps.setString(1, username);
             ResultSet rs = ps.executeQuery();
             if (!rs.next()) return null;
+
             return new User(rs.getString(1), rs.getString(2));
         } catch (Exception e) {
             return null;
         }
     }
 
-    // НЕ ЗАБЫТЬ ПРО ВТОРОЙ АККАУНТ! ОН НУЖЕН ТОЛЬКО ПРИ РАЗРАБОТКЕ!
     static void ensureDefaultDeveloper() {
 
         if (findUser("developer") != null) {
             return;
         }
 
+        String password = UUID.randomUUID().toString();
+        String hash = Security.hashPassword(password);
+
         try (PreparedStatement ps = db.prepareStatement(
-                "INSERT OR IGNORE INTO users(username,password_hash,role) VALUES (?,?,?)")) {
+                "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
+
             ps.setString(1, "developer");
-            ps.setString(2, Security.hashPassword(
-                    UUID.randomUUID().toString()
-            ));
+            ps.setString(2, hash);
             ps.setString(3, "developer");
             ps.executeUpdate();
-        } catch (Exception ignored) {}
 
-        // =======================================================================
-        // =======================================================================
-        // АККАУНТ НИЖЕ УДАЛИТЬ ПОСЛЕ КОНЦА РАЗРАБОТКИ. ЭТО ТЕСТОВЫЙ АККАУНТ!!!
-        // =======================================================================
-        // =======================================================================
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create developer account", e);
+        }
 
-        try (PreparedStatement ps = db.prepareStatement(
-                "INSERT OR IGNORE INTO users(username,password_hash,role) VALUES (?,?,?)")) {
-            ps.setString(1, "1");
-            ps.setString(2, Security.hashPassword("1"));
-            ps.setString(3, "developer");
-            ps.executeUpdate();
-        } catch (Exception ignored) {}
-
-        // =======================================================================
-        // =======================================================================
-        // =======================================================================
-        // =======================================================================
-        // =======================================================================
+        System.out.println("""
+        ==============================================
+        ⚠️ ВНИМАНИЕ! Создан аккаунт разработчика!
+        
+        🔑 Username: developer
+        🔑 Password:\s""" + password + """
+        
+        ⚠️  СОХРАНИТЕ ЭТОТ ПАРОЛЬ, ЕСЛИ ВЫ РАЗРАБОТЧИК!
+        ⚠️  ПАРОЛЬ БОЛЬШЕ НИКОГДА НЕ БУДЕТ ПОКАЗАН!
+        ==============================================
+        """);
     }
 }
