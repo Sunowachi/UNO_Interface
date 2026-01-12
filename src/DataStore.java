@@ -72,7 +72,6 @@ public class DataStore {
         try (PreparedStatement ps = Database.db.prepareStatement(
                 "DELETE FROM history WHERE ts < ?")) {
 
-            // удаляем историю старше 7 дней
             ps.setLong(1,
                     System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
             );
@@ -163,24 +162,24 @@ public class DataStore {
     /* ====== DB LOAD ====== */
 
     static void warmupCacheFromDb() {
-        loadFromDb(0).forEach((k, pts) -> {
+        loadFromDbGrouped(0).forEach((k, pts) -> {
             SensorCache c = new SensorCache();
             for (Point p : pts) c.add(p.value, p.ts);
             cache.put(k, c);
         });
     }
 
-    private static Map<String, List<Point>> loadFromDb(long fromTs) {
+    private static Map<String, List<Point>> loadFromDbGrouped(long fromTs) {
         Map<String, List<Point>> m = new LinkedHashMap<>();
         try (PreparedStatement ps = Database.db.prepareStatement(
                 "SELECT sensor_id,var_name,ts,value FROM history WHERE ts>=? ORDER BY ts")) {
             ps.setLong(1, fromTs);
             ResultSet rs = ps.executeQuery();
-            while (rs.next())
-                m.computeIfAbsent(
-                                rs.getString(1) + "_" + rs.getString(2),
-                                k -> new ArrayList<>())
+            while (rs.next()) {
+                String key = rs.getString(1) + "_" + rs.getString(2);
+                m.computeIfAbsent(key, k -> new ArrayList<>())
                         .add(new Point(rs.getLong(3), rs.getDouble(4)));
+            }
         } catch (Exception ignored) {}
         return m;
     }
@@ -188,22 +187,20 @@ public class DataStore {
     /* ====== JSON ====== */
 
     static String buildSensorsJson(long rangeMs) {
-        long fromTs = rangeMs > 0
-                ? System.currentTimeMillis() - rangeMs
-                : 0;
+
+        if (rangeMs > 0) {
+            long fromTs = System.currentTimeMillis() - rangeMs;
+            return pointsToJsonMap(loadFromDbGrouped(fromTs));
+        }
 
         Map<String, List<Point>> data = new LinkedHashMap<>();
 
         for (var e : cache.entrySet()) {
             SensorCache sc = e.getValue();
             if (!sc.isAlive()) continue;
-
-            List<Point> pts = new ArrayList<>();
-            for (Point p : sc.points)
-                if (p.ts >= fromTs) pts.add(p);
-
-            if (!pts.isEmpty()) data.put(e.getKey(), pts);
+            data.put(e.getKey(), new ArrayList<>(sc.points));
         }
+
         return pointsToJsonMap(data);
     }
 

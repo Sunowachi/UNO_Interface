@@ -55,6 +55,13 @@
           "showProcessed": false
         }
       ]
+    },
+    {
+      "id": "1",
+      "name": "Датчик 1",
+      "vars": "",
+      "deleted": false,
+      "varSettings": []
     }
   ]
 }
