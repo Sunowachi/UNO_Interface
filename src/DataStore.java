@@ -5,12 +5,20 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 public class DataStore {
 
     static final int CACHE_POINTS = 200;
     static final long SENSOR_TTL_MS = 60_000;
+
+    /* ===== DB ASYNC SETTINGS ===== */
+
+    static final int DB_BATCH_SIZE = 500;
+    static final int DB_QUEUE_LIMIT = 50_000;
+
+    static final BlockingQueue<DbPoint> dbQueue =
+            new LinkedBlockingQueue<>(DB_QUEUE_LIMIT);
 
     static final Map<String, SensorCache> cache =
             new ConcurrentHashMap<>();
@@ -147,19 +155,67 @@ public class DataStore {
         cache.computeIfAbsent(sensor + "_" + var,
                 k -> new SensorCache()).add(value, ts);
 
+        dbQueue.offer(new DbPoint(sensor, var, ts, value));
+    }
+
+    /* ====== DB WRITER ====== */
+
+    static void startDbWriter() {
+
+        Thread t = new Thread(() -> {
+
+            List<DbPoint> batch = new ArrayList<>(DB_BATCH_SIZE);
+
+            while (true) {
+                try {
+                    DbPoint first = dbQueue.take();
+                    batch.add(first);
+                    dbQueue.drainTo(batch, DB_BATCH_SIZE - 1);
+
+                    writeBatch(batch);
+                    batch.clear();
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                }
+            }
+        });
+
+        t.setDaemon(true);
+        t.setName("db-writer");
+        t.start();
+    }
+
+    private static void writeBatch(List<DbPoint> batch) {
+
+        if (batch.isEmpty()) return;
+
         Connection c = null;
         try {
             c = Database.borrow();
+            c.setAutoCommit(false);
+
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO history(sensor_id,var_name,ts,value) VALUES (?,?,?,?)")) {
 
-                ps.setString(1, sensor);
-                ps.setString(2, var);
-                ps.setLong(3, ts);
-                ps.setDouble(4, value);
-                ps.executeUpdate();
+                for (DbPoint p : batch) {
+                    ps.setString(1, p.sensor);
+                    ps.setString(2, p.var);
+                    ps.setLong(3, p.ts);
+                    ps.setDouble(4, p.value);
+                    ps.addBatch();
+                }
+
+                ps.executeBatch();
             }
-        } catch (Exception ignored) {
+
+            c.commit();
+
+        } catch (Exception e) {
+            try { if (c != null) c.rollback(); } catch (Exception ignored) {}
+            throw new RuntimeException(e);
+
         } finally {
             Database.release(c);
         }
@@ -272,5 +328,19 @@ public class DataStore {
         final long ts;
         final double value;
         Point(long t, double v) { ts = t; value = v; }
+    }
+
+    static class DbPoint {
+        final String sensor;
+        final String var;
+        final long ts;
+        final double value;
+
+        DbPoint(String s, String v, long t, double val) {
+            sensor = s;
+            var = v;
+            ts = t;
+            value = val;
+        }
     }
 }
