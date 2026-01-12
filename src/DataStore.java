@@ -1,6 +1,7 @@
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.*;
@@ -46,15 +47,12 @@ public class DataStore {
         if ("GET".equalsIgnoreCase(method)) {
 
             Security.Session s = Security.getSession(ex);
-
             if (s == null) {
                 HttpUtil.sendError(ex, 401, "unauthorized");
                 return;
             }
 
-            if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) {
-                return;
-            }
+            if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
             long range = HttpUtil.parseRange(ex);
             HttpUtil.sendJson(ex, buildSensorsJson(range));
@@ -69,14 +67,20 @@ public class DataStore {
     static void cleanupCache() {
         cache.entrySet().removeIf(e -> !e.getValue().isAlive());
 
-        try (PreparedStatement ps = Database.db.prepareStatement(
-                "DELETE FROM history WHERE ts < ?")) {
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM history WHERE ts < ?")) {
 
-            ps.setLong(1,
-                    System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
-            );
-            ps.executeUpdate();
-        } catch (Exception ignored) {}
+                ps.setLong(1,
+                        System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000);
+                ps.executeUpdate();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            Database.release(c);
+        }
     }
 
     /* ====== SENSOR POST ====== */
@@ -110,8 +114,8 @@ public class DataStore {
             return;
         }
 
-        String body = new String(bodyBytes).trim();
-        body = body.replaceAll("[{}\" ]", "");
+        String body = new String(bodyBytes).trim()
+                .replaceAll("[{}\" ]", "");
 
         int created = 0;
 
@@ -123,11 +127,9 @@ public class DataStore {
             if (!var.matches("[a-zA-Z0-9_]+")) continue;
 
             String key = sensorId + "_" + var;
-            if (!cache.containsKey(key)) {
-                if (++created > 50) {
-                    HttpUtil.sendError(ex, 429, "too_many_metrics");
-                    return;
-                }
+            if (!cache.containsKey(key) && ++created > 50) {
+                HttpUtil.sendError(ex, 429, "too_many_metrics");
+                return;
             }
 
             try {
@@ -143,20 +145,26 @@ public class DataStore {
 
     private static void recordValue(String sensor, String var, double value) {
         long ts = System.currentTimeMillis();
+
         cache.computeIfAbsent(sensor + "_" + var,
                 k -> new SensorCache()).add(value, ts);
-        saveToDb(sensor, var, ts, value);
-    }
 
-    private static void saveToDb(String s, String v, long ts, double val) {
-        try (PreparedStatement ps = Database.db.prepareStatement(
-                "INSERT INTO history(sensor_id,var_name,ts,value) VALUES (?,?,?,?)")) {
-            ps.setString(1, s);
-            ps.setString(2, v);
-            ps.setLong(3, ts);
-            ps.setDouble(4, val);
-            ps.executeUpdate();
-        } catch (Exception ignored) {}
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO history(sensor_id,var_name,ts,value) VALUES (?,?,?,?)")) {
+
+                ps.setString(1, sensor);
+                ps.setString(2, var);
+                ps.setLong(3, ts);
+                ps.setDouble(4, value);
+                ps.executeUpdate();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            Database.release(c);
+        }
     }
 
     /* ====== DB LOAD ====== */
@@ -171,68 +179,44 @@ public class DataStore {
 
     private static Map<String, List<Point>> loadFromDbGrouped(long fromTs) {
         Map<String, List<Point>> m = new LinkedHashMap<>();
-        try (PreparedStatement ps = Database.db.prepareStatement(
-                "SELECT sensor_id,var_name,ts,value FROM history WHERE ts>=? ORDER BY ts")) {
-            ps.setLong(1, fromTs);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                String key = rs.getString(1) + "_" + rs.getString(2);
-                m.computeIfAbsent(key, k -> new ArrayList<>())
-                        .add(new Point(rs.getLong(3), rs.getDouble(4)));
+        Connection c = null;
+
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT sensor_id,var_name,ts,value FROM history WHERE ts>=? ORDER BY ts")) {
+
+                ps.setLong(1, fromTs);
+                ResultSet rs = ps.executeQuery();
+
+                while (rs.next()) {
+                    String key = rs.getString(1) + "_" + rs.getString(2);
+                    m.computeIfAbsent(key, k -> new ArrayList<>())
+                            .add(new Point(rs.getLong(3), rs.getDouble(4)));
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            Database.release(c);
+        }
+
         return m;
     }
 
     /* ====== JSON ====== */
 
     static String buildSensorsJson(long rangeMs) {
-
         if (rangeMs > 0) {
             long fromTs = System.currentTimeMillis() - rangeMs;
             return pointsToJsonMap(loadFromDbGrouped(fromTs));
         }
 
         Map<String, List<Point>> data = new LinkedHashMap<>();
-
         for (var e : cache.entrySet()) {
-            SensorCache sc = e.getValue();
-            if (!sc.isAlive()) continue;
-            data.put(e.getKey(), new ArrayList<>(sc.points));
+            if (e.getValue().isAlive())
+                data.put(e.getKey(), new ArrayList<>(e.getValue().points));
         }
-
         return pointsToJsonMap(data);
-    }
-
-    private static String pointsToJsonMap(Map<String, List<Point>> data) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean f = true;
-
-        for (var e : data.entrySet()) {
-            if (!f) sb.append(",");
-            f = false;
-
-            String safeKey = e.getKey()
-                    .replaceAll("[^a-zA-Z0-9_\\-]", "_");
-
-            sb.append("\"")
-                    .append(safeKey)
-                    .append("\":")
-                    .append(pointsToJson(e.getValue()));
-        }
-
-        return sb.append("}").toString();
-    }
-
-    private static String pointsToJson(List<Point> pts) {
-        StringBuilder v = new StringBuilder("["),
-                t = new StringBuilder("[");
-        for (int i = 0; i < pts.size(); i++) {
-            if (i > 0) { v.append(","); t.append(","); }
-            v.append(pts.get(i).value);
-            t.append(pts.get(i).ts);
-        }
-        return "{\"values\":" + v + "],\"times\":" + t + "]}";
     }
 
     /* ====== CACHE ====== */
