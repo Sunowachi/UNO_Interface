@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class Web {
@@ -13,9 +14,15 @@ public class Web {
 
     public static void main(String[] args) throws IOException {
 
+        /* ===== INIT CORE ===== */
+
         Database.init();
         Security.ensureDefaultDeveloper();
+
         DataStore.warmupCacheFromDb();
+        DataStore.startDbWriter(); // <<< КРИТИЧЕСКИ ВАЖНО
+
+        /* ===== HTTP SERVER ===== */
 
         HttpServer server =
                 HttpServer.create(new InetSocketAddress(PORT), 0);
@@ -38,11 +45,32 @@ public class Web {
 
         System.out.println("✅ Server started: http://localhost:" + PORT);
 
-        Executors.newSingleThreadScheduledExecutor()
-                .scheduleAtFixedRate(
-                        DataStore::cleanupCache,
-                        1, 1, TimeUnit.MINUTES
-                );
+        /* ===== CACHE CLEANUP ===== */
+
+        ScheduledExecutorService scheduler =
+                Executors.newSingleThreadScheduledExecutor();
+
+        scheduler.scheduleAtFixedRate(
+                DataStore::cleanupCache,
+                1, 1, TimeUnit.MINUTES
+        );
+
+        /* ===== SHUTDOWN HOOK ===== */
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("⏹ Shutting down server...");
+
+            try {
+                scheduler.shutdownNow();
+                server.stop(1);
+            } catch (Exception ignored) {}
+
+            try {
+                Thread.sleep(1500); // дать дописать batch
+            } catch (InterruptedException ignored) {}
+
+            System.out.println("✔ Server stopped");
+        }));
     }
 
     /* === handlers === */
