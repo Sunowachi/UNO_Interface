@@ -22,6 +22,9 @@ public class Web {
 
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
+
+        server.createContext("/sensor/register", Web::handleSensorRegister);
+
         server.createContext("/config/load", Web::handleConfigLoad);
         server.createContext("/config/save", Web::handleConfigSave);
         server.createContext("/auth/login", Web::handleLogin);
@@ -42,7 +45,7 @@ public class Web {
                 );
     }
 
-    /* === handlers просто проксируют вызовы === */
+    /* === handlers === */
 
     static void handleInit(HttpExchange ex) throws IOException {
 
@@ -65,6 +68,48 @@ public class Web {
     static void handleData(HttpExchange ex) throws IOException {
         DataStore.handleData(ex);
     }
+
+    /* ==== SENSOR REGISTRATION ==== */
+
+    static void handleSensorRegister(HttpExchange ex) throws IOException {
+
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        var json = HttpUtil.parseJson(ex);
+
+        String sensorId = json.get("sensorId");
+        String key = json.get("key");
+
+        if (sensorId == null || key == null) {
+            HttpUtil.sendError(ex, 400, "bad_request");
+            return;
+        }
+
+        if (!Security.checkSensorRegisterKey(key)) {
+            HttpUtil.sendError(ex, 403, "forbidden");
+            return;
+        }
+
+        if (Security.isSensorRegistered(sensorId)) {
+            HttpUtil.sendError(ex, 409, "already_registered");
+            return;
+        }
+
+        String token = Security.registerSensor(sensorId);
+        if (token == null) {
+            HttpUtil.sendError(ex, 500, "register_failed");
+            return;
+        }
+
+        HttpUtil.sendJson(ex,
+                "{\"token\":\"" + token + "\"}"
+        );
+    }
+
+    /* ==== AUTH / CONFIG ==== */
 
     static void handleLogin(HttpExchange ex) throws IOException {
         Security.handleLogin(ex);
