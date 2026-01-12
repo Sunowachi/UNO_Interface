@@ -155,7 +155,9 @@ public class DataStore {
         cache.computeIfAbsent(sensor + "_" + var,
                 k -> new SensorCache()).add(value, ts);
 
-        dbQueue.offer(new DbPoint(sensor, var, ts, value));
+        if (!dbQueue.offer(new DbPoint(sensor, var, ts, value))) {
+            System.err.println("DB queue overflow, dropping data");
+        }
     }
 
     /* ====== DB WRITER ====== */
