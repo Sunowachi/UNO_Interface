@@ -31,9 +31,7 @@ public class DataStore {
             }
 
             Security.Session s = Security.peekSession(ex);
-            if (s != null) {
-                if (!Security.checkCsrf(ex, s)) return;
-            }
+            if (s != null && !Security.checkCsrf(ex, s)) return;
 
             if (!ip.startsWith("192.168.") && !ip.equals("127.0.0.1")) {
                 HttpUtil.sendError(ex, 403, "forbidden");
@@ -217,6 +215,39 @@ public class DataStore {
                 data.put(e.getKey(), new ArrayList<>(e.getValue().points));
         }
         return pointsToJsonMap(data);
+    }
+
+    private static String pointsToJsonMap(Map<String, List<Point>> data) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+
+        for (var e : data.entrySet()) {
+            if (!first) sb.append(",");
+            first = false;
+
+            String safeKey = e.getKey()
+                    .replaceAll("[^a-zA-Z0-9_\\-]", "_");
+
+            sb.append("\"")
+                    .append(safeKey)
+                    .append("\":")
+                    .append(pointsToJson(e.getValue()));
+        }
+
+        return sb.append("}").toString();
+    }
+
+    private static String pointsToJson(List<Point> pts) {
+        StringBuilder v = new StringBuilder("[");
+        StringBuilder t = new StringBuilder("[");
+
+        for (int i = 0; i < pts.size(); i++) {
+            if (i > 0) { v.append(","); t.append(","); }
+            v.append(pts.get(i).value);
+            t.append(pts.get(i).ts);
+        }
+
+        return "{\"values\":" + v + "],\"times\":" + t + "]}";
     }
 
     /* ====== CACHE ====== */
