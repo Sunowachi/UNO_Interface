@@ -3,6 +3,11 @@ import java.util.UUID;
 
 public class Database {
 
+    public static final String WHITE = "\u001B[0m";
+    public static final String RED = "\u001B[31m";
+    public static final String GREEN = "\u001B[32m";
+    public static final String YELLOW = "\u001B[33m";
+
     static Connection db;
 
     static class User {
@@ -99,16 +104,19 @@ public class Database {
             throw new RuntimeException("Failed to create developer account", e);
         }
 
-        System.out.println("""
-        ==============================================
-        ⚠️ ВНИМАНИЕ! Создан аккаунт разработчика!
-        
+        System.out.println(YELLOW + """
+        ===========================================================
+        ⚠️ ВНИМАНИЕ! Создан аккаунт разработчика!""" + GREEN + """
+        \n
         🔑 Username: developer
-        🔑 Password:\s""" + password + """
-        
-        ⚠️  СОХРАНИТЕ ЭТОТ ПАРОЛЬ, ЕСЛИ ВЫ РАЗРАБОТЧИК!
-        ⚠️  ПАРОЛЬ БОЛЬШЕ НИКОГДА НЕ БУДЕТ ПОКАЗАН!
-        ==============================================
-        """);
+        🔑 Password:""" + RED + password + YELLOW + """
+        \n
+        ⚠️ СОХРАНИТЕ ЭТОТ ПАРОЛЬ, ЕСЛИ ВЫ РАЗРАБОТЧИК!
+        ⚠️ ПАРОЛЬ БОЛЬШЕ НИКОГДА НЕ БУДЕТ ПОКАЗАН!""" + RED + """
+        \s
+        ⚠️ НИ В КОЕМ СЛУЧАЕ НЕ РАЗГЛАШАЙТЕ ПАРОЛЬ ПОСТОРОННИМ!""" + YELLOW + """
+        \s
+        ===========================================================
+        """ + WHITE);
     }
 }
