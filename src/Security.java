@@ -3,6 +3,9 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.SecretKeyFactory;
@@ -10,7 +13,7 @@ import javax.crypto.spec.PBEKeySpec;
 
 public class Security {
 
-    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;        // 10 минут без активности
+    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;
     static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
 
     static final int ITERATIONS = 120_000;
@@ -32,15 +35,11 @@ public class Security {
 
     /* ==== SENSOR SECURITY ==== */
 
-    // мастер-ключ для первичной регистрации датчиков
     static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
-
-    // ВАЖНО: токены хранятся в памяти и теряются при рестарте сервера
     static final Map<String, String> SENSOR_TOKENS = new ConcurrentHashMap<>();
 
     static boolean checkSensorToken(String id, String token) {
-        if (id == null || token == null) return false;
-        return token.equals(SENSOR_TOKENS.get(id));
+        return id != null && token != null && token.equals(SENSOR_TOKENS.get(id));
     }
 
     static boolean isSensorRegistered(String id) {
@@ -52,9 +51,7 @@ public class Security {
     }
 
     static String registerSensor(String sensorId) {
-        if (sensorId == null || SENSOR_TOKENS.containsKey(sensorId)) {
-            return null;
-        }
+        if (sensorId == null || SENSOR_TOKENS.containsKey(sensorId)) return null;
         String token = UUID.randomUUID().toString().replace("-", "");
         SENSOR_TOKENS.put(sensorId, token);
         return token;
@@ -101,9 +98,7 @@ public class Security {
 
     static Session getSession(HttpExchange ex) {
         Session s = peekSession(ex);
-        if (s != null) {
-            s.touch();
-        }
+        if (s != null) s.touch();
         return s;
     }
 
@@ -115,12 +110,7 @@ public class Security {
         if (s == null) return null;
 
         String ua = ex.getRequestHeaders().getFirst("User-Agent");
-        if (!Objects.equals(s.userAgent, ua)) {
-            sessions.remove(sid);
-            return null;
-        }
-
-        if (s.expired()) {
+        if (!Objects.equals(s.userAgent, ua) || s.expired()) {
             sessions.remove(sid);
             return null;
         }
@@ -130,7 +120,7 @@ public class Security {
 
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
         String token = ex.getRequestHeaders().getFirst("X-CSRF-Token");
-        if (token == null || !token.equals(s.csrfToken)) {
+        if (!Objects.equals(token, s.csrfToken)) {
             HttpUtil.sendError(ex, 403, "csrf");
             return false;
         }
@@ -140,12 +130,8 @@ public class Security {
     static boolean require(Session s, HttpExchange ex, Permission p) throws IOException {
         if (!ROLE_PERMS.getOrDefault(s.role, Set.of()).contains(p)) {
             HttpUtil.sendError(ex, 403, "forbidden");
-
-            Audit.log(
-                    s.username,
-                    "ACCESS_DENIED",
-                    ex.getRemoteAddress().getAddress().getHostAddress()
-            );
+            Audit.log(s.username, "ACCESS_DENIED",
+                    ex.getRemoteAddress().getAddress().getHostAddress());
             return false;
         }
         return true;
@@ -197,35 +183,78 @@ public class Security {
         Database.ensureDefaultDeveloper();
     }
 
-    /* ==== FAILED LOGIN ==== */
+    /* ==== FAILED LOGIN (PostgreSQL) ==== */
 
-    static class FailedLogin {
-        int count;
-        long blockedUntil;
-        long lastFail;
-    }
+    static boolean isBlocked(String user, String ip) {
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT blocked_until FROM failed_logins WHERE username=? AND ip=?")) {
 
-    static final Map<String, FailedLogin> failed = new ConcurrentHashMap<>();
+                ps.setString(1, user);
+                ps.setString(2, ip);
+                ResultSet rs = ps.executeQuery();
+                if (!rs.next()) return false;
 
-    static boolean isBlocked(String key) {
-        FailedLogin f = failed.get(key);
-        if (f == null) return false;
-
-        if (System.currentTimeMillis() - f.lastFail > 15 * 60 * 1000) {
-            failed.remove(key);
-            return false;
-        }
-
-        return f.blockedUntil > System.currentTimeMillis();
-    }
-
-    static {
-        new Timer(true).scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                sessions.entrySet().removeIf(e -> e.getValue().expired());
+                return rs.getLong(1) > System.currentTimeMillis();
             }
-        }, 60_000, 60_000);
+        } catch (Exception e) {
+            return false;
+        } finally {
+            Database.release(c);
+        }
+    }
+
+    static void recordFailedLogin(String user, String ip) {
+        long now = System.currentTimeMillis();
+
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO failed_logins(username,ip,count,last_fail,blocked_until)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT (username,ip)
+                DO UPDATE SET
+                    count = failed_logins.count + 1,
+                    last_fail = EXCLUDED.last_fail,
+                    blocked_until = CASE
+                        WHEN failed_logins.count + 1 >= 5
+                        THEN ?
+                        ELSE failed_logins.blocked_until
+                    END
+            """)) {
+
+                ps.setString(1, user);
+                ps.setString(2, ip);
+                ps.setInt(3, 1);
+                ps.setLong(4, now);
+                ps.setLong(5, 0);
+                ps.setLong(6, now + 60_000);
+
+                ps.executeUpdate();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            Database.release(c);
+        }
+    }
+
+    static void clearFailedLogins(String user, String ip) {
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM failed_logins WHERE username=? AND ip=?")) {
+                ps.setString(1, user);
+                ps.setString(2, ip);
+                ps.executeUpdate();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            Database.release(c);
+        }
     }
 
     /* ==== handlers ==== */
@@ -249,34 +278,24 @@ public class Security {
         }
 
         String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-
         var data = HttpUtil.parseJson(ex);
         var user = data.get("username");
         var pass = data.get("password");
         var dbUser = Database.findUser(user);
 
-        String key = user + "|" + ip;
-        if (isBlocked(key)) {
+        if (isBlocked(user, ip)) {
             HttpUtil.sendError(ex, 403, "blocked");
             return;
         }
 
         if (dbUser == null || !checkPassword(pass, dbUser.passwordHash)) {
-
-            FailedLogin f = failed.computeIfAbsent(key, k -> new FailedLogin());
-            f.count++;
-            f.lastFail = System.currentTimeMillis();
-
-            if (f.count >= 5) {
-                f.blockedUntil = System.currentTimeMillis() + 60_000;
-            }
-
+            recordFailedLogin(user, ip);
             Audit.log(user, "LOGIN_FAIL", ip);
             HttpUtil.sendError(ex, 401, "invalid_login");
             return;
         }
 
-        failed.remove(key);
+        clearFailedLogins(user, ip);
 
         String oldSid = HttpUtil.getCookie(ex, "SESSION");
         if (oldSid != null) {
@@ -296,7 +315,6 @@ public class Security {
     }
 
     static void handleLogout(HttpExchange ex) throws IOException {
-
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -311,11 +329,8 @@ public class Security {
         HttpUtil.clearCookie(ex, "SESSION");
         HttpUtil.sendJson(ex, "{\"status\":\"logged_out\"}");
 
-        Audit.log(
-                s.username,
-                "LOGOUT",
-                ex.getRemoteAddress().getAddress().getHostAddress()
-        );
+        Audit.log(s.username, "LOGOUT",
+                ex.getRemoteAddress().getAddress().getHostAddress());
     }
 
     static void handleAuthMe(HttpExchange ex) throws IOException {
@@ -326,7 +341,6 @@ public class Security {
         }
 
         s.rotateCsrf();
-
         HttpUtil.sendJson(ex,
                 "{\"username\":\"" + s.username +
                         "\",\"role\":\"" + s.role +
@@ -346,7 +360,6 @@ public class Security {
         s.lastPing = now;
         s.touch();
         s.rotateCsrf();
-
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
