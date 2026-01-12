@@ -1,5 +1,7 @@
 import com.sun.net.httpserver.HttpExchange;
 
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -8,18 +10,21 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
 
 public class Security {
 
+    /* ================= CONFIG ================= */
+
     static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;
     static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
+    static final int MAX_SESSIONS = 1000;
 
     static final int ITERATIONS = 120_000;
     static final int KEY_LENGTH = 256;
 
-    static final int MAX_SESSIONS = 1000;
+    static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
+
+    /* ================= PERMISSIONS ================= */
 
     enum Permission {
         VIEW_DATA,
@@ -33,28 +38,33 @@ public class Security {
             "worker", EnumSet.of(Permission.VIEW_DATA)
     );
 
-    static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
-
-    /* ==== SENSOR SECURITY VIA DB ==== */
+    /* ================= SENSORS ================= */
 
     static boolean checkSensorToken(String id, String token) {
         if (id == null || token == null) return false;
+
         Connection c = null;
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT 1 FROM sensors WHERE sensor_id=? AND token=?")) {
+                    "SELECT token FROM sensors WHERE sensor_id=?")) {
                 ps.setString(1, id);
-                ps.setString(2, token);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
+
+                if (!MessageDigest.isEqual(
+                        rs.getString(1).getBytes(),
+                        token.getBytes()
+                )) return false;
             }
+
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
                 ps.setLong(1, System.currentTimeMillis());
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
+
             return true;
         } catch (Exception e) {
             return false;
@@ -71,8 +81,7 @@ public class Security {
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT 1 FROM sensors WHERE sensor_id=?")) {
                 ps.setString(1, id);
-                ResultSet rs = ps.executeQuery();
-                return rs.next();
+                return ps.executeQuery().next();
             }
         } catch (Exception e) {
             return false;
@@ -87,15 +96,19 @@ public class Security {
 
     static String registerSensor(String sensorId) {
         if (sensorId == null) return null;
+
         String token = UUID.randomUUID().toString().replace("-", "");
+        long now = System.currentTimeMillis();
+
         Connection c = null;
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO sensors(sensor_id,token,created_at) VALUES (?,?,?)")) {
+                    "INSERT INTO sensors(sensor_id,token,created_at,last_seen) VALUES (?,?,?,?)")) {
                 ps.setString(1, sensorId);
                 ps.setString(2, token);
-                ps.setLong(3, System.currentTimeMillis());
+                ps.setLong(3, now);
+                ps.setLong(4, now);
                 ps.executeUpdate();
             }
             return token;
@@ -106,21 +119,19 @@ public class Security {
         }
     }
 
-    /* ==== SESSION ==== */
+    /* ================= SESSION ================= */
 
     static class Session {
         final String username;
         final String role;
         final long createdAt;
         volatile long lastActive;
-        volatile String csrfToken;
         volatile long lastPing;
-        final String userAgent;
+        volatile String csrf;
 
-        Session(String u, String r, String ua) {
+        Session(String u, String r) {
             username = u;
             role = r;
-            userAgent = ua;
             createdAt = System.currentTimeMillis();
             rotateCsrf();
             touch();
@@ -131,7 +142,7 @@ public class Security {
         }
 
         void rotateCsrf() {
-            csrfToken = UUID.randomUUID().toString();
+            csrf = UUID.randomUUID().toString();
         }
 
         boolean expired() {
@@ -143,36 +154,31 @@ public class Security {
 
     static final Map<String, Session> sessions = new ConcurrentHashMap<>();
 
-    /* ==== helpers ==== */
-
-    static Session getSession(HttpExchange ex) {
-        Session s = peekSession(ex);
-        if (s != null) s.touch();
-        return s;
+    static void cleanupSessions() {
+        sessions.entrySet().removeIf(e -> e.getValue().expired());
     }
 
-    static Session peekSession(HttpExchange ex) {
+    static Session getSession(HttpExchange ex) {
+        cleanupSessions();
         String sid = HttpUtil.getCookie(ex, "SESSION");
         if (sid == null) return null;
 
         Session s = sessions.get(sid);
-        if (s == null) return null;
-
-        String ua = ex.getRequestHeaders().getFirst("User-Agent");
-        if (!Objects.equals(s.userAgent, ua) || s.expired()) {
+        if (s == null || s.expired()) {
             sessions.remove(sid);
             return null;
         }
-
+        s.touch();
         return s;
     }
 
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
         String token = ex.getRequestHeaders().getFirst("X-CSRF-Token");
-        if (!Objects.equals(token, s.csrfToken)) {
+        if (!Objects.equals(token, s.csrf)) {
             HttpUtil.sendError(ex, 403, "csrf");
             return false;
         }
+        s.rotateCsrf();
         return true;
     }
 
@@ -186,7 +192,7 @@ public class Security {
         return true;
     }
 
-    /* ==== PASSWORDS ==== */
+    /* ================= PASSWORDS ================= */
 
     static String hashPassword(String password) {
         try {
@@ -232,7 +238,7 @@ public class Security {
         Database.ensureDefaultDeveloper();
     }
 
-    /* ==== FAILED LOGIN (PostgreSQL) ==== */
+    /* ================= FAILED LOGIN ================= */
 
     static boolean isBlocked(String user, String ip) {
         Connection c = null;
@@ -240,13 +246,10 @@ public class Security {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT blocked_until FROM failed_logins WHERE username=? AND ip=?")) {
-
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ResultSet rs = ps.executeQuery();
-                if (!rs.next()) return false;
-
-                return rs.getLong(1) > System.currentTimeMillis();
+                return rs.next() && rs.getLong(1) > System.currentTimeMillis();
             }
         } catch (Exception e) {
             return false;
@@ -257,7 +260,6 @@ public class Security {
 
     static void recordFailedLogin(String user, String ip) {
         long now = System.currentTimeMillis();
-
         Connection c = null;
         try {
             c = Database.borrow();
@@ -274,14 +276,12 @@ public class Security {
                         ELSE failed_logins.blocked_until
                     END
             """)) {
-
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ps.setInt(3, 1);
                 ps.setLong(4, now);
                 ps.setLong(5, 0);
                 ps.setLong(6, now + 60_000);
-
                 ps.executeUpdate();
             }
         } catch (Exception ignored) {
@@ -306,7 +306,7 @@ public class Security {
         }
     }
 
-    /* ==== handlers ==== */
+    /* ================= HANDLERS ================= */
 
     static void handleLogin(HttpExchange ex) throws IOException {
 
@@ -315,28 +315,29 @@ public class Security {
             return;
         }
 
-        if (sessions.size() > MAX_SESSIONS) {
+        cleanupSessions();
+        if (sessions.size() >= MAX_SESSIONS) {
             HttpUtil.sendError(ex, 503, "too_many_sessions");
             return;
         }
 
-        String ua = ex.getRequestHeaders().getFirst("User-Agent");
-        if (ua == null || ua.matches(".*(Android|iPhone|Mobile).*")) {
-            HttpUtil.sendError(ex, 403, "forbidden_device");
+        var data = HttpUtil.parseJson(ex);
+        String user = data.get("username");
+        String pass = data.get("password");
+
+        if (user == null || pass == null) {
+            HttpUtil.sendError(ex, 400, "bad_request");
             return;
         }
 
         String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-        var data = HttpUtil.parseJson(ex);
-        var user = data.get("username");
-        var pass = data.get("password");
-        var dbUser = Database.findUser(user);
 
         if (isBlocked(user, ip)) {
             HttpUtil.sendError(ex, 403, "blocked");
             return;
         }
 
+        var dbUser = Database.findUser(user);
         if (dbUser == null || !checkPassword(pass, dbUser.passwordHash)) {
             recordFailedLogin(user, ip);
             Audit.log(user, "LOGIN_FAIL", ip);
@@ -346,14 +347,8 @@ public class Security {
 
         clearFailedLogins(user, ip);
 
-        String oldSid = HttpUtil.getCookie(ex, "SESSION");
-        if (oldSid != null) {
-            sessions.remove(oldSid);
-            HttpUtil.clearCookie(ex, "SESSION");
-        }
-
         String sid = UUID.randomUUID().toString();
-        sessions.put(sid, new Session(user, dbUser.role, ua));
+        sessions.put(sid, new Session(user, dbUser.role));
         HttpUtil.setCookie(ex, "SESSION", sid);
 
         HttpUtil.sendJson(ex,
@@ -364,11 +359,6 @@ public class Security {
     }
 
     static void handleLogout(HttpExchange ex) throws IOException {
-        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1);
-            return;
-        }
-
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
 
@@ -377,9 +367,6 @@ public class Security {
 
         HttpUtil.clearCookie(ex, "SESSION");
         HttpUtil.sendJson(ex, "{\"status\":\"logged_out\"}");
-
-        Audit.log(s.username, "LOGOUT",
-                ex.getRemoteAddress().getAddress().getHostAddress());
     }
 
     static void handleAuthMe(HttpExchange ex) throws IOException {
@@ -393,7 +380,7 @@ public class Security {
         HttpUtil.sendJson(ex,
                 "{\"username\":\"" + s.username +
                         "\",\"role\":\"" + s.role +
-                        "\",\"csrf\":\"" + s.csrfToken + "\"}");
+                        "\",\"csrf\":\"" + s.csrf + "\"}");
     }
 
     static void handleAuthPing(HttpExchange ex) throws IOException {
@@ -407,8 +394,6 @@ public class Security {
         }
 
         s.lastPing = now;
-        s.touch();
-        s.rotateCsrf();
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
@@ -423,7 +408,6 @@ public class Security {
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
         if (!require(s, ex, Permission.EDIT_CONFIG)) return;
-        s.rotateCsrf();
         HttpUtil.saveConfig(ex);
     }
 }
