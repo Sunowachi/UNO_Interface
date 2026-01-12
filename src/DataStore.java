@@ -30,9 +30,7 @@ public class DataStore {
         String ip = ex.getRemoteAddress().getAddress().getHostAddress();
 
         if ("POST".equalsIgnoreCase(method)) {
-
             String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-
             if (sensorId != null) {
                 handleSensorPost(ex);
                 return;
@@ -45,13 +43,11 @@ public class DataStore {
                 HttpUtil.sendError(ex, 403, "forbidden");
                 return;
             }
-
             HttpUtil.sendError(ex, 400, "invalid_post_target");
             return;
         }
 
         if ("GET".equalsIgnoreCase(method)) {
-
             Security.Session s = Security.getSession(ex);
             if (s == null) {
                 HttpUtil.sendError(ex, 401, "unauthorized");
@@ -67,8 +63,6 @@ public class DataStore {
 
         ex.sendResponseHeaders(405, -1);
     }
-
-    /* ====== CACHE CLEANUP ====== */
 
     static void cleanupCache() {
         cache.entrySet().removeIf(e -> !e.getValue().isAlive());

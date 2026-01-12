@@ -33,17 +33,52 @@ public class Security {
             "worker", EnumSet.of(Permission.VIEW_DATA)
     );
 
-    /* ==== SENSOR SECURITY ==== */
-
     static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
-    static final Map<String, String> SENSOR_TOKENS = new ConcurrentHashMap<>();
+
+    /* ==== SENSOR SECURITY VIA DB ==== */
 
     static boolean checkSensorToken(String id, String token) {
-        return id != null && token != null && token.equals(SENSOR_TOKENS.get(id));
+        if (id == null || token == null) return false;
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT 1 FROM sensors WHERE sensor_id=? AND token=?")) {
+                ps.setString(1, id);
+                ps.setString(2, token);
+                ResultSet rs = ps.executeQuery();
+                if (!rs.next()) return false;
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
+                ps.setLong(1, System.currentTimeMillis());
+                ps.setString(2, id);
+                ps.executeUpdate();
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            Database.release(c);
+        }
     }
 
     static boolean isSensorRegistered(String id) {
-        return SENSOR_TOKENS.containsKey(id);
+        if (id == null) return false;
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT 1 FROM sensors WHERE sensor_id=?")) {
+                ps.setString(1, id);
+                ResultSet rs = ps.executeQuery();
+                return rs.next();
+            }
+        } catch (Exception e) {
+            return false;
+        } finally {
+            Database.release(c);
+        }
     }
 
     static boolean checkSensorRegisterKey(String key) {
@@ -51,10 +86,24 @@ public class Security {
     }
 
     static String registerSensor(String sensorId) {
-        if (sensorId == null || SENSOR_TOKENS.containsKey(sensorId)) return null;
+        if (sensorId == null) return null;
         String token = UUID.randomUUID().toString().replace("-", "");
-        SENSOR_TOKENS.put(sensorId, token);
-        return token;
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO sensors(sensor_id,token,created_at) VALUES (?,?,?)")) {
+                ps.setString(1, sensorId);
+                ps.setString(2, token);
+                ps.setLong(3, System.currentTimeMillis());
+                ps.executeUpdate();
+            }
+            return token;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            Database.release(c);
+        }
     }
 
     /* ==== SESSION ==== */
