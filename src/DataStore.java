@@ -64,6 +64,22 @@ public class DataStore {
         ex.sendResponseHeaders(405, -1);
     }
 
+    /* ====== CACHE CLEANUP ====== */
+
+    static void cleanupCache() {
+        cache.entrySet().removeIf(e -> !e.getValue().isAlive());
+
+        try (PreparedStatement ps = Database.db.prepareStatement(
+                "DELETE FROM history WHERE ts < ?")) {
+
+            // удаляем историю старше 7 дней
+            ps.setLong(1,
+                    System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+            );
+            ps.executeUpdate();
+        } catch (Exception ignored) {}
+    }
+
     /* ====== SENSOR POST ====== */
 
     private static void handleSensorPost(HttpExchange ex) throws IOException {
@@ -77,29 +93,6 @@ public class DataStore {
         }
 
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-
-        /* === SENSOR REGISTRATION === */
-
-        String regKey = ex.getRequestHeaders().getFirst("X-Sensor-Register");
-        if (regKey != null) {
-
-            if (!Security.checkSensorRegisterKey(regKey)) {
-                HttpUtil.sendError(ex, 403, "invalid_register_key");
-                return;
-            }
-
-            if (Security.isSensorRegistered(sensorId)) {
-                HttpUtil.sendError(ex, 409, "sensor_exists");
-                return;
-            }
-
-            String token = Security.registerSensor(sensorId);
-            HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
-            return;
-        }
-
-        /* === NORMAL SENSOR DATA === */
-
         String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
         if (sensorId == null || token == null) {
