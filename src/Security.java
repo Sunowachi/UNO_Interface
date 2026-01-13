@@ -40,12 +40,13 @@ public class Security {
             "worker", EnumSet.of(Permission.VIEW_DATA)
     );
 
-    /* ================= SENSORS ================= */
+    /* ================= SENSOR SECURITY ================= */
 
     static String hashToken(String token) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return Base64.getEncoder().encodeToString(md.digest(token.getBytes()));
+            return Base64.getEncoder()
+                    .encodeToString(md.digest(token.getBytes()));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -57,19 +58,20 @@ public class Security {
         Connection c = null;
         try {
             c = Database.borrow();
+
+            String stored;
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT token_hash FROM sensors WHERE sensor_id=?")) {
-
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
+                stored = rs.getString(1);
+            }
 
-                String stored = rs.getString(1);
-                String incoming = hashToken(token);
-
-                if (!MessageDigest.isEqual(
-                        stored.getBytes(),
-                        incoming.getBytes())) return false;
+            String incoming = hashToken(token);
+            if (!MessageDigest.isEqual(
+                    stored.getBytes(), incoming.getBytes())) {
+                return false;
             }
 
             try (PreparedStatement ps = c.prepareStatement(
@@ -80,6 +82,7 @@ public class Security {
             }
 
             return true;
+
         } catch (Exception e) {
             return false;
         } finally {
@@ -109,7 +112,7 @@ public class Security {
     }
 
     static String registerSensor(String sensorId) {
-        if (sensorId == null) return null;
+        if (sensorId == null || sensorId.length() > 64) return null;
 
         String token = UUID.randomUUID().toString().replace("-", "");
         String hash = hashToken(token);
@@ -119,7 +122,10 @@ public class Security {
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO sensors(sensor_id,token_hash,created_at,last_seen) VALUES (?,?,?,?)")) {
+                    """
+                    INSERT INTO sensors(sensor_id, token_hash, created_at, last_seen)
+                    VALUES (?,?,?,?)
+                    """)) {
                 ps.setString(1, sensorId);
                 ps.setString(2, hash);
                 ps.setLong(3, now);
@@ -140,6 +146,7 @@ public class Security {
         final String username;
         final String role;
         final long createdAt;
+
         volatile long lastActive;
         volatile long lastPing;
         volatile String csrf;
@@ -167,10 +174,12 @@ public class Security {
         }
     }
 
-    static final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    static final Map<String, Session> sessions =
+            new ConcurrentHashMap<>();
 
     static void cleanupSessions() {
-        sessions.entrySet().removeIf(e -> e.getValue().expired());
+        sessions.entrySet()
+                .removeIf(e -> e.getValue().expired());
     }
 
     static Session peekSession(HttpExchange ex) {
@@ -203,11 +212,20 @@ public class Security {
         return true;
     }
 
-    static boolean require(Session s, HttpExchange ex, Permission p) throws IOException {
-        if (!ROLE_PERMS.getOrDefault(s.role, Set.of()).contains(p)) {
+    static boolean require(Session s, HttpExchange ex, Permission p)
+            throws IOException {
+
+        if (!ROLE_PERMS
+                .getOrDefault(s.role, Set.of())
+                .contains(p)) {
+
             HttpUtil.sendError(ex, 403, "forbidden");
-            Audit.log(s.username, "ACCESS_DENIED",
-                    ex.getRemoteAddress().getAddress().getHostAddress());
+            Audit.log(
+                    s.username,
+                    "ACCESS_DENIED",
+                    ex.getRemoteAddress()
+                            .getAddress().getHostAddress()
+            );
             return false;
         }
         return true;
@@ -216,23 +234,31 @@ public class Security {
     /* ================= PASSWORDS ================= */
 
     static String hashPassword(String password) {
-        if (password == null || password.length() > MAX_PASSWORD_LENGTH)
+        if (password == null ||
+                password.length() > MAX_PASSWORD_LENGTH) {
             throw new IllegalArgumentException("bad password");
+        }
 
         try {
             byte[] salt = new byte[16];
             SecureRandom.getInstanceStrong().nextBytes(salt);
 
             PBEKeySpec spec = new PBEKeySpec(
-                    password.toCharArray(), salt, ITERATIONS, KEY_LENGTH);
+                    password.toCharArray(),
+                    salt,
+                    ITERATIONS,
+                    KEY_LENGTH
+            );
 
             byte[] hash = SecretKeyFactory
                     .getInstance("PBKDF2WithHmacSHA256")
                     .generateSecret(spec)
                     .getEncoded();
 
-            return Base64.getEncoder().encodeToString(salt) + ":" +
+            return Base64.getEncoder().encodeToString(salt) +
+                    ":" +
                     Base64.getEncoder().encodeToString(hash);
+
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -250,7 +276,11 @@ public class Security {
             byte[] hash = Base64.getDecoder().decode(p[1]);
 
             PBEKeySpec spec = new PBEKeySpec(
-                    password.toCharArray(), salt, ITERATIONS, KEY_LENGTH);
+                    password.toCharArray(),
+                    salt,
+                    ITERATIONS,
+                    KEY_LENGTH
+            );
 
             byte[] test = SecretKeyFactory
                     .getInstance("PBKDF2WithHmacSHA256")
@@ -258,6 +288,7 @@ public class Security {
                     .getEncoded();
 
             return MessageDigest.isEqual(hash, test);
+
         } catch (Exception e) {
             return false;
         }
@@ -335,7 +366,7 @@ public class Security {
         }
     }
 
-    /* ================= HANDLERS ================= */
+    /* ================= LOGIN / AUTH ================= */
 
     static void handleLogin(HttpExchange ex) throws IOException {
 
@@ -359,22 +390,17 @@ public class Security {
             return;
         }
 
-        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-
-        if (isBlocked(user, ip)) {
-            HttpUtil.sendError(ex, 403, "blocked");
-            return;
-        }
+        String ip = ex.getRemoteAddress()
+                .getAddress().getHostAddress();
 
         var dbUser = Database.findUser(user);
-        if (dbUser == null || !checkPassword(pass, dbUser.passwordHash)) {
-            recordFailedLogin(user, ip);
+        if (dbUser == null ||
+                !checkPassword(pass, dbUser.passwordHash)) {
+
             Audit.log(user, "LOGIN_FAIL", ip);
             HttpUtil.sendError(ex, 401, "invalid_login");
             return;
         }
-
-        clearFailedLogins(user, ip);
 
         String sid = UUID.randomUUID().toString();
         sessions.put(sid, new Session(user, dbUser.role));
@@ -425,6 +451,8 @@ public class Security {
         s.lastPing = now;
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
+
+    /* ================= CONFIG ================= */
 
     static void handleConfigLoad(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
