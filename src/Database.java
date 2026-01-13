@@ -17,7 +17,7 @@ public class Database {
     private static final String DB_URL =
             System.getenv().getOrDefault(
                     "DB_URL",
-                    "jdbc:postgresql://localhost:5432/sensors"
+                    "jdbc:postgresql://localhost:8080/sensors"
             );
 
     private static final String DB_USER =
@@ -57,9 +57,11 @@ public class Database {
                 pool.add(createConnection());
             }
 
-            try (Connection c = borrow();
-                 Statement st = c.createStatement()) {
+            Connection c = borrow();
+            try (Statement st = c.createStatement()) {
                 initTables(st);
+            } finally {
+                release(c);
             }
 
             System.out.println(GREEN +
@@ -80,26 +82,34 @@ public class Database {
     static Connection borrow() {
         try {
             Connection c = pool.poll(BORROW_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            if (c == null)
-                throw new SQLException("DB pool exhausted");
+            if (c == null) return null;
 
             if (c.isClosed() || !c.isValid(2)) {
+                quietlyClose(c);
                 return createConnection();
             }
             return c;
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to borrow DB connection", e);
+            return null;
         }
     }
 
     static void release(Connection c) {
         if (c == null) return;
         try {
-            if (!c.isClosed() && !pool.offer(c)) {
-                c.close();
+            if (c.isClosed() || !c.isValid(1) || !pool.offer(c)) {
+                quietlyClose(c);
             }
-        } catch (SQLException ignored) {}
+        } catch (Exception e) {
+            quietlyClose(c);
+        }
+    }
+
+    private static void quietlyClose(Connection c) {
+        try {
+            c.close();
+        } catch (Exception ignored) {}
     }
 
     /* ========= TABLES ========= */
@@ -117,7 +127,7 @@ public class Database {
         st.execute("""
             CREATE TABLE IF NOT EXISTS sensors(
                 sensor_id TEXT PRIMARY KEY,
-                token_hash TEXT NOT NULL,
+                token TEXT NOT NULL,
                 created_at BIGINT NOT NULL,
                 last_seen BIGINT
             )
@@ -154,9 +164,11 @@ public class Database {
     static User findUser(String username) {
         if (username == null || username.length() > 64) return null;
 
-        try (Connection c = borrow();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT password_hash, role FROM users WHERE username=?")) {
+        Connection c = borrow();
+        if (c == null) return null;
+
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT password_hash, role FROM users WHERE username=?")) {
 
             ps.setString(1, username);
             ResultSet rs = ps.executeQuery();
@@ -169,6 +181,8 @@ public class Database {
 
         } catch (Exception e) {
             return null;
+        } finally {
+            release(c);
         }
     }
 
@@ -181,9 +195,12 @@ public class Database {
         String password = UUID.randomUUID().toString();
         String hash = Security.hashPassword(password);
 
-        try (Connection c = borrow();
-             PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
+        Connection c = borrow();
+        if (c == null)
+            throw new RuntimeException("DB unavailable");
+
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
 
             ps.setString(1, "developer");
             ps.setString(2, hash);
@@ -192,6 +209,8 @@ public class Database {
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to create developer account", e);
+        } finally {
+            release(c);
         }
 
         System.out.println(YELLOW + """
