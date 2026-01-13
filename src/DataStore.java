@@ -87,10 +87,8 @@ public class DataStore {
 
     private static void handleSensorPost(HttpExchange ex) throws IOException {
 
-        if (ex.getRequestHeaders().getFirst("Content-Type") == null ||
-                !ex.getRequestHeaders().getFirst("Content-Type")
-                        .startsWith("application/json")) {
-
+        String ct = ex.getRequestHeaders().getFirst("Content-Type");
+        if (ct == null || !ct.startsWith("application/json")) {
             HttpUtil.sendError(ex, 400, "invalid_content_type");
             return;
         }
@@ -150,7 +148,9 @@ public class DataStore {
                 k -> new SensorCache()).add(value, ts);
 
         if (!dbQueue.offer(new DbPoint(sensor, var, ts, value))) {
-            System.err.println("DB queue overflow, dropping data");
+            System.err.println(
+                    "DB queue overflow, dropping data: " +
+                            sensor + ":" + var + "=" + value);
         }
     }
 
@@ -256,50 +256,46 @@ public class DataStore {
     /* ====== JSON ====== */
 
     static String buildSensorsJson(long rangeMs) {
-        if (rangeMs > 0) {
-            long fromTs = System.currentTimeMillis() - rangeMs;
-            return pointsToJsonMap(loadFromDbGrouped(fromTs));
+        long fromTs = rangeMs > 0 ? System.currentTimeMillis() - rangeMs : 0;
+        Map<String, List<Point>> data = new LinkedHashMap<>();
+
+        for (var e : cache.entrySet()) {
+            SensorCache sc = e.getValue();
+            if (!sc.isAlive()) continue;
+
+            List<Point> pts = sc.snapshot(fromTs);
+            if (!pts.isEmpty()) data.put(e.getKey(), pts);
         }
 
-        Map<String, List<Point>> data = new LinkedHashMap<>();
-        for (var e : cache.entrySet()) {
-            if (e.getValue().isAlive())
-                data.put(e.getKey(), new ArrayList<>(e.getValue().points));
-        }
         return pointsToJsonMap(data);
     }
 
     private static String pointsToJsonMap(Map<String, List<Point>> data) {
         StringBuilder sb = new StringBuilder("{");
         boolean first = true;
-
         for (var e : data.entrySet()) {
             if (!first) sb.append(",");
             first = false;
-
-            String safeKey = e.getKey()
-                    .replaceAll("[^a-zA-Z0-9_\\-]", "_");
-
-            sb.append("\"")
-                    .append(safeKey)
-                    .append("\":")
+            String safeKey = e.getKey().replaceAll("[^a-zA-Z0-9_\\-]", "_");
+            sb.append("\"").append(safeKey).append("\":")
                     .append(pointsToJson(e.getValue()));
         }
-
-        return sb.append("}").toString();
+        sb.append("}");
+        return sb.toString();
     }
 
     private static String pointsToJson(List<Point> pts) {
-        StringBuilder v = new StringBuilder("[");
-        StringBuilder t = new StringBuilder("[");
-
+        StringBuilder values = new StringBuilder();
+        StringBuilder times = new StringBuilder();
         for (int i = 0; i < pts.size(); i++) {
-            if (i > 0) { v.append(","); t.append(","); }
-            v.append(pts.get(i).value);
-            t.append(pts.get(i).ts);
+            if (i > 0) {
+                values.append(",");
+                times.append(",");
+            }
+            values.append(pts.get(i).value);
+            times.append(pts.get(i).ts);
         }
-
-        return "{\"values\":" + v + "],\"times\":" + t + "]}";
+        return "{\"values\":[" + values + "],\"times\":[" + times + "]}";
     }
 
     /* ====== CACHE ====== */
@@ -311,12 +307,20 @@ public class DataStore {
         synchronized void add(double v, long t) {
             points.addLast(new Point(t, v));
             lastSeen = t;
-            while (points.size() > CACHE_POINTS)
-                points.removeFirst();
+            while (points.size() > CACHE_POINTS) points.removeFirst();
+        }
+
+        synchronized List<Point> snapshot(long fromTs) {
+            List<Point> out = new ArrayList<>();
+            for (Point p : points) {
+                if (p.ts >= fromTs) out.add(p);
+            }
+            return out;
         }
 
         synchronized boolean isAlive() {
-            return System.currentTimeMillis() - lastSeen <= SENSOR_TTL_MS;
+            return lastSeen != 0 &&
+                    System.currentTimeMillis() - lastSeen <= SENSOR_TTL_MS;
         }
     }
 
