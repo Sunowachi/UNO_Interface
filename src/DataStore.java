@@ -111,11 +111,12 @@ public class DataStore {
         }
 
         long now = System.currentTimeMillis();
-        Long last = lastPostTs.put(sensorId, now);
+        Long last = lastPostTs.get(sensorId);
         if (last != null && now - last < SENSOR_MIN_POST_INTERVAL_MS) {
             HttpUtil.sendError(ex, 429, "sensor_rate_limit");
             return;
         }
+        lastPostTs.put(sensorId, now);
 
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
         if (bodyBytes.length == 0 || bodyBytes.length > 4096) {
@@ -163,6 +164,10 @@ public class DataStore {
                 .add(value, ts);
 
         dbQueue.offer(new DbPoint(sensor, var, ts, value));
+        if (!dbQueue.offer(new DbPoint(sensor, var, ts, value))) {
+            HttpUtil.sendError(ex, 503, "storage_overload");
+            return;
+        }
     }
 
     /* ====== DB WRITER ====== */
@@ -209,6 +214,7 @@ public class DataStore {
                     ps.addBatch();
                 }
                 ps.executeBatch();
+                ps.clearBatch();
             }
             c.commit();
 
@@ -319,7 +325,10 @@ public class DataStore {
                 String[] kv = part.split(":", 2);
                 if (kv.length != 2) continue;
                 String k = kv[0].replace("\"", "").trim();
-                double v = Double.parseDouble(kv[1].trim());
+                String rawVal = kv[1].trim();
+                if (rawVal.startsWith("\"")) return null;
+                double v = Double.parseDouble(rawVal);
+
                 m.put(k, v);
             }
             return m;
