@@ -57,13 +57,6 @@
       ]
     },
     {
-      "id": "1",
-      "name": "Датчик 1",
-      "vars": "",
-      "deleted": false,
-      "varSettings": []
-    },
-    {
       "id": "2",
       "name": "Датчик 2",
       "vars": "temperature, humidity",
