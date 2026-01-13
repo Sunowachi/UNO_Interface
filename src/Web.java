@@ -10,6 +10,8 @@ import java.util.concurrent.TimeUnit;
 public class Web {
 
     private static final int PORT = 8181;
+    private static final int MAX_BODY_SIZE = 64 * 1024; // 64 KB
+
     public static final long SERVER_START = System.currentTimeMillis();
 
     public static void main(String[] args) throws IOException {
@@ -20,7 +22,7 @@ public class Web {
         Security.ensureDefaultDeveloper();
 
         DataStore.warmupCacheFromDb();
-        DataStore.startDbWriter(); // <<< КРИТИЧЕСКИ ВАЖНО
+        DataStore.startDbWriter();
 
         /* ===== HTTP SERVER ===== */
 
@@ -29,15 +31,16 @@ public class Web {
 
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
-
         server.createContext("/sensor/register", Web::handleSensorRegister);
 
         server.createContext("/config/load", Web::handleConfigLoad);
         server.createContext("/config/save", Web::handleConfigSave);
+
         server.createContext("/auth/login", Web::handleLogin);
         server.createContext("/auth/logout", Web::handleLogout);
         server.createContext("/auth/me", Web::handleAuthMe);
         server.createContext("/auth/ping", Web::handleAuthPing);
+
         server.createContext("/", Web::handleStatic);
 
         server.setExecutor(Executors.newCachedThreadPool());
@@ -73,7 +76,7 @@ public class Web {
         }));
     }
 
-    /* === handlers === */
+    /* ================= HANDLERS ================= */
 
     static void handleInit(HttpExchange ex) throws IOException {
 
@@ -93,7 +96,20 @@ public class Web {
         );
     }
 
+    /* ===== SENSOR DATA ===== */
+
     static void handleData(HttpExchange ex) throws IOException {
+
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
+            HttpUtil.sendError(ex, 413, "payload_too_large");
+            return;
+        }
+
         DataStore.handleData(ex);
     }
 
@@ -126,11 +142,16 @@ public class Web {
             return;
         }
 
-        String token = Security.registerSensor(sensorId);
+        String ip = ex.getRemoteAddress()
+                .getAddress().getHostAddress();
+
+        String token = Security.registerSensor(sensorId, ip);
         if (token == null) {
-            HttpUtil.sendError(ex, 500, "register_failed");
+            HttpUtil.sendError(ex, 429, "register_limited");
             return;
         }
+
+        Audit.log(sensorId, "SENSOR_REGISTER", ip);
 
         HttpUtil.sendJson(ex,
                 "{\"token\":\"" + token + "\"}"
