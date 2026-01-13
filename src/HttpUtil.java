@@ -97,6 +97,20 @@ public class HttpUtil {
         return map;
     }
 
+    /* ========= BODY SIZE ========= */
+
+    static long getBodySize(HttpExchange ex) {
+
+        String cl = ex.getRequestHeaders().getFirst("Content-Length");
+        if (cl == null) return 0;
+
+        try {
+            return Long.parseLong(cl);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     /* ========= RAW JSON (CONFIG / FUTURE API) ========= */
 
     static String readRawJson(HttpExchange ex, int maxSize) throws IOException {
