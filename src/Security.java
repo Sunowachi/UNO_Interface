@@ -26,6 +26,11 @@ public class Security {
     static final String SENSOR_REGISTER_KEY =
             System.getenv().getOrDefault("SENSOR_REGISTER_KEY", "CHANGE_ME");
 
+    /* ===== SENSOR LIMITS ===== */
+
+    static final int MAX_SENSORS_TOTAL = 10_000;
+    static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
+    static final long MIN_SENSOR_PING_INTERVAL_MS = 500;
 
     /* ================= PERMISSIONS ================= */
 
@@ -61,12 +66,15 @@ public class Security {
             c = Database.borrow();
 
             String stored;
+            long lastSeen;
+
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT token_hash FROM sensors WHERE sensor_id=?")) {
+                    "SELECT token_hash, last_seen FROM sensors WHERE sensor_id=?")) {
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
                 stored = rs.getString(1);
+                lastSeen = rs.getLong(2);
             }
 
             String incoming = hashToken(token);
@@ -76,9 +84,14 @@ public class Security {
                 return false;
             }
 
+            long now = System.currentTimeMillis();
+            if (now - lastSeen < MIN_SENSOR_PING_INTERVAL_MS) {
+                return false;
+            }
+
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
-                ps.setLong(1, System.currentTimeMillis());
+                ps.setLong(1, now);
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
@@ -113,31 +126,58 @@ public class Security {
         return SENSOR_REGISTER_KEY.equals(key);
     }
 
-    static String registerSensor(String sensorId) {
+    static String registerSensor(String sensorId, String ip) {
+
         if ("CHANGE_ME".equals(SENSOR_REGISTER_KEY))
             throw new IllegalStateException("SENSOR_REGISTER_KEY not set");
 
         if (sensorId == null || sensorId.length() > 64) return null;
 
-        String token = UUID.randomUUID().toString().replace("-", "");
-        String hash = hashToken(token);
-        long now = System.currentTimeMillis();
-
         Connection c = null;
         try {
             c = Database.borrow();
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT COUNT(*) FROM sensors")) {
+                ResultSet rs = ps.executeQuery();
+                if (rs.next() && rs.getInt(1) >= MAX_SENSORS_TOTAL) {
+                    return null;
+                }
+            }
+
             try (PreparedStatement ps = c.prepareStatement(
                     """
-                    INSERT INTO sensors(sensor_id, token_hash, created_at, last_seen)
-                    VALUES (?,?,?,?)
+                    SELECT COUNT(*) FROM sensors
+                    WHERE created_at > ? AND register_ip = ?
+                    """)) {
+                ps.setLong(1, System.currentTimeMillis() - 3_600_000);
+                ps.setString(2, ip);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next() && rs.getInt(1) >= MAX_SENSOR_REG_PER_IP_PER_HOUR) {
+                    return null;
+                }
+            }
+
+            String token = UUID.randomUUID().toString().replace("-", "");
+            String hash = hashToken(token);
+            long now = System.currentTimeMillis();
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    """
+                    INSERT INTO sensors
+                    (sensor_id, token_hash, created_at, last_seen, register_ip)
+                    VALUES (?,?,?,?,?)
                     """)) {
                 ps.setString(1, sensorId);
                 ps.setString(2, hash);
                 ps.setLong(3, now);
                 ps.setLong(4, now);
+                ps.setString(5, ip);
                 ps.executeUpdate();
             }
+
             return token;
+
         } catch (Exception e) {
             return null;
         } finally {
