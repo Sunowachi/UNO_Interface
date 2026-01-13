@@ -62,11 +62,12 @@ public class HttpUtil {
 
     static Map<String, String> parseJson(HttpExchange ex) throws IOException {
 
-        if (!"application/json".equalsIgnoreCase(
-                Optional.ofNullable(ex.getRequestHeaders()
-                                .getFirst("Content-Type"))
-                        .orElse(""))
-        ) {
+        String ct = Optional.ofNullable(
+                        ex.getRequestHeaders().getFirst("Content-Type"))
+                .orElse("")
+                .toLowerCase();
+
+        if (!ct.startsWith("application/json")) {
             return Map.of();
         }
 
@@ -107,11 +108,16 @@ public class HttpUtil {
         var cookies = ex.getRequestHeaders().get("Cookie");
         if (cookies == null) return null;
 
-        for (String c : cookies)
-            for (String p : c.split(";"))
-                if (p.trim().startsWith(name + "="))
-                    return p.trim().substring(name.length() + 1);
-
+        for (String c : cookies) {
+            for (String p : c.split(";")) {
+                p = p.trim();
+                if (p.length() > name.length() + 1 &&
+                        p.startsWith(name) &&
+                        p.charAt(name.length()) == '=') {
+                    return p.substring(name.length() + 1);
+                }
+            }
+        }
         return null;
     }
 
@@ -180,7 +186,10 @@ public class HttpUtil {
         byte[] data = Files.readAllBytes(path);
 
         ex.getResponseHeaders().set("Content-Type", getMimeType(name));
-        ex.getResponseHeaders().set("Cache-Control", "public, max-age=3600");
+        ex.getResponseHeaders().set(
+                "Cache-Control",
+                name.endsWith(".html") ? "no-store" : "public, max-age=3600"
+        );
 
         applySecurityHeaders(ex);
 
@@ -241,10 +250,15 @@ public class HttpUtil {
         String q = ex.getRequestURI().getQuery();
         if (q == null) return 0;
 
-        for (String p : q.split("&"))
-            if (p.startsWith("rangeMs="))
-                return Math.max(0, Long.parseLong(p.substring(8)));
-
+        for (String p : q.split("&")) {
+            if (p.startsWith("rangeMs=")) {
+                try {
+                    return Math.max(0, Long.parseLong(p.substring(8)));
+                } catch (NumberFormatException ignored) {
+                    return 0;
+                }
+            }
+        }
         return 0;
     }
 }
