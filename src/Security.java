@@ -15,14 +15,16 @@ public class Security {
 
     /* ================= CONFIG ================= */
 
-    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;  // сессия без активности = 10 минут
+    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;
     static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
     static final int MAX_SESSIONS = 1000;
 
     static final int ITERATIONS = 120_000;
     static final int KEY_LENGTH = 256;
+    static final int MAX_PASSWORD_LENGTH = 256;
 
-    static final String SENSOR_REGISTER_KEY = "CHANGE_ME_REGISTER_KEY";
+    static final String SENSOR_REGISTER_KEY =
+            System.getenv().getOrDefault("SENSOR_REGISTER_KEY", "CHANGE_ME");
 
     /* ================= PERMISSIONS ================= */
 
@@ -40,6 +42,15 @@ public class Security {
 
     /* ================= SENSORS ================= */
 
+    static String hashToken(String token) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return Base64.getEncoder().encodeToString(md.digest(token.getBytes()));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     static boolean checkSensorToken(String id, String token) {
         if (id == null || token == null) return false;
 
@@ -47,15 +58,18 @@ public class Security {
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT token FROM sensors WHERE sensor_id=?")) {
+                    "SELECT token_hash FROM sensors WHERE sensor_id=?")) {
 
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
 
+                String stored = rs.getString(1);
+                String incoming = hashToken(token);
+
                 if (!MessageDigest.isEqual(
-                        rs.getString(1).getBytes(),
-                        token.getBytes())) return false;
+                        stored.getBytes(),
+                        incoming.getBytes())) return false;
             }
 
             try (PreparedStatement ps = c.prepareStatement(
@@ -98,15 +112,16 @@ public class Security {
         if (sensorId == null) return null;
 
         String token = UUID.randomUUID().toString().replace("-", "");
+        String hash = hashToken(token);
         long now = System.currentTimeMillis();
 
         Connection c = null;
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO sensors(sensor_id,token,created_at,last_seen) VALUES (?,?,?,?)")) {
+                    "INSERT INTO sensors(sensor_id,token_hash,created_at,last_seen) VALUES (?,?,?,?)")) {
                 ps.setString(1, sensorId);
-                ps.setString(2, token);
+                ps.setString(2, hash);
                 ps.setLong(3, now);
                 ps.setLong(4, now);
                 ps.executeUpdate();
@@ -201,6 +216,9 @@ public class Security {
     /* ================= PASSWORDS ================= */
 
     static String hashPassword(String password) {
+        if (password == null || password.length() > MAX_PASSWORD_LENGTH)
+            throw new IllegalArgumentException("bad password");
+
         try {
             byte[] salt = new byte[16];
             SecureRandom.getInstanceStrong().nextBytes(salt);
@@ -222,7 +240,12 @@ public class Security {
 
     static boolean checkPassword(String password, String stored) {
         try {
+            if (password == null || stored == null) return false;
+            if (password.length() > MAX_PASSWORD_LENGTH) return false;
+
             String[] p = stored.split(":");
+            if (p.length != 2) return false;
+
             byte[] salt = Base64.getDecoder().decode(p[0]);
             byte[] hash = Base64.getDecoder().decode(p[1]);
 
