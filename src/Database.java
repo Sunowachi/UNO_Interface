@@ -17,7 +17,7 @@ public class Database {
     private static final String DB_URL =
             System.getenv().getOrDefault(
                     "DB_URL",
-                    "jdbc:postgresql://localhost:8080/sensors" // Стандартный порт: 5432
+                    "jdbc:postgresql://localhost:5432/sensors"
             );
 
     private static final String DB_USER =
@@ -86,13 +86,11 @@ public class Database {
                 throw new SQLException("DB pool exhausted");
 
             if (c.isClosed() || !c.isValid(2)) {
-                try {
-                    return createConnection();
-                } catch (SQLException e) {
-                    return null;
-                }
+                quietlyClose(c);
+                return createConnection();
             }
             return c;
+
         } catch (Exception e) {
             throw new RuntimeException("DB unavailable", e);
         }
@@ -182,8 +180,8 @@ public class Database {
                     rs.getString(2)
             );
 
-        } catch (Exception e) {
-            return null;
+        } catch (SQLException e) {
+            throw new RuntimeException("DB error", e);
         } finally {
             release(c);
         }
