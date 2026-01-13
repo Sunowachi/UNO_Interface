@@ -15,7 +15,7 @@ public class Security {
 
     /* ================= CONFIG ================= */
 
-    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+    static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;  // сессия без активности = 10 минут
     static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
     static final int MAX_SESSIONS = 1000;
 
@@ -48,14 +48,14 @@ public class Security {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT token FROM sensors WHERE sensor_id=?")) {
+
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
 
                 if (!MessageDigest.isEqual(
                         rs.getString(1).getBytes(),
-                        token.getBytes()
-                )) return false;
+                        token.getBytes())) return false;
             }
 
             try (PreparedStatement ps = c.prepareStatement(
@@ -158,6 +158,13 @@ public class Security {
         sessions.entrySet().removeIf(e -> e.getValue().expired());
     }
 
+    static Session peekSession(HttpExchange ex) {
+        String sid = HttpUtil.getCookie(ex, "SESSION");
+        if (sid == null) return null;
+        Session s = sessions.get(sid);
+        return (s == null || s.expired()) ? null : s;
+    }
+
     static Session getSession(HttpExchange ex) {
         cleanupSessions();
         String sid = HttpUtil.getCookie(ex, "SESSION");
@@ -178,7 +185,6 @@ public class Security {
             HttpUtil.sendError(ex, 403, "csrf");
             return false;
         }
-        s.rotateCsrf();
         return true;
     }
 
