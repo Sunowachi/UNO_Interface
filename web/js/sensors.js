@@ -4,6 +4,25 @@ import { config, setConfig, csrfToken, PERMISSIONS } from './constants.js';
 import { showToast, updateSensorPanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 
+const MAX_SENSORS = 256;
+
+let saveTimer = null;
+
+function normalizeVars(input) {
+  if (Array.isArray(input)) return input;
+  if (typeof input === 'string') {
+    return input
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function isValidVarName(v) {
+  return /^[a-zA-Z0-9_]{1,32}$/.test(v);
+}
+
 // === ЗАГРУЗКА КОНФИГА ===
 export async function loadConfig() {
   try {
@@ -40,25 +59,32 @@ export async function loadConfig() {
 
 // === СИНХРОНИЗАЦИЯ КОНФИГА С ДАННЫМИ (при загрузке страницы) ===
 export async function syncConfigInitial() {
+
+  if (config.sensors.length >= MAX_SENSORS) {
+    console.warn('Достигнут лимит датчиков = 256!');
+    return;
+  }
+
   const ipMap = buildIpVarMap();
   let updated = false;
 
   for (const [sensorId, varSet] of Object.entries(ipMap)) {
-    const varsFromData = Array.from(varSet).join(', ');
+    const varsFromData = Array.from(varSet)
+      .filter(isValidVarName);
     let sCfg = config.sensors.find(s => String(s.id) === String(sensorId));
 
     if (!sCfg) {
       sCfg = {
         id: sensorId,
         name: sensorId,
-        vars: varsFromData,
+        vars: normalizeVars(varsFromData),
         deleted: false
       };
       config.sensors.push(sCfg);
       updated = true;
     } else {
-      if (!sCfg.vars || sCfg.vars.trim() === '') {
-        sCfg.vars = varsFromData;
+      sCfg.vars = normalizeVars(sCfg.vars);
+      if (sCfg.vars.length === 0) {
         updated = true;
       }
     }
@@ -69,7 +95,7 @@ export async function syncConfigInitial() {
       hasPermission(PERMISSIONS.EDIT_CONFIG) &&
       hasPermission(PERMISSIONS.SAVE_CONFIG)
     ) {
-      await saveConfigSilent();
+      scheduleSave();
     } else {
       showToast('❌ Недостаточно прав для сохранения конфигурации');
     }
@@ -97,7 +123,7 @@ export async function syncNewSensors() {
 
   if (updated) {
     if (hasPermission(PERMISSIONS.SAVE_CONFIG)) {
-      await saveConfigSilent();
+      scheduleSave();
       showToast('✅ Добавлены новые датчики');
     } else {
       showToast('⚠️ Найдены новые датчики (нет прав на сохранение)');
@@ -161,4 +187,9 @@ export async function saveConfigWithMessage() {
   } catch (e) {
     alert('❌ Ошибка сохранения: ' + e.message);
   }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveConfigSilent, 2000);
 }
