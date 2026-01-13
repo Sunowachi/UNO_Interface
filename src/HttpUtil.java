@@ -20,31 +20,21 @@ public class HttpUtil {
         ex.getResponseHeaders().set("X-Frame-Options", "DENY");
         ex.getResponseHeaders().set(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'self'; object-src 'none'"
+                "default-src 'self'; " +
+                        "script-src 'self'; " +
+                        "connect-src 'self'; " +
+                        "object-src 'none'"
         );
     }
 
-    /* ========= JSON ========= */
+    /* ========= JSON RESPONSE ========= */
 
     static void sendJson(HttpExchange ex, String json) throws IOException {
-        byte[] b = json.getBytes(StandardCharsets.UTF_8);
-
-        ex.getResponseHeaders().set(
-                "Content-Type", "application/json; charset=utf-8");
-        ex.getResponseHeaders().set("Cache-Control", "no-store");
-
-        applySecurityHeaders(ex);
-
-        ex.sendResponseHeaders(200, b.length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(b);
-        }
+        sendJson(ex, 200, json);
     }
 
-    static void sendError(HttpExchange ex, int code, String msg) throws IOException {
-        String safe = msg.replaceAll("[^a-zA-Z0-9_]", "");
-        byte[] b = ("{\"error\":\"" + safe + "\"}")
-                .getBytes(StandardCharsets.UTF_8);
+    static void sendJson(HttpExchange ex, int code, String json) throws IOException {
+        byte[] b = json.getBytes(StandardCharsets.UTF_8);
 
         ex.getResponseHeaders().set(
                 "Content-Type", "application/json; charset=utf-8");
@@ -58,7 +48,12 @@ public class HttpUtil {
         }
     }
 
-    /* ========= JSON PARSE (SAFE, FLAT) ========= */
+    static void sendError(HttpExchange ex, int code, String msg) throws IOException {
+        String safe = msg.replaceAll("[^a-zA-Z0-9_]", "");
+        sendJson(ex, code, "{\"error\":\"" + safe + "\"}");
+    }
+
+    /* ========= STRICT JSON PARSE (AUTH / KEYS ONLY) ========= */
 
     static Map<String, String> parseJson(HttpExchange ex) throws IOException {
 
@@ -100,6 +95,26 @@ public class HttpUtil {
             if (map.size() > 10) return Map.of();
         }
         return map;
+    }
+
+    /* ========= RAW JSON (CONFIG / FUTURE API) ========= */
+
+    static String readRawJson(HttpExchange ex, int maxSize) throws IOException {
+
+        String ct = Optional.ofNullable(
+                        ex.getRequestHeaders().getFirst("Content-Type"))
+                .orElse("")
+                .toLowerCase();
+
+        if (!ct.startsWith("application/json")) return null;
+
+        byte[] raw = ex.getRequestBody().readAllBytes();
+        if (raw.length == 0 || raw.length > maxSize) return null;
+
+        String json = new String(raw, StandardCharsets.UTF_8).trim();
+        if (!json.startsWith("{") || !json.endsWith("}")) return null;
+
+        return json;
     }
 
     /* ========= COOKIES ========= */
@@ -203,15 +218,21 @@ public class HttpUtil {
         return name.endsWith(".html") ||
                 name.endsWith(".js") ||
                 name.endsWith(".css") ||
-                name.endsWith(".json");
+                name.endsWith(".json") ||
+                name.endsWith(".svg") ||
+                name.endsWith(".png") ||
+                name.endsWith(".woff2");
     }
 
     static String getMimeType(String file) {
-        if (file.endsWith(".html")) return "text/html; charset=utf-8";
-        if (file.endsWith(".js"))   return "application/javascript; charset=utf-8";
-        if (file.endsWith(".json")) return "application/json; charset=utf-8";
-        if (file.endsWith(".css"))  return "text/css; charset=utf-8";
-        return "text/plain; charset=utf-8";
+        if (file.endsWith(".html"))  return "text/html; charset=utf-8";
+        if (file.endsWith(".js"))    return "application/javascript; charset=utf-8";
+        if (file.endsWith(".json"))  return "application/json; charset=utf-8";
+        if (file.endsWith(".css"))   return "text/css; charset=utf-8";
+        if (file.endsWith(".svg"))   return "image/svg+xml";
+        if (file.endsWith(".png"))   return "image/png";
+        if (file.endsWith(".woff2")) return "font/woff2";
+        return "application/octet-stream";
     }
 
     /* ========= CONFIG ========= */
@@ -228,14 +249,8 @@ public class HttpUtil {
 
     static void saveConfig(HttpExchange ex) throws IOException {
 
-        byte[] raw = ex.getRequestBody().readAllBytes();
-        if (raw.length == 0 || raw.length > MAX_CONFIG_SIZE) {
-            sendError(ex, 413, "config_too_large");
-            return;
-        }
-
-        String json = new String(raw, StandardCharsets.UTF_8).trim();
-        if (!json.startsWith("{") || !json.endsWith("}")) {
+        String json = readRawJson(ex, MAX_CONFIG_SIZE);
+        if (json == null) {
             sendError(ex, 400, "invalid_json");
             return;
         }
