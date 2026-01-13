@@ -4,18 +4,23 @@ import { config, setConfig, csrfToken, PERMISSIONS } from './constants.js';
 import { showToast, updateSensorPanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 
-const MAX_SENSORS = 256;
+/* ================== CONSTANTS ================== */
 
-let saveTimer = null;
+const MAX_SENSORS = 256;
+const SAVE_DEBOUNCE_MS = 2000;
+
+/* ================== UTILS ================== */
 
 function normalizeVars(input) {
   if (Array.isArray(input)) return input;
+
   if (typeof input === 'string') {
     return input
       .split(',')
       .map(v => v.trim())
       .filter(Boolean);
   }
+
   return [];
 }
 
@@ -23,14 +28,20 @@ function isValidVarName(v) {
   return /^[a-zA-Z0-9_]{1,32}$/.test(v);
 }
 
-// === ЗАГРУЗКА КОНФИГА ===
+let saveTimer = null;
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveConfigSilent, SAVE_DEBOUNCE_MS);
+}
+
+/* ================== LOAD CONFIG ================== */
+
 export async function loadConfig() {
   try {
     const res = await fetch('/config/load', {
       credentials: 'include',
-      headers: csrfToken ? {
-        'X-CSRF-Token': csrfToken
-      } : {}
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -39,7 +50,7 @@ export async function loadConfig() {
     }
 
     if (!res.ok) {
-      throw new Error('Ошибка HTTP: ' + res.status);
+      throw new Error('HTTP error: ' + res.status);
     }
 
     const text = await res.text();
@@ -47,9 +58,18 @@ export async function loadConfig() {
 
     if (!parsed || !Array.isArray(parsed.sensors)) {
       setConfig({ sensors: [] });
-    } else {
-      setConfig(parsed);
+      return;
     }
+
+    // Нормализация vars и deleted
+    parsed.sensors.forEach(s => {
+      s.vars = normalizeVars(s.vars).filter(isValidVarName);
+      if (typeof s.deleted !== 'boolean') {
+        s.deleted = false;
+      }
+    });
+
+    setConfig(parsed);
 
   } catch (e) {
     console.warn('Ошибка загрузки конфига:', e);
@@ -57,34 +77,42 @@ export async function loadConfig() {
   }
 }
 
-// === СИНХРОНИЗАЦИЯ КОНФИГА С ДАННЫМИ (при загрузке страницы) ===
+/* ================== INITIAL SYNC ================== */
+
 export async function syncConfigInitial() {
-
-  if (config.sensors.length >= MAX_SENSORS) {
-    console.warn('Достигнут лимит датчиков = 256!');
-    return;
-  }
-
   const ipMap = buildIpVarMap();
   let updated = false;
 
   for (const [sensorId, varSet] of Object.entries(ipMap)) {
+
+    if (config.sensors.length >= MAX_SENSORS) {
+      console.warn('Достигнут лимит датчиков');
+      break;
+    }
+
     const varsFromData = Array.from(varSet)
       .filter(isValidVarName);
-    let sCfg = config.sensors.find(s => String(s.id) === String(sensorId));
+
+    let sCfg = config.sensors.find(
+      s => String(s.id) === String(sensorId)
+    );
 
     if (!sCfg) {
       sCfg = {
         id: sensorId,
         name: sensorId,
-        vars: normalizeVars(varsFromData),
+        vars: varsFromData,
         deleted: false
       };
       config.sensors.push(sCfg);
       updated = true;
     } else {
+      if (sCfg.deleted) continue;
+
       sCfg.vars = normalizeVars(sCfg.vars);
-      if (sCfg.vars.length === 0) {
+
+      if (sCfg.vars.length === 0 && varsFromData.length > 0) {
+        sCfg.vars = varsFromData;
         updated = true;
       }
     }
@@ -102,18 +130,28 @@ export async function syncConfigInitial() {
   }
 }
 
-// === ДОБАВЛЕНИЕ ТОЛЬКО НОВЫХ ДАТЧИКОВ ПО IP (при каждом новом /data) ===
+/* ================== NEW SENSOR SYNC ================== */
+
 export async function syncNewSensors() {
   const ipMap = buildIpVarMap();
   let updated = false;
 
   for (const [sensorId, varSet] of Object.entries(ipMap)) {
-    let sCfg = config.sensors.find(s => String(s.id) === String(sensorId));
+
+    if (config.sensors.length >= MAX_SENSORS) {
+      console.warn('Достигнут лимит датчиков');
+      break;
+    }
+
+    let sCfg = config.sensors.find(
+      s => String(s.id) === String(sensorId)
+    );
+
     if (!sCfg) {
       sCfg = {
         id: sensorId,
         name: sensorId,
-        vars: Array.from(varSet).join(', '),
+        vars: Array.from(varSet).filter(isValidVarName),
         deleted: false
       };
       config.sensors.push(sCfg);
@@ -132,7 +170,8 @@ export async function syncNewSensors() {
   }
 }
 
-// === СОХРАНЕНИЕ CONFIG.JSON ===
+/* ================== SAVE CONFIG ================== */
+
 export async function saveConfigSilent() {
   try {
     const res = await fetch('/config/save', {
@@ -151,7 +190,7 @@ export async function saveConfigSilent() {
     }
 
     if (!res.ok) {
-      throw new Error('Ошибка HTTP: ' + res.status);
+      throw new Error('HTTP error: ' + res.status);
     }
 
   } catch (e) {
@@ -187,9 +226,4 @@ export async function saveConfigWithMessage() {
   } catch (e) {
     alert('❌ Ошибка сохранения: ' + e.message);
   }
-}
-
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveConfigSilent, 2000);
 }
