@@ -26,6 +26,7 @@ public class Security {
     static final String SENSOR_REGISTER_KEY =
             System.getenv().getOrDefault("SENSOR_REGISTER_KEY", "CHANGE_ME");
 
+
     /* ================= PERMISSIONS ================= */
 
     enum Permission {
@@ -70,7 +71,8 @@ public class Security {
 
             String incoming = hashToken(token);
             if (!MessageDigest.isEqual(
-                    stored.getBytes(), incoming.getBytes())) {
+                    Base64.getDecoder().decode(stored),
+                    Base64.getDecoder().decode(incoming))) {
                 return false;
             }
 
@@ -112,6 +114,9 @@ public class Security {
     }
 
     static String registerSensor(String sensorId) {
+        if ("CHANGE_ME".equals(SENSOR_REGISTER_KEY))
+            throw new IllegalStateException("SENSOR_REGISTER_KEY not set");
+
         if (sensorId == null || sensorId.length() > 64) return null;
 
         String token = UUID.randomUUID().toString().replace("-", "");
@@ -393,14 +398,22 @@ public class Security {
         String ip = ex.getRemoteAddress()
                 .getAddress().getHostAddress();
 
+        if (isBlocked(user, ip)) {
+            HttpUtil.sendError(ex, 403, "blocked");
+            return;
+        }
+
         var dbUser = Database.findUser(user);
         if (dbUser == null ||
                 !checkPassword(pass, dbUser.passwordHash)) {
 
+            recordFailedLogin(user, ip);
             Audit.log(user, "LOGIN_FAIL", ip);
             HttpUtil.sendError(ex, 401, "invalid_login");
             return;
         }
+
+        clearFailedLogins(user, ip);
 
         String sid = UUID.randomUUID().toString();
         sessions.put(sid, new Session(user, dbUser.role));
