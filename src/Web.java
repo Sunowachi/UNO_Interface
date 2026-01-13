@@ -44,6 +44,7 @@ public class Web {
         server.createContext("/", Web::handleStatic);
 
         server.setExecutor(Executors.newCachedThreadPool());
+        server.setExecutor(Executors.newFixedThreadPool(32));
         server.start();
 
         System.out.println("✅ Server started: http://localhost:" + PORT);
@@ -79,6 +80,10 @@ public class Web {
     /* ================= HANDLERS ================= */
 
     static void handleInit(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
 
         Security.Session s = Security.getSession(ex);
         if (s == null) {
@@ -105,6 +110,12 @@ public class Web {
             return;
         }
 
+        if (!"application/json".equals(ex.getRequestHeaders()
+                .getFirst("Content-Type"))) {
+            HttpUtil.sendError(ex, 415, "unsupported_media_type");
+            return;
+        }
+
         if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
             HttpUtil.sendError(ex, 413, "payload_too_large");
             return;
@@ -119,6 +130,12 @@ public class Web {
 
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        if (!"application/json".equals(ex.getRequestHeaders()
+                .getFirst("Content-Type"))) {
+            HttpUtil.sendError(ex, 415, "unsupported_media_type");
             return;
         }
 
