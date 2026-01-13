@@ -13,6 +13,14 @@ public class DataStore {
     static final int CACHE_POINTS = 200;
     static final long SENSOR_TTL_MS = 60_000;
 
+    /* ===== SENSOR PROTECTION ===== */
+
+    static final long SENSOR_MIN_POST_INTERVAL_MS = 50;
+    static final int MAX_SENSOR_FIELDS = 100;
+
+    static final Map<String, Long> lastPostTs =
+            new ConcurrentHashMap<>();
+
     /* ===== DB ASYNC SETTINGS ===== */
 
     static final int DB_BATCH_SIZE = 500;
@@ -20,6 +28,8 @@ public class DataStore {
 
     static final BlockingQueue<DbPoint> dbQueue =
             new LinkedBlockingQueue<>(DB_QUEUE_LIMIT);
+
+    static volatile boolean dbRunning = true;
 
     static final Map<String, SensorCache> cache =
             new ConcurrentHashMap<>();
@@ -66,7 +76,8 @@ public class DataStore {
     }
 
     static void cleanupCache() {
-        cache.entrySet().removeIf(e -> !e.getValue().isAlive());
+        cache.entrySet().removeIf(e ->
+                e.getValue().status() == SensorCache.Status.DEAD);
 
         Connection c = null;
         try {
@@ -107,8 +118,15 @@ public class DataStore {
             return;
         }
 
+        long now = System.currentTimeMillis();
+        Long last = lastPostTs.put(sensorId, now);
+        if (last != null && now - last < SENSOR_MIN_POST_INTERVAL_MS) {
+            HttpUtil.sendError(ex, 429, "sensor_rate_limit");
+            return;
+        }
+
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
-        if (bodyBytes.length > 4096) {
+        if (bodyBytes.length == 0 || bodyBytes.length > 4096) {
             HttpUtil.sendError(ex, 413, "payload_too_large");
             return;
         }
@@ -121,21 +139,27 @@ public class DataStore {
 
         body = body.substring(1, body.length() - 1);
 
+        String[] pairs = body.split(",");
+        if (pairs.length > MAX_SENSOR_FIELDS) {
+            HttpUtil.sendError(ex, 413, "too_many_fields");
+            return;
+        }
+
         int created = 0;
 
-        for (String pair : body.split(",")) {
+        for (String pair : pairs) {
             int idx = pair.indexOf(':');
             if (idx <= 0) continue;
 
-            String var = pair.substring(0, idx).trim()
+            String var = pair.substring(0, idx)
+                    .trim()
                     .replace("\"", "");
 
             if (!var.matches("[a-zA-Z0-9_]+")) continue;
 
             String key = sensorId + "_" + var;
 
-            boolean exists = cache.containsKey(key);
-            if (!exists) {
+            if (!cache.containsKey(key)) {
                 created++;
                 if (created > 50) {
                     HttpUtil.sendError(ex, 429, "too_many_metrics");
@@ -177,9 +201,11 @@ public class DataStore {
 
             List<DbPoint> batch = new ArrayList<>(DB_BATCH_SIZE);
 
-            while (true) {
+            while (dbRunning) {
                 try {
-                    DbPoint first = dbQueue.take();
+                    DbPoint first = dbQueue.poll(1, TimeUnit.SECONDS);
+                    if (first == null) continue;
+
                     batch.add(first);
                     dbQueue.drainTo(batch, DB_BATCH_SIZE - 1);
 
@@ -196,6 +222,10 @@ public class DataStore {
         t.setDaemon(true);
         t.setName("db-writer");
         t.start();
+    }
+
+    static void stopDbWriter() {
+        dbRunning = false;
     }
 
     private static void writeBatch(List<DbPoint> batch) {
@@ -276,7 +306,7 @@ public class DataStore {
 
         for (var e : cache.entrySet()) {
             SensorCache sc = e.getValue();
-            if (!sc.isAlive()) continue;
+            if (sc.status() == SensorCache.Status.DEAD) continue;
 
             List<Point> pts = sc.snapshot(fromTs);
             if (!pts.isEmpty()) data.put(e.getKey(), pts);
@@ -316,6 +346,8 @@ public class DataStore {
     /* ====== CACHE ====== */
 
     static class SensorCache {
+        enum Status { ONLINE, STALE, DEAD }
+
         volatile long lastSeen;
         final Deque<Point> points = new ArrayDeque<>();
 
@@ -331,6 +363,14 @@ public class DataStore {
                 if (p.ts >= fromTs) out.add(p);
             }
             return out;
+        }
+
+        Status status() {
+            if (lastSeen == 0) return Status.DEAD;
+            long age = System.currentTimeMillis() - lastSeen;
+            if (age <= SENSOR_TTL_MS) return Status.ONLINE;
+            if (age <= SENSOR_TTL_MS * 3) return Status.STALE;
+            return Status.DEAD;
         }
 
         synchronized boolean isAlive() {
