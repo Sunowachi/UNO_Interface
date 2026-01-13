@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class DataStore {
 
@@ -33,6 +34,8 @@ public class DataStore {
 
     static final Map<String, SensorCache> cache =
             new ConcurrentHashMap<>();
+
+    static final AtomicLong droppedPoints = new AtomicLong();
 
     /* ====== API ====== */
 
@@ -121,6 +124,7 @@ public class DataStore {
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
         if (bodyBytes.length == 0 || bodyBytes.length > 4096) {
             HttpUtil.sendError(ex, 413, "payload_too_large");
+            droppedPoints.incrementAndGet();
             return;
         }
 
@@ -148,7 +152,10 @@ public class DataStore {
                 }
             }
 
-            recordValue(sensorId, var, value);
+            if (!recordValue(sensorId, var, value)) {
+                HttpUtil.sendError(ex, 503, "storage_overload");
+                return;
+            }
         }
 
         HttpUtil.sendJson(ex, "{\"status\":\"OK\"}");
@@ -156,26 +163,23 @@ public class DataStore {
 
     /* ====== STORAGE ====== */
 
-    private static void recordValue(String sensor, String var, double value) {
+    private static boolean recordValue(String sensor, String var, double value) {
         long ts = System.currentTimeMillis();
         String key = sensor + ":" + var;
 
         cache.computeIfAbsent(key, k -> new SensorCache())
                 .add(value, ts);
 
-        dbQueue.offer(new DbPoint(sensor, var, ts, value));
-        if (!dbQueue.offer(new DbPoint(sensor, var, ts, value))) {
-            HttpUtil.sendError(ex, 503, "storage_overload");
-            return;
-        }
+        return dbQueue.offer(new DbPoint(sensor, var, ts, value));
     }
+
 
     /* ====== DB WRITER ====== */
 
     static void startDbWriter() {
         Thread t = new Thread(() -> {
             List<DbPoint> batch = new ArrayList<>(DB_BATCH_SIZE);
-            while (dbRunning) {
+            while (dbRunning || !dbQueue.isEmpty()) {
                 try {
                     DbPoint first = dbQueue.poll(1, TimeUnit.SECONDS);
                     if (first == null) continue;
