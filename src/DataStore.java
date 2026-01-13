@@ -144,12 +144,11 @@ public class DataStore {
 
             String key = sensorId + ":" + var;
 
-            if (!cache.containsKey(key)) {
-                created++;
-                if (created > MAX_NEW_METRICS_PER_POST) {
-                    HttpUtil.sendError(ex, 429, "too_many_metrics");
-                    return;
-                }
+            boolean isNew = !cache.containsKey(key);
+
+            if (isNew && ++created > MAX_NEW_METRICS_PER_POST) {
+                HttpUtil.sendError(ex, 429, "too_many_metrics");
+                return;
             }
 
             if (!recordValue(sensorId, var, value)) {
@@ -252,7 +251,7 @@ public class DataStore {
                 ResultSet rs = ps.executeQuery();
 
                 while (rs.next()) {
-                    String key = rs.getString(1) + "_" + rs.getString(2);
+                    String key = rs.getString(1) + ":" + rs.getString(2);
                     m.computeIfAbsent(key, k -> new ArrayList<>())
                             .add(new Point(rs.getLong(3), rs.getDouble(4)));
                 }
