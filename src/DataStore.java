@@ -1,6 +1,7 @@
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -112,28 +113,42 @@ public class DataStore {
             return;
         }
 
-        String body = new String(bodyBytes).trim()
-                .replaceAll("[{}\" ]", "");
+        String body = new String(bodyBytes, StandardCharsets.UTF_8).trim();
+        if (!body.startsWith("{") || !body.endsWith("}")) {
+            HttpUtil.sendError(ex, 400, "invalid_json");
+            return;
+        }
+
+        body = body.substring(1, body.length() - 1);
 
         int created = 0;
 
         for (String pair : body.split(",")) {
-            if (!pair.contains(":")) continue;
-            String[] kv = pair.split(":", 2);
+            int idx = pair.indexOf(':');
+            if (idx <= 0) continue;
 
-            String var = kv[0];
+            String var = pair.substring(0, idx).trim()
+                    .replace("\"", "");
+
             if (!var.matches("[a-zA-Z0-9_]+")) continue;
 
             String key = sensorId + "_" + var;
-            if (!cache.containsKey(key) && ++created > 50) {
-                HttpUtil.sendError(ex, 429, "too_many_metrics");
-                return;
+
+            boolean exists = cache.containsKey(key);
+            if (!exists) {
+                created++;
+                if (created > 50) {
+                    HttpUtil.sendError(ex, 429, "too_many_metrics");
+                    return;
+                }
             }
 
             try {
-                double value = Double.parseDouble(kv[1]);
+                double value = Double.parseDouble(
+                        pair.substring(idx + 1).trim());
                 recordValue(sensorId, var, value);
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         HttpUtil.sendJson(ex, "{\"status\":\"OK\"}");
