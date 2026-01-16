@@ -60,13 +60,14 @@ public class Security {
     }
 
     static boolean checkSensorToken(String id, String token) {
+
         if (id == null || token == null) return false;
 
         Connection c = null;
         try {
             c = Database.borrow();
 
-            String stored;
+            String storedHash;
             long lastSeen;
 
             try (PreparedStatement ps = c.prepareStatement(
@@ -74,14 +75,16 @@ public class Security {
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
-                stored = rs.getString(1);
-                lastSeen = rs.getLong(2);
+
+                storedHash = rs.getString("token_hash");
+                lastSeen = rs.getTimestamp("last_seen").getTime();
             }
 
-            String incoming = hashToken(token);
+            String incomingHash = hashToken(token);
+
             if (!MessageDigest.isEqual(
-                    Base64.getDecoder().decode(stored),
-                    Base64.getDecoder().decode(incoming))) {
+                    Base64.getDecoder().decode(storedHash),
+                    Base64.getDecoder().decode(incomingHash))) {
                 return false;
             }
 
@@ -92,7 +95,7 @@ public class Security {
 
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
-                ps.setLong(1, now);
+                ps.setTimestamp(1, new Timestamp(now));
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
@@ -100,11 +103,13 @@ public class Security {
             return true;
 
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         } finally {
             Database.release(c);
         }
     }
+
 
     // HTTP-адаптер
     static boolean checkSensorToken(HttpExchange ex) {
