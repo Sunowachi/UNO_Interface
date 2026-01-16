@@ -103,47 +103,53 @@ public class Web {
     /* ===== SENSOR DATA ===== */
 
     static void handleData(HttpExchange ex) throws IOException {
+        try {
+            if ("POST".equalsIgnoreCase(ex.getRequestMethod())) {
 
-        if ("POST".equalsIgnoreCase(ex.getRequestMethod())) {
+                String ct = ex.getRequestHeaders().getFirst("Content-Type");
+                if (ct == null || !ct.startsWith("application/json")) {
+                    HttpUtil.sendError(ex, 415, "unsupported_media_type");
+                    return;
+                }
 
-            String ct = ex.getRequestHeaders().getFirst("Content-Type");
-            if (ct == null || !ct.startsWith("application/json")) {
-                HttpUtil.sendError(ex, 415, "unsupported_media_type");
+                if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
+                    HttpUtil.sendError(ex, 413, "payload_too_large");
+                    return;
+                }
+
+                // SENSOR AUTH
+                if (!Security.checkSensorToken(ex)) {
+                    HttpUtil.sendError(ex, 403, "forbidden");
+                    return;
+                }
+
+                DataStore.handleData(ex);
                 return;
             }
 
-            if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
-                HttpUtil.sendError(ex, 413, "payload_too_large");
+            if ("GET".equalsIgnoreCase(ex.getRequestMethod())) {
+
+                Security.Session s = Security.getSession(ex);
+                if (s == null) {
+                    HttpUtil.sendError(ex, 401, "unauthorized");
+                    return;
+                }
+
+                if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) {
+                    return;
+                }
+
+                DataStore.handleData(ex);
                 return;
             }
 
-            // SENSOR AUTH
-            if (!Security.checkSensorToken(ex)) {
-                HttpUtil.sendError(ex, 403, "forbidden");
-                return;
-            }
-
-            DataStore.handleData(ex);
-            return;
+            ex.sendResponseHeaders(405, -1);
+        } catch (Exception e) {
+            e.printStackTrace(); // ОБЯЗАТЕЛЬНО
+            try {
+                HttpUtil.sendError(ex, 500, "internal_error");
+            } catch (Exception ignored) {}
         }
-
-        if ("GET".equalsIgnoreCase(ex.getRequestMethod())) {
-
-            Security.Session s = Security.getSession(ex);
-            if (s == null) {
-                HttpUtil.sendError(ex, 401, "unauthorized");
-                return;
-            }
-
-            if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) {
-                return;
-            }
-
-            DataStore.handleData(ex);
-            return;
-        }
-
-        ex.sendResponseHeaders(405, -1);
     }
 
     /* ==== SENSOR REGISTRATION ==== */
