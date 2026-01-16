@@ -2,3 +2,8 @@
 2026-01-16 14:29:09 | pid=26708 | thread=pool-1-thread-14 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-16 15:25:51 | pid=6688 | thread=pool-1-thread-4 | user=developer | action=LOGIN_FAIL | ip=0:0:0:0:0:0:0:1
 2026-01-16 15:25:56 | pid=6688 | thread=pool-1-thread-14 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:39:01 | pid=14124 | thread=pool-1-thread-13 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:43:31 | pid=6048 | thread=pool-1-thread-18 | user=developer | action=LOGIN_FAIL | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:43:39 | pid=6048 | thread=pool-1-thread-22 | user=developer | action=LOGIN_FAIL | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:43:39 | pid=6048 | thread=pool-1-thread-23 | user=developer | action=LOGIN_FAIL | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:44:12 | pid=30772 | thread=pool-1-thread-4 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

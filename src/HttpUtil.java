@@ -133,45 +133,53 @@ public class HttpUtil {
     /* ========= STRICT JSON PARSE (AUTH / KEYS ONLY) ========= */
 
     static Map<String, String> parseJson(HttpExchange ex) throws IOException {
+        try {
+            String ct = Optional.ofNullable(
+                            ex.getRequestHeaders().getFirst("Content-Type"))
+                    .orElse("")
+                    .toLowerCase();
 
-        String ct = Optional.ofNullable(
-                        ex.getRequestHeaders().getFirst("Content-Type"))
-                .orElse("")
-                .toLowerCase();
+            if (!ct.contains("application/json")) {
+                return Map.of();
+            }
 
-        if (!ct.startsWith("application/json")) {
+            byte[] raw;
+            try {
+                raw = ex.getRequestBody().readAllBytes();
+            } catch (Exception e) {
+                return Map.of();
+            }
+            if (raw.length == 0 || raw.length > MAX_JSON_SIZE) return Map.of();
+
+            String json = new String(raw, StandardCharsets.UTF_8).trim();
+            if (!json.startsWith("{") || !json.endsWith("}")) return Map.of();
+
+            Map<String, String> map = new HashMap<>();
+
+            json = json.substring(1, json.length() - 1).trim();
+            if (json.isEmpty()) return map;
+
+            for (String pair : json.split(",")) {
+                String[] kv = pair.split(":", 2);
+                if (kv.length != 2) return Map.of();
+
+                String key = kv[0].trim();
+                String val = kv[1].trim();
+
+                if (!key.matches("\"[a-zA-Z0-9_]+\"")) return Map.of();
+                if (!val.matches("\"[^\"]*\"")) return Map.of();
+
+                map.put(
+                        key.substring(1, key.length() - 1),
+                        val.substring(1, val.length() - 1)
+                );
+
+                if (map.size() > 10) return Map.of();
+            }
+            return map;
+        } catch (Exception e) {
             return Map.of();
         }
-
-        byte[] raw = ex.getRequestBody().readAllBytes();
-        if (raw.length == 0 || raw.length > MAX_JSON_SIZE) return Map.of();
-
-        String json = new String(raw, StandardCharsets.UTF_8).trim();
-        if (!json.startsWith("{") || !json.endsWith("}")) return Map.of();
-
-        Map<String, String> map = new HashMap<>();
-
-        json = json.substring(1, json.length() - 1).trim();
-        if (json.isEmpty()) return map;
-
-        for (String pair : json.split(",")) {
-            String[] kv = pair.split(":", 2);
-            if (kv.length != 2) return Map.of();
-
-            String key = kv[0].trim();
-            String val = kv[1].trim();
-
-            if (!key.matches("\"[a-zA-Z0-9_]+\"")) return Map.of();
-            if (!val.matches("\"[^\"]*\"")) return Map.of();
-
-            map.put(
-                    key.substring(1, key.length() - 1),
-                    val.substring(1, val.length() - 1)
-            );
-
-            if (map.size() > 10) return Map.of();
-        }
-        return map;
     }
 
     /* ========= BODY SIZE ========= */
