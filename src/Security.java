@@ -77,7 +77,7 @@ public class Security {
                 if (!rs.next()) return false;
 
                 storedHash = rs.getString("token_hash");
-                lastSeen = rs.getTimestamp("last_seen").getTime();
+                lastSeen = rs.getLong("last_seen"); // <-- ТОЛЬКО getLong
             }
 
             String incomingHash = hashToken(token);
@@ -95,7 +95,7 @@ public class Security {
 
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
-                ps.setTimestamp(1, new Timestamp(now));
+                ps.setLong(1, now);
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
@@ -193,12 +193,11 @@ public class Security {
                     (sensor_id, token_hash, created_at, last_seen, register_ip)
                     VALUES (?,?,?,?,?)
                     """)) {
+
                 ps.setString(1, sensorId);
                 ps.setString(2, hash);
-
-                ps.setLong(3, now); // created_at
-                ps.setLong(4, now); // last_seen
-
+                ps.setLong(3, now);
+                ps.setLong(4, now);
                 ps.setString(5, ip);
                 ps.executeUpdate();
             } catch (SQLException e) {
