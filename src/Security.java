@@ -25,7 +25,9 @@ public class Security {
     static final int MAX_PASSWORD_LENGTH = 256;
 
     static final String SENSOR_REGISTER_KEY =
-            System.getenv().getOrDefault("SENSOR_REGISTER_KEY", "CHANGE_ME");
+            System.getenv()
+                    .getOrDefault("SENSOR_REGISTER_KEY", "CHANGE_ME")
+                    .trim();
 
     /* ===== SENSOR LIMITS ===== */
 
@@ -266,8 +268,7 @@ public class Security {
         return true;
     }
 
-    static boolean require(Session s, HttpExchange ex, Permission p)
-            throws IOException {
+    static boolean require(Session s, HttpExchange ex, Permission p) throws IOException {
 
         if (!ROLE_PERMS
                 .getOrDefault(s.role, Set.of())
