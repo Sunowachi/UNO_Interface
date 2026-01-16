@@ -75,11 +75,9 @@ public class DataStore {
     static void cleanupCache() {
         long now = System.currentTimeMillis();
 
-        cache.entrySet().removeIf(e ->
-                e.getValue().status(now) == SensorCache.Status.DEAD);
+        cache.entrySet().removeIf(e -> e.getValue().status(now) == SensorCache.Status.DEAD);
 
-        lastPostTs.entrySet().removeIf(e ->
-                now - e.getValue() > SENSOR_TTL_MS * 3);
+        lastPostTs.entrySet().removeIf(e -> now - e.getValue() > SENSOR_TTL_MS * 3);
     }
 
     static void cleanupHistoryDb() {
@@ -92,7 +90,8 @@ public class DataStore {
                 ps.setLong(1, now - 7L * 24 * 60 * 60 * 1000);
                 ps.executeUpdate();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            e.printStackTrace();
         } finally {
             Database.release(c);
         }
@@ -222,14 +221,14 @@ public class DataStore {
         cache.computeIfAbsent(key, k -> new SensorCache())
                 .add(value, ts);
 
+        SensorCache c = cache.computeIfAbsent(key, k -> new SensorCache());
+        c.add(value, ts);
+
         boolean ok = dbQueue.offer(new DbPoint(sensor, var, ts, value));
         if (!ok) {
-            SensorCache c = cache.get(key);
-            if (c != null) {
-                synchronized (c) {
-                    if (!c.points.isEmpty()) {
-                        c.points.removeLast();
-                    }
+            synchronized (c) {
+                if (!c.points.isEmpty()) {
+                    c.points.removeLast();
                 }
             }
         }
