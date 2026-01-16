@@ -107,8 +107,8 @@ public class Web {
 
         if ("POST".equalsIgnoreCase(ex.getRequestMethod())) {
 
-            if (!"application/json".equals(
-                    ex.getRequestHeaders().getFirst("Content-Type"))) {
+            String ct = ex.getRequestHeaders().getFirst("Content-Type");
+            if (ct == null || !ct.startsWith("application/json")) {
                 HttpUtil.sendError(ex, 415, "unsupported_media_type");
                 return;
             }
@@ -117,11 +117,35 @@ public class Web {
                 HttpUtil.sendError(ex, 413, "payload_too_large");
                 return;
             }
+
+            // SENSOR AUTH
+            if (!Security.checkSensorToken(ex)) {
+                HttpUtil.sendError(ex, 403, "forbidden");
+                return;
+            }
+
+            DataStore.handleData(ex);
+            return;
         }
 
-        DataStore.handleData(ex);
-    }
+        if ("GET".equalsIgnoreCase(ex.getRequestMethod())) {
 
+            Security.Session s = Security.getSession(ex);
+            if (s == null) {
+                HttpUtil.sendError(ex, 401, "unauthorized");
+                return;
+            }
+
+            if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) {
+                return;
+            }
+
+            DataStore.handleData(ex);
+            return;
+        }
+
+        ex.sendResponseHeaders(405, -1);
+    }
 
     /* ==== SENSOR REGISTRATION ==== */
 
@@ -150,8 +174,8 @@ public class Web {
             return;
         }
 
-        if (!"application/json".equals(ex.getRequestHeaders()
-                .getFirst("Content-Type"))) {
+        String ct = ex.getRequestHeaders().getFirst("Content-Type");
+        if (ct == null || !ct.startsWith("application/json")) {
             HttpUtil.sendError(ex, 415, "unsupported_media_type");
             return;
         }
@@ -163,6 +187,11 @@ public class Web {
 
         if (sensorId == null || key == null) {
             HttpUtil.sendError(ex, 400, "bad_request");
+            return;
+        }
+
+        if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
+            HttpUtil.sendError(ex, 400, "invalid_sensor_id");
             return;
         }
 
