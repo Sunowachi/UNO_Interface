@@ -1,2 +1,4 @@
 2026-01-13 18:08:58 | pid=22332 | thread=pool-1-thread-4 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-16 14:29:09 | pid=26708 | thread=pool-1-thread-14 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:25:51 | pid=6688 | thread=pool-1-thread-4 | user=developer | action=LOGIN_FAIL | ip=0:0:0:0:0:0:0:1
+2026-01-16 15:25:56 | pid=6688 | thread=pool-1-thread-14 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

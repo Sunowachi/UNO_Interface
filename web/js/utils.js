@@ -47,11 +47,14 @@ function isValidSensorId(id) {
 export function buildIpVarMap() {
   const map = {};
 
-  for (const src of Object.values(allSensors || {})) {
-    if (!src || !src.sensorId || !src.var) continue;
+  for (const key of Object.keys(allSensors || {})) {
+    if (typeof key !== 'string') continue;
 
-    const sensorId = String(src.sensorId);
-    const varName = String(src.var);
+    const parts = key.split(':', 2);
+    if (parts.length !== 2) continue;
+
+    const sensorId = parts[0];
+    const varName = parts[1];
 
     if (!isValidSensorId(sensorId)) continue;
     if (!isValidVarName(varName)) continue;
@@ -59,6 +62,7 @@ export function buildIpVarMap() {
     if (!map[sensorId]) {
       map[sensorId] = new Set();
     }
+
     map[sensorId].add(varName);
   }
 
