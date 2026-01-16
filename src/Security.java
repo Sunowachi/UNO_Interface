@@ -35,6 +35,7 @@ public class Security {
     static final int MAX_SENSORS_TOTAL = 10_000;
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
     static final long MIN_SENSOR_PING_INTERVAL_MS = 500;
+    static final int MAX_REG_PER_SENSOR_ID = 1;
 
     /* ================= PERMISSIONS ================= */
 
@@ -181,6 +182,8 @@ public class Security {
             String token = UUID.randomUUID().toString().replace("-", "");
             String hash = hashToken(token);
             long now = System.currentTimeMillis();
+
+            if (isSensorRegistered(sensorId)) return null;
 
             try (PreparedStatement ps = c.prepareStatement(
                     """
