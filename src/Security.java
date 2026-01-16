@@ -3,6 +3,7 @@ import com.sun.net.httpserver.HttpExchange;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.Connection;
@@ -51,8 +52,7 @@ public class Security {
     static String hashToken(String token) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return Base64.getEncoder()
-                    .encodeToString(md.digest(token.getBytes()));
+            return Base64.getEncoder().encodeToString(md.digest(token.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -223,10 +223,8 @@ public class Security {
             new ConcurrentHashMap<>();
 
     static void cleanupSessions() {
-        sessions.entrySet()
-                .removeIf(e -> e.getValue().expired());
+        sessions.entrySet().removeIf(e -> e.getValue().expired());
     }
-
 
     static Session getSession(HttpExchange ex) {
         cleanupSessions();
