@@ -6,10 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -193,8 +190,8 @@ public class Security {
                     """)) {
                 ps.setString(1, sensorId);
                 ps.setString(2, hash);
-                ps.setLong(3, now);
-                ps.setLong(4, now);
+                ps.setTimestamp(3, new Timestamp(now));
+                ps.setTimestamp(4, new Timestamp(now));
                 ps.setString(5, ip);
                 ps.executeUpdate();
             } catch (SQLException e) {
@@ -206,7 +203,8 @@ public class Security {
             return token;
 
         } catch (Exception e) {
-            return null;
+            e.printStackTrace();
+            throw new RuntimeException("Sensor registration failed", e);
         } finally {
             Database.release(c);
         }

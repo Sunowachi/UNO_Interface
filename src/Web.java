@@ -223,7 +223,7 @@ public class Web {
 
         String token = Security.registerSensor(sensorId, ip);
         if (token == null) {
-            HttpUtil.sendError(ex, 429, "register_limited");
+            HttpUtil.sendError(ex, 500, "sensor_register_failed");
             System.out.println("limited REGISTER KEY FROM REQUEST = " + key);
             System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
             return;
