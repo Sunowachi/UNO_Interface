@@ -53,6 +53,83 @@ public class HttpUtil {
         sendJson(ex, code, "{\"error\":\"" + safe + "\"}");
     }
 
+    /* ========= JSON SERIALIZATION ========= */
+
+    static String toJson(Object o) {
+        StringBuilder sb = new StringBuilder();
+        writeJson(sb, o);
+        return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void writeJson(StringBuilder sb, Object o) {
+
+        if (o == null) {
+            sb.append("null");
+            return;
+        }
+
+        if (o instanceof String s) {
+            sb.append('"').append(escape(s)).append('"');
+            return;
+        }
+
+        if (o instanceof Number || o instanceof Boolean) {
+            sb.append(o.toString());
+            return;
+        }
+
+        if (o instanceof Enum<?> e) {
+            sb.append('"').append(e.name()).append('"');
+            return;
+        }
+
+        if (o instanceof Map<?, ?> map) {
+            sb.append('{');
+            boolean first = true;
+            for (var e : map.entrySet()) {
+                if (!(e.getKey() instanceof String)) continue;
+                if (!first) sb.append(',');
+                first = false;
+                sb.append('"').append(escape((String) e.getKey())).append("\":");
+                writeJson(sb, e.getValue());
+            }
+            sb.append('}');
+            return;
+        }
+
+        if (o instanceof Iterable<?> it) {
+            sb.append('[');
+            boolean first = true;
+            for (Object v : it) {
+                if (!first) sb.append(',');
+                first = false;
+                writeJson(sb, v);
+            }
+            sb.append(']');
+            return;
+        }
+        sb.append('"').append(escape(o.toString())).append('"');
+    }
+
+    private static String escape(String s) {
+        StringBuilder out = new StringBuilder(s.length() + 8);
+        for (char c : s.toCharArray()) {
+            switch (c) {
+                case '"'  -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                default -> {
+                    if (c < 32) out.append('?');
+                    else out.append(c);
+                }
+            }
+        }
+        return out.toString();
+    }
+
     /* ========= STRICT JSON PARSE (AUTH / KEYS ONLY) ========= */
 
     static Map<String, String> parseJson(HttpExchange ex) throws IOException {
