@@ -58,7 +58,7 @@ public class Security {
         }
     }
 
-    static boolean checkSensorToken(String id, String token, HttpExchange ex) {
+    static boolean checkSensorToken(String id, String token) {
         if (id == null || token == null) return false;
 
         Connection c = null;
@@ -103,15 +103,18 @@ public class Security {
         } finally {
             Database.release(c);
         }
+    }
+
+    // HTTP-адаптер
+    static boolean checkSensorToken(HttpExchange ex) {
 
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-        token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
+        String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
         if (sensorId == null || token == null) {
             return false;
         }
 
-        // базовая валидация
         if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
             return false;
         }
