@@ -19,6 +19,7 @@ public class DataStore {
     static final long SENSOR_MIN_POST_INTERVAL_MS = 50;
     static final int MAX_SENSOR_FIELDS = 100;
     static final int MAX_NEW_METRICS_PER_POST = 50;
+    static final int MAX_ACTIVE_SENSORS = 20_000;
 
     static final Map<String, Long> lastPostTs = new ConcurrentHashMap<>();
 
@@ -27,15 +28,19 @@ public class DataStore {
     static final int DB_BATCH_SIZE = 500;
     static final int DB_QUEUE_LIMIT = 50_000;
 
-    static final BlockingQueue<DbPoint> dbQueue =
-            new LinkedBlockingQueue<>(DB_QUEUE_LIMIT);
+    static final BlockingQueue<DbPoint> dbQueue = new LinkedBlockingQueue<>(DB_QUEUE_LIMIT);
 
     static volatile boolean dbRunning = true;
+    static void shutdown() {
+        dbRunning = false;
+    }
 
-    static final Map<String, SensorCache> cache =
-            new ConcurrentHashMap<>();
+    static final Map<String, SensorCache> cache = new ConcurrentHashMap<>();
 
     static final AtomicLong droppedPoints = new AtomicLong();
+    static long getDroppedPoints() {
+        return droppedPoints.get();
+    }
 
     /* ====== API ====== */
 
@@ -75,7 +80,10 @@ public class DataStore {
 
         lastPostTs.entrySet().removeIf(e ->
                 now - e.getValue() > SENSOR_TTL_MS * 3);
+    }
 
+    static void cleanupHistoryDb() {
+        long now = System.currentTimeMillis();
         Connection c = null;
         try {
             c = Database.borrow();
@@ -90,6 +98,44 @@ public class DataStore {
         }
     }
 
+    static void handleSensors(HttpExchange ex) throws IOException {
+        Security.Session s = Security.getSession(ex);
+        if (s == null) {
+            HttpUtil.sendError(ex, 401, "unauthorized");
+            return;
+        }
+        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
+
+        List<SensorInfo> list = listSensors();
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+
+        for (SensorInfo si : list) {
+            if (!first) sb.append(",");
+            first = false;
+            sb.append("{")
+                    .append("\"id\":\"").append(si.id).append("\",")
+                    .append("\"status\":\"").append(si.status).append("\",")
+                    .append("\"lastSeen\":").append(si.lastSeen).append(",")
+                    .append("\"vars\":").append(varsToJson(si.vars))
+                    .append("}");
+        }
+        sb.append("]");
+        HttpUtil.sendJson(ex, sb.toString());
+    }
+
+    private static String varsToJson(Set<String> vars) {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (String v : vars) {
+            if (!first) sb.append(",");
+            first = false;
+            sb.append("\"").append(v).append("\"");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
     /* ====== SENSOR POST ====== */
 
     private static void handleSensorPost(HttpExchange ex) throws IOException {
@@ -102,6 +148,12 @@ public class DataStore {
 
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
         String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
+
+        if (!lastPostTs.containsKey(sensorId)
+                && lastPostTs.size() > MAX_ACTIVE_SENSORS) {
+            HttpUtil.sendError(ex, 503, "sensor_capacity_exceeded");
+            return;
+        }
 
         if (!isValidSensorId(sensorId) || token == null) {
             HttpUtil.sendError(ex, 401, "missing_sensor_auth");
@@ -185,6 +237,23 @@ public class DataStore {
     }
 
     /* ====== DB WRITER ====== */
+
+    static void startMaintenance() {
+        Thread t = new Thread(() -> {
+            while (true) {
+                try {
+                    cleanupCache();
+                    cleanupHistoryDb();
+                    Thread.sleep(60_000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        });
+        t.setDaemon(true);
+        t.setName("datastore-maintenance");
+        t.start();
+    }
 
     static void startDbWriter() {
         Thread t = new Thread(() -> {
