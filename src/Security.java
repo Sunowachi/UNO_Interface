@@ -168,7 +168,7 @@ public class Security {
                     SELECT COUNT(*) FROM sensors
                     WHERE created_at > ? AND register_ip = ?
                     """)) {
-                ps.setLong(1, System.currentTimeMillis() - 3_600_000);
+                ps.setTimestamp(1, new Timestamp(System.currentTimeMillis() - 3_600_000));
                 ps.setString(2, ip);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next() && rs.getInt(1) >= MAX_SENSOR_REG_PER_IP_PER_HOUR) {
