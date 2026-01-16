@@ -52,7 +52,7 @@ public class Security {
 
     static String hashToken(String token) {
         try {
-            MessageDigest md = MessageDigest.getInstance("HmacSHA256(serverSecret, token)");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
             return Base64.getEncoder()
                     .encodeToString(md.digest(token.getBytes()));
         } catch (Exception e) {
@@ -245,11 +245,6 @@ public class Security {
     }
 
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
-        if (!"POST".equals(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1);
-            return false;
-        }
-
         String token = ex.getRequestHeaders().getFirst("X-CSRF-Token");
         if (!Objects.equals(token, s.csrf)) {
             HttpUtil.sendError(ex, 403, "csrf");
@@ -449,7 +444,6 @@ public class Security {
             recordFailedLogin(user, ip);
             Audit.log(user, "LOGIN_FAIL", ip);
             HttpUtil.sendError(ex, 401, "invalid_login");
-            Thread.sleep(300 + random(0..300));
             return;
         }
 
