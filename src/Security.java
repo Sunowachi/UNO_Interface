@@ -150,8 +150,9 @@ public class Security {
 
     static String registerSensor(String sensorId, String ip) {
 
-        if ("CHANGE_ME".equals(SENSOR_REGISTER_KEY))
-            throw new IllegalStateException("SENSOR_REGISTER_KEY not set");
+        if ("CHANGE_ME".equals(SENSOR_REGISTER_KEY)) {
+            System.err.println("WARNING: SENSOR_REGISTER_KEY is not set!");
+        }
 
         if (sensorId == null || sensorId.length() > 64) return null;
 

@@ -167,75 +167,79 @@ public class Web {
     }
 
     static void handleSensorRegister(HttpExchange ex) throws IOException {
+        try {
+            if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+                ex.sendResponseHeaders(405, -1);
+                return;
+            }
 
-        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1);
-            return;
-        }
+            String ct = ex.getRequestHeaders().getFirst("Content-Type");
+            if (ct == null || !ct.startsWith("application/json")) {
+                HttpUtil.sendError(ex, 415, "unsupported_media_type");
+                return;
+            }
 
-        String ct = ex.getRequestHeaders().getFirst("Content-Type");
-        if (ct == null || !ct.startsWith("application/json")) {
-            HttpUtil.sendError(ex, 415, "unsupported_media_type");
-            return;
-        }
+            var json = HttpUtil.parseJson(ex);
 
-        var json = HttpUtil.parseJson(ex);
+            String sensorId = json.get("sensorId");
+            String key = json.get("key");
 
-        String sensorId = json.get("sensorId");
-        String key = json.get("key");
+            if (sensorId != null) sensorId = sensorId.trim();
+            if (key != null) key = key.trim();
 
-        if (sensorId != null) sensorId = sensorId.trim();
-        if (key != null) key = key.trim();
+            System.out.println("REGISTER KEY FROM REQUEST = [" + key + "]");
+            System.out.println("EXPECTED REGISTER KEY = [" + Security.SENSOR_REGISTER_KEY + "]");
 
-        System.out.println("REGISTER KEY FROM REQUEST = [" + key + "]");
-        System.out.println("EXPECTED REGISTER KEY = [" + Security.SENSOR_REGISTER_KEY + "]");
+            if (sensorId == null || key == null) {
+                HttpUtil.sendError(ex, 400, "bad_request");
+                System.out.println("bad REGISTER KEY FROM REQUEST = " + key);
+                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+                return;
+            }
 
-        if (sensorId == null || key == null) {
-            HttpUtil.sendError(ex, 400, "bad_request");
-            System.out.println("bad REGISTER KEY FROM REQUEST = " + key);
+            if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
+                HttpUtil.sendError(ex, 400, "invalid_sensor_id");
+                System.out.println("invalid REGISTER KEY FROM REQUEST = " + key);
+                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+                return;
+            }
+
+            if (!Security.checkSensorRegisterKey(key)) {
+                HttpUtil.sendError(ex, 403, "forbidden");
+                System.out.println("forbidden REGISTER KEY FROM REQUEST = " + key);
+                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+                return;
+            }
+
+            if (Security.isSensorRegistered(sensorId)) {
+                HttpUtil.sendError(ex, 409, "already_registered");
+                System.out.println("registered REGISTER KEY FROM REQUEST = " + key);
+                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+                return;
+            }
+
+            String ip = ex.getRemoteAddress().getAddress().getHostAddress();
+
+            String token = Security.registerSensor(sensorId, ip);
+            if (token == null) {
+                HttpUtil.sendError(ex, 500, "sensor_register_failed");
+                System.out.println("limited REGISTER KEY FROM REQUEST = " + key);
+                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+                return;
+            }
+
+            Audit.log(sensorId, "SENSOR_REGISTER", ip);
+            System.out.println("OK REGISTER KEY FROM REQUEST = " + key);
             System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+
+            HttpUtil.sendJson(ex,
+                    "{\"token\":\"" + token + "\"}"
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+            HttpUtil.sendError(ex, 500, "internal_error_during_register");
             return;
         }
-
-        if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
-            HttpUtil.sendError(ex, 400, "invalid_sensor_id");
-            System.out.println("invalid REGISTER KEY FROM REQUEST = " + key);
-            System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
-            return;
-        }
-
-        if (!Security.checkSensorRegisterKey(key)) {
-            HttpUtil.sendError(ex, 403, "forbidden");
-            System.out.println("forbidden REGISTER KEY FROM REQUEST = " + key);
-            System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
-            return;
-        }
-
-        if (Security.isSensorRegistered(sensorId)) {
-            HttpUtil.sendError(ex, 409, "already_registered");
-            System.out.println("registered REGISTER KEY FROM REQUEST = " + key);
-            System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
-            return;
-        }
-
-        String ip = ex.getRemoteAddress()
-                .getAddress().getHostAddress();
-
-        String token = Security.registerSensor(sensorId, ip);
-        if (token == null) {
-            HttpUtil.sendError(ex, 500, "sensor_register_failed");
-            System.out.println("limited REGISTER KEY FROM REQUEST = " + key);
-            System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
-            return;
-        }
-
-        Audit.log(sensorId, "SENSOR_REGISTER", ip);
-        System.out.println("OK REGISTER KEY FROM REQUEST = " + key);
-        System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
-
-        HttpUtil.sendJson(ex,
-                "{\"token\":\"" + token + "\"}"
-        );
     }
 
     /* ==== AUTH / CONFIG ==== */
