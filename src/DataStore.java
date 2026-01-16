@@ -119,7 +119,6 @@ public class DataStore {
             HttpUtil.sendError(ex, 429, "sensor_rate_limit");
             return;
         }
-        lastPostTs.put(sensorId, now);
 
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
         if (bodyBytes.length == 0 || bodyBytes.length > 4096) {
@@ -157,6 +156,8 @@ public class DataStore {
             }
         }
 
+        lastPostTs.put(sensorId, now);
+
         HttpUtil.sendJson(ex, "{\"status\":\"OK\"}");
     }
 
@@ -171,7 +172,14 @@ public class DataStore {
 
         boolean ok = dbQueue.offer(new DbPoint(sensor, var, ts, value));
         if (!ok) {
-            cache.remove(key);
+            SensorCache c = cache.get(key);
+            if (c != null) {
+                synchronized (c) {
+                    if (!c.points.isEmpty()) {
+                        c.points.removeLast();
+                    }
+                }
+            }
         }
         return ok;
     }
