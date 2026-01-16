@@ -184,6 +184,9 @@ public class Web {
         String sensorId = json.get("sensorId");
         String key = json.get("key");
 
+        System.out.println("REGISTER KEY FROM REQUEST = " + key);
+        System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
+
         if (sensorId == null || key == null) {
             HttpUtil.sendError(ex, 400, "bad_request");
             return;
