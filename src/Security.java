@@ -11,6 +11,8 @@ import java.sql.ResultSet;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static java.lang.Math.random;
+
 public class Security {
 
     /* ================= CONFIG ================= */
@@ -50,7 +52,7 @@ public class Security {
 
     static String hashToken(String token) {
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            MessageDigest md = MessageDigest.getInstance("HmacSHA256(serverSecret, token)");
             return Base64.getEncoder()
                     .encodeToString(md.digest(token.getBytes()));
         } catch (Exception e) {
@@ -227,12 +229,6 @@ public class Security {
                 .removeIf(e -> e.getValue().expired());
     }
 
-    static Session peekSession(HttpExchange ex) {
-        String sid = HttpUtil.getCookie(ex, "SESSION");
-        if (sid == null) return null;
-        Session s = sessions.get(sid);
-        return (s == null || s.expired()) ? null : s;
-    }
 
     static Session getSession(HttpExchange ex) {
         cleanupSessions();
@@ -249,6 +245,11 @@ public class Security {
     }
 
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
+        if (!"POST".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return false;
+        }
+
         String token = ex.getRequestHeaders().getFirst("X-CSRF-Token");
         if (!Objects.equals(token, s.csrf)) {
             HttpUtil.sendError(ex, 403, "csrf");
@@ -435,8 +436,7 @@ public class Security {
             return;
         }
 
-        String ip = ex.getRemoteAddress()
-                .getAddress().getHostAddress();
+        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
 
         if (isBlocked(user, ip)) {
             HttpUtil.sendError(ex, 403, "blocked");
@@ -444,12 +444,12 @@ public class Security {
         }
 
         var dbUser = Database.findUser(user);
-        if (dbUser == null ||
-                !checkPassword(pass, dbUser.passwordHash)) {
+        if (dbUser == null || !checkPassword(pass, dbUser.passwordHash)) {
 
             recordFailedLogin(user, ip);
             Audit.log(user, "LOGIN_FAIL", ip);
             HttpUtil.sendError(ex, 401, "invalid_login");
+            Thread.sleep(300 + random(0..300));
             return;
         }
 
