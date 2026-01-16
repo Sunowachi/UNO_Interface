@@ -369,6 +369,65 @@ public class DataStore {
         }
     }
 
+    private static class SensorInfoBuilder {
+        long lastSeen = 0;
+        SensorCache.Status status = SensorCache.Status.DEAD;
+        Set<String> vars = new TreeSet<>();
+
+        void add(String var, long seen, SensorCache.Status st) {
+            vars.add(var);
+            if (seen > lastSeen) lastSeen = seen;
+            if (st.ordinal() < status.ordinal()) status = st;
+        }
+
+        SensorInfo build(String id) {
+            return new SensorInfo(id, status, lastSeen, vars);
+        }
+    }
+
+    static List<SensorInfo> listSensors() {
+        long now = System.currentTimeMillis();
+
+        Map<String, SensorInfoBuilder> tmp = new HashMap<>();
+
+        for (var e : cache.entrySet()) {
+            String[] parts = e.getKey().split(":", 2);
+            if (parts.length != 2) continue;
+
+            String sensorId = parts[0];
+            String var = parts[1];
+            SensorCache c = e.getValue();
+
+            tmp.computeIfAbsent(sensorId, k -> new SensorInfoBuilder())
+                    .add(var, c.lastSeen, c.status(now));
+        }
+
+        List<SensorInfo> out = new ArrayList<>();
+        for (var e : tmp.entrySet()) {
+            out.add(e.getValue().build(e.getKey()));
+        }
+
+        out.sort(Comparator.comparing(a -> a.id));
+        return out;
+    }
+
+    static class SensorInfo {
+        final String id;
+        final SensorCache.Status status;
+        final long lastSeen;
+        final Set<String> vars;
+
+        SensorInfo(String id,
+                   SensorCache.Status status,
+                   long lastSeen,
+                   Set<String> vars) {
+            this.id = id;
+            this.status = status;
+            this.lastSeen = lastSeen;
+            this.vars = vars;
+        }
+    }
+
     static class Point {
         final long ts;
         final double value;
