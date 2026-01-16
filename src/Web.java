@@ -26,8 +26,7 @@ public class Web {
 
         /* ===== HTTP SERVER ===== */
 
-        HttpServer server =
-                HttpServer.create(new InetSocketAddress(PORT), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
 
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
@@ -44,7 +43,7 @@ public class Web {
 
         server.createContext("/", Web::handleStatic);
 
-        server.setExecutor(Executors.newFixedThreadPool(32));
+        server.setExecutor(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2));
         server.start();
 
         System.out.println("✅ Server started: http://localhost:" + PORT);
