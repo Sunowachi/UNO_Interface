@@ -9,6 +9,7 @@ import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -142,7 +143,7 @@ public class Security {
     }
 
     static boolean checkSensorRegisterKey(String key) {
-        return SENSOR_REGISTER_KEY.equals(key);
+        return SENSOR_REGISTER_KEY.equals(key.trim());
     }
 
     static String registerSensor(String sensorId, String ip) {
@@ -193,6 +194,10 @@ public class Security {
                 ps.setLong(4, now);
                 ps.setString(5, ip);
                 ps.executeUpdate();
+            } catch (SQLException e) {
+                if (e.getSQLState().equals("23505")) {
+                    return null;
+                }
             }
 
             return token;
