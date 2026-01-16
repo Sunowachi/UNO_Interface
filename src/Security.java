@@ -110,7 +110,6 @@ public class Security {
         }
     }
 
-
     // HTTP-адаптер
     static boolean checkSensorToken(HttpExchange ex) {
 

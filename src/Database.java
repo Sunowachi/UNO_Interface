@@ -128,9 +128,10 @@ public class Database {
         st.execute("""
             CREATE TABLE IF NOT EXISTS sensors(
                 sensor_id TEXT PRIMARY KEY,
-                token TEXT NOT NULL,
+                token_hash TEXT NOT NULL,
                 created_at BIGINT NOT NULL,
-                last_seen BIGINT
+                last_seen BIGINT NOT NULL,
+                register_ip TEXT NOT NULL
             )
         """);
 
