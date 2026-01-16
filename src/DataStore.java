@@ -47,7 +47,7 @@ public class DataStore {
                 handleSensorPost(ex);
                 return;
             }
-            HttpUtil.sendError(ex, 400, "invalid_post_target");
+            HttpUtil.sendError(ex, 403, "forbidden");
             return;
         }
 
@@ -169,9 +169,12 @@ public class DataStore {
         cache.computeIfAbsent(key, k -> new SensorCache())
                 .add(value, ts);
 
-        return dbQueue.offer(new DbPoint(sensor, var, ts, value));
+        boolean ok = dbQueue.offer(new DbPoint(sensor, var, ts, value));
+        if (!ok) {
+            cache.remove(key);
+        }
+        return ok;
     }
-
 
     /* ====== DB WRITER ====== */
 
@@ -327,7 +330,11 @@ public class DataStore {
             for (String part : s.split(",")) {
                 String[] kv = part.split(":", 2);
                 if (kv.length != 2) continue;
-                String k = kv[0].replace("\"", "").trim();
+
+                String k = kv[0].trim();
+                if (!k.matches("\"[a-zA-Z0-9_]{1,32}\"")) return null;
+                k = k.substring(1, k.length() - 1);
+
                 String rawVal = kv[1].trim();
                 if (rawVal.startsWith("\"")) return null;
                 double v = Double.parseDouble(rawVal);
