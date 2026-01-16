@@ -89,7 +89,7 @@ public class Security {
             }
 
             long now = System.currentTimeMillis();
-            if (now - lastSeen < MIN_SENSOR_PING_INTERVAL_MS) {
+            if (lastSeen > 0 && now - lastSeen < MIN_SENSOR_PING_INTERVAL_MS) {
                 return false;
             }
 
