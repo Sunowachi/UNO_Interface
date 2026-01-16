@@ -31,6 +31,7 @@ public class Web {
 
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
+        server.createContext("/sensors", Web::handleSensors);
         server.createContext("/sensor/register", Web::handleSensorRegister);
 
         server.createContext("/config/load", Web::handleConfigLoad);
@@ -125,6 +126,24 @@ public class Web {
     }
 
     /* ==== SENSOR REGISTRATION ==== */
+
+    static void handleSensors(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        Security.Session s = Security.getSession(ex);
+        if (s == null) {
+            HttpUtil.sendError(ex, 401, "unauthorized");
+            return;
+        }
+
+        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
+
+        HttpUtil.sendJson(ex,
+                HttpUtil.toJson(DataStore.listSensors()));
+    }
 
     static void handleSensorRegister(HttpExchange ex) throws IOException {
 
