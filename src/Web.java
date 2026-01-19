@@ -43,22 +43,16 @@ public class Web {
 
         server.createContext("/", Web::handleStatic);
 
-        // Увеличиваем количество потоков, чтобы сервер мог обслуживать множество быстрых POST одновременно
+        // фиксированный пул потоков для стабильной работы с контроллерами
         server.setExecutor(Executors.newFixedThreadPool(100));
 
         server.start();
-
         System.out.println("✅ Server started: http://localhost:" + PORT);
 
         /* ===== CACHE CLEANUP ===== */
 
-        ScheduledExecutorService scheduler =
-                Executors.newSingleThreadScheduledExecutor();
-
-        scheduler.scheduleAtFixedRate(
-                DataStore::cleanupCache,
-                1, 1, TimeUnit.MINUTES
-        );
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleAtFixedRate(DataStore::cleanupCache, 1, 1, TimeUnit.MINUTES);
 
         /* ===== SHUTDOWN HOOK ===== */
 
@@ -73,7 +67,6 @@ public class Web {
             try {
                 Thread.sleep(1500); // дать дописать batch
             } catch (InterruptedException ignored) {}
-
             System.out.println("✔ Server stopped");
         }));
     }
@@ -131,12 +124,13 @@ public class Web {
                     return;
                 }
 
-                DataStore.handleData(ex);
+                // кладём данные в очередь для асинхронной записи
+                DataStore.enqueueData(ex);
+                HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
                 return;
             }
 
             if ("GET".equalsIgnoreCase(ex.getRequestMethod())) {
-
                 Security.Session s = Security.getSession(ex);
                 if (s == null) {
                     HttpUtil.sendError(ex, 401, "unauthorized");
@@ -150,10 +144,9 @@ public class Web {
                 DataStore.handleData(ex);
                 return;
             }
-
             ex.sendResponseHeaders(405, -1);
         } catch (Exception e) {
-            e.printStackTrace(); // ОБЯЗАТЕЛЬНО
+            e.printStackTrace();
             try {
                 HttpUtil.sendError(ex, 500, "internal_error");
             } catch (Exception ignored) {}
@@ -194,65 +187,45 @@ public class Web {
             }
 
             var json = HttpUtil.parseJson(ex);
-
             String sensorId = json.get("sensorId");
             String key = json.get("key");
 
             if (sensorId != null) sensorId = sensorId.trim();
             if (key != null) key = key.trim();
 
-            System.out.println("REGISTER KEY FROM REQUEST = [" + key + "]");
-            System.out.println("EXPECTED REGISTER KEY = [" + Security.SENSOR_REGISTER_KEY + "]");
-
             if (sensorId == null || key == null) {
                 HttpUtil.sendError(ex, 400, "bad_request");
-                System.out.println("bad REGISTER KEY FROM REQUEST = " + key);
-                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
                 return;
             }
 
             if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
                 HttpUtil.sendError(ex, 400, "invalid_sensor_id");
-                System.out.println("invalid REGISTER KEY FROM REQUEST = " + key);
-                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
                 return;
             }
 
             if (!Security.checkSensorRegisterKey(key)) {
                 HttpUtil.sendError(ex, 403, "forbidden");
-                System.out.println("forbidden REGISTER KEY FROM REQUEST = " + key);
-                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
                 return;
             }
 
             if (Security.isSensorRegistered(sensorId)) {
                 HttpUtil.sendError(ex, 409, "already_registered");
-                System.out.println("registered REGISTER KEY FROM REQUEST = " + key);
-                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
                 return;
             }
 
             String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-
             String token = Security.registerSensor(sensorId, ip);
             if (token == null) {
                 HttpUtil.sendError(ex, 500, "sensor_register_failed");
-                System.out.println("limited REGISTER KEY FROM REQUEST = " + key);
-                System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
                 return;
             }
 
             Audit.log(sensorId, "SENSOR_REGISTER", ip);
-            System.out.println("OK REGISTER KEY FROM REQUEST = " + key);
-            System.out.println("EXPECTED REGISTER KEY = " + Security.SENSOR_REGISTER_KEY);
 
-            HttpUtil.sendJson(ex,
-                    "{\"token\":\"" + token + "\"}"
-            );
+            HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
         } catch (Exception e) {
             e.printStackTrace();
             HttpUtil.sendError(ex, 500, "internal_error_during_register");
-            return;
         }
     }
 
