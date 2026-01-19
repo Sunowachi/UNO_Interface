@@ -125,7 +125,7 @@ public class Web {
                 }
 
                 // кладём данные в очередь для асинхронной записи
-                DataStore.enqueueData(ex);
+                DataStore.handleData(ex);
                 HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
                 return;
             }
