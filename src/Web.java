@@ -26,7 +26,7 @@ public class Web {
 
         /* ===== HTTP SERVER ===== */
 
-        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 100);
 
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
@@ -44,7 +44,7 @@ public class Web {
         server.createContext("/", Web::handleStatic);
 
         // Увеличиваем количество потоков, чтобы сервер мог обслуживать множество быстрых POST одновременно
-        server.setExecutor(Executors.newFixedThreadPool(1000)); // или больше по необходимости
+        server.setExecutor(Executors.newCachedThreadPool());
 
         server.start();
 
