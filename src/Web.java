@@ -44,7 +44,7 @@ public class Web {
         server.createContext("/", Web::handleStatic);
 
         // Увеличиваем количество потоков, чтобы сервер мог обслуживать множество быстрых POST одновременно
-        server.setExecutor(Executors.newCachedThreadPool());
+        server.setExecutor(Executors.newFixedThreadPool(100));
 
         server.start();
 
