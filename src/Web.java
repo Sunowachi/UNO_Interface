@@ -23,6 +23,7 @@ public class Web {
 
         DataStore.warmupCacheFromDb();
         DataStore.startDbWriter();
+        DataStore.startMaintenance();
 
         /* ===== HTTP SERVER ===== */
 
@@ -51,23 +52,20 @@ public class Web {
 
         /* ===== CACHE CLEANUP ===== */
 
-        ScheduledExecutorService scheduler =
-                Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        scheduler.scheduleAtFixedRate(
-                DataStore::cleanupCache,
-                1, 1, TimeUnit.MINUTES
-        );
+        scheduler.scheduleAtFixedRate(DataStore::cleanupCache, 1, 1, TimeUnit.MINUTES);
 
         /* ===== SHUTDOWN HOOK ===== */
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("⏹ Shutting down server...");
-
             try {
                 scheduler.shutdownNow();
                 server.stop(1);
             } catch (Exception ignored) {}
+
+            DataStore.shutdown();
 
             try {
                 Thread.sleep(1500); // дать дописать batch
@@ -132,10 +130,8 @@ public class Web {
             }
 
             var json = HttpUtil.parseJson(ex);
-
             String sensorId = json.get("sensorId");
             String key = json.get("key");
-
             if (sensorId != null) sensorId = sensorId.trim();
             if (key != null) key = key.trim();
 
