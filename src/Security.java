@@ -66,9 +66,7 @@ public class Security {
         Connection c = null;
         try {
             c = Database.borrow();
-
             String storedHash;
-            long lastSeen;
 
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT token_hash, last_seen FROM sensors WHERE sensor_id=?")) {
@@ -77,9 +75,7 @@ public class Security {
                 if (!rs.next()) return false;
 
                 storedHash = rs.getString("token_hash");
-                lastSeen = rs.getLong("last_seen"); // <-- ТОЛЬКО getLong
             }
-
             String incomingHash = hashToken(token);
 
             if (!MessageDigest.isEqual(
@@ -88,18 +84,12 @@ public class Security {
                 return false;
             }
 
-            long now = System.currentTimeMillis();
-            if (lastSeen > 0 && now - lastSeen < MIN_SENSOR_PING_INTERVAL_MS) {
-                return false;
-            }
-
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
-                ps.setLong(1, now);
+                ps.setLong(1, System.currentTimeMillis());
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
-
             return true;
 
         } catch (Exception e) {
