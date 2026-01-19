@@ -219,13 +219,12 @@ public class DataStore {
         SensorCache c = cache.computeIfAbsent(key, k -> new SensorCache());
         c.add(value, ts);
 
-        try {
-            dbQueue.put(new DbPoint(sensor, var, ts, value));
-            return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        boolean added = dbQueue.offer(new DbPoint(sensor, var, ts, value));
+        if (!added) {
+            droppedPoints.incrementAndGet();
             return false;
         }
+        return true;
     }
 
     /* ====== DB WRITER ====== */

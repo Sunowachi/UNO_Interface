@@ -44,7 +44,7 @@ public class Web {
         server.createContext("/", Web::handleStatic);
 
         // Фиксированное число потоков для стабильной обработки частых POST
-        server.setExecutor(Executors.newFixedThreadPool(50));
+        server.setExecutor(Executors.newCachedThreadPool());
 
         server.start();
         System.out.println("✅ Server started: http://localhost:" + PORT);
