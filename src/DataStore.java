@@ -218,9 +218,6 @@ public class DataStore {
         long ts = System.currentTimeMillis();
         String key = sensor + ":" + var;
 
-        cache.computeIfAbsent(key, k -> new SensorCache())
-                .add(value, ts);
-
         SensorCache c = cache.computeIfAbsent(key, k -> new SensorCache());
         c.add(value, ts);
 
