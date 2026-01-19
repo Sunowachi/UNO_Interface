@@ -26,7 +26,7 @@ public class DataStore {
     /* ===== DB ASYNC SETTINGS ===== */
 
     static final int DB_BATCH_SIZE = 500;
-    static final int DB_QUEUE_LIMIT = 50_000;
+    static final int DB_QUEUE_LIMIT = 500_000;
 
     static final BlockingQueue<DbPoint> dbQueue = new LinkedBlockingQueue<>(DB_QUEUE_LIMIT);
 
@@ -219,15 +219,13 @@ public class DataStore {
         SensorCache c = cache.computeIfAbsent(key, k -> new SensorCache());
         c.add(value, ts);
 
-        boolean ok = dbQueue.offer(new DbPoint(sensor, var, ts, value));
-        if (!ok) {
-            synchronized (c) {
-                if (!c.points.isEmpty()) {
-                    c.points.removeLast();
-                }
-            }
+        try {
+            dbQueue.put(new DbPoint(sensor, var, ts, value));
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
-        return ok;
     }
 
     /* ====== DB WRITER ====== */

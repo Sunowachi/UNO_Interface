@@ -43,7 +43,9 @@ public class Web {
 
         server.createContext("/", Web::handleStatic);
 
-        server.setExecutor(Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2));
+        // Увеличиваем количество потоков, чтобы сервер мог обслуживать множество быстрых POST одновременно
+        server.setExecutor(Executors.newFixedThreadPool(1000)); // или больше по необходимости
+
         server.start();
 
         System.out.println("✅ Server started: http://localhost:" + PORT);
