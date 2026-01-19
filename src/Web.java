@@ -112,6 +112,12 @@ public class Web {
                     return;
                 }
 
+                String enc = ex.getRequestHeaders().getFirst("Content-Encoding");
+                if (enc != null && !enc.equalsIgnoreCase("identity")) {
+                    HttpUtil.sendError(ex, 415, "compressed_body_not_supported");
+                    return;
+                }
+
                 if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
                     HttpUtil.sendError(ex, 413, "payload_too_large");
                     return;
