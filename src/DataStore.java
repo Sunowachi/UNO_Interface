@@ -219,6 +219,7 @@ public class DataStore {
         SensorCache c = cache.computeIfAbsent(key, k -> new SensorCache());
         c.add(value, ts);
 
+        // Не блокируем поток при переполнении очереди
         boolean added = dbQueue.offer(new DbPoint(sensor, var, ts, value));
         if (!added) {
             droppedPoints.incrementAndGet();
