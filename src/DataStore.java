@@ -40,34 +40,6 @@ public class DataStore {
 
     /* ====== API ====== */
 
-    static void handleData(HttpExchange ex) throws IOException {
-        String method = ex.getRequestMethod();
-
-        if ("POST".equalsIgnoreCase(method)) {
-            if (ex.getRequestHeaders().getFirst("X-Sensor-Id") != null) {
-                handleSensorPost(ex);
-                return;
-            }
-            HttpUtil.sendError(ex, 403, "forbidden");
-            return;
-        }
-
-        if ("GET".equalsIgnoreCase(method)) {
-            Security.Session s = Security.getSession(ex);
-            if (s == null) {
-                HttpUtil.sendError(ex, 401, "unauthorized");
-                return;
-            }
-            if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
-
-            long range = HttpUtil.parseRange(ex);
-            HttpUtil.sendJson(ex, buildSensorsJson(range));
-            return;
-        }
-
-        ex.sendResponseHeaders(405, -1);
-    }
-
     static void cleanupCache() {
         long now = System.currentTimeMillis();
         cache.entrySet().removeIf(e -> e.getValue().status(now) == SensorCache.Status.DEAD);
@@ -131,55 +103,34 @@ public class DataStore {
 
     /* ====== SENSOR POST ====== */
 
-    private static void handleSensorPost(HttpExchange ex) throws IOException {
+    static void handleSensorPost(byte[] bodyBytes, String sensorId, String token) {
 
-        String ct = ex.getRequestHeaders().getFirst("Content-Type");
-        if (ct == null || !ct.startsWith("application/json")) {
-            HttpUtil.sendError(ex, 400, "invalid_content_type");
+        if (!isValidSensorId(sensorId) || token == null || !Security.checkSensorToken(sensorId, token)) {
+            droppedPoints.incrementAndGet();
             return;
         }
 
-        String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-        String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
-
-        if (!lastPostTs.containsKey(sensorId)
-                && lastPostTs.size() > MAX_ACTIVE_SENSORS) {
-            HttpUtil.sendError(ex, 503, "sensor_capacity_exceeded");
-            return;
-        }
-
-        if (!isValidSensorId(sensorId) || token == null) {
-            HttpUtil.sendError(ex, 401, "missing_sensor_auth");
-            return;
-        }
-
-        if (!Security.checkSensorToken(sensorId, token)) {
-            HttpUtil.sendError(ex, 403, "invalid_sensor");
+        if (!lastPostTs.containsKey(sensorId) && lastPostTs.size() > MAX_ACTIVE_SENSORS) {
+            droppedPoints.incrementAndGet();
             return;
         }
 
         long now = System.currentTimeMillis();
         Long last = lastPostTs.get(sensorId);
-        if (last != null && now - last < SENSOR_MIN_POST_INTERVAL_MS) {
-            HttpUtil.sendError(ex, 429, "sensor_rate_limit");
-            return;
-        }
+        if (last != null && now - last < SENSOR_MIN_POST_INTERVAL_MS) return;
 
-        byte[] bodyBytes = ex.getRequestBody().readAllBytes();
-        if (bodyBytes.length == 0 || bodyBytes.length > 4096) {
-            HttpUtil.sendError(ex, 413, "payload_too_large");
+        if (bodyBytes == null || bodyBytes.length == 0 || bodyBytes.length > 4096) {
             droppedPoints.incrementAndGet();
             return;
         }
 
         Map<String, Double> fields = parseSimpleJson(bodyBytes);
         if (fields == null || fields.size() > MAX_SENSOR_FIELDS) {
-            HttpUtil.sendError(ex, 400, "invalid_json");
+            droppedPoints.incrementAndGet();
             return;
         }
 
         int created = 0;
-
         for (var e : fields.entrySet()) {
             String var = e.getKey();
             double value = e.getValue();
@@ -187,58 +138,26 @@ public class DataStore {
             if (!isValidVar(var) || !Double.isFinite(value)) continue;
 
             String key = sensorId + ":" + var;
-            boolean isNew = !cache.containsKey(key);
-            if (isNew && ++created > MAX_NEW_METRICS_PER_POST) {
-                HttpUtil.sendError(ex, 429, "too_many_metrics");
-                return;
-            }
+            if (!cache.containsKey(key) && ++created > MAX_NEW_METRICS_PER_POST) break;
 
-            boolean ok = recordValue(sensorId, var, value);
-            if (!ok) {
-                HttpUtil.sendError(ex, 503, "storage_overload");
-                return;
-            }
+            recordValue(sensorId, var, value);
         }
+
         lastPostTs.put(sensorId, now);
-        HttpUtil.sendJson(ex, "{\"status\":\"OK\"}");
     }
 
     /* ====== STORAGE ====== */
 
     private static boolean recordValue(String sensor, String var, double value) {
         long ts = System.currentTimeMillis();
-        String key = sensor + ":" + var;
-
-        SensorCache c = cache.computeIfAbsent(key, k -> new SensorCache());
+        SensorCache c = cache.computeIfAbsent(sensor + ":" + var, k -> new SensorCache());
         c.add(value, ts);
-
-        // Не блокируем поток при переполнении очереди
         boolean added = dbQueue.offer(new DbPoint(sensor, var, ts, value));
-        if (!added) {
-            droppedPoints.incrementAndGet();
-            return false;
-        }
-        return true;
+        if (!added) droppedPoints.incrementAndGet();
+        return added;
     }
 
     /* ====== DB WRITER ====== */
-
-    static void startMaintenance() {
-        Thread t = new Thread(() -> {
-            while (true) {
-                try {
-                    cleanupCache();
-                    cleanupHistoryDb();
-                    Thread.sleep(60_000);
-                } catch (InterruptedException e) {
-                    return;
-                }
-            }
-        });
-        t.setDaemon(true);
-        t.setName("datastore-maintenance");
-        t.start();
-    }
 
     static void startDbWriter() {
         Thread t = new Thread(() -> {
@@ -412,8 +331,6 @@ public class DataStore {
     /* ====== CACHE ====== */
 
     static class SensorCache {
-        enum Status { ONLINE, STALE, DEAD }
-
         volatile long lastSeen;
         final Deque<Point> points = new ArrayDeque<>();
 
@@ -425,8 +342,7 @@ public class DataStore {
 
         synchronized List<Point> snapshot(long fromTs) {
             List<Point> out = new ArrayList<>();
-            for (Point p : points)
-                if (p.ts >= fromTs) out.add(p);
+            for (Point p : points) if (p.ts >= fromTs) out.add(p);
             return out;
         }
 
@@ -436,7 +352,13 @@ public class DataStore {
             if (age <= SENSOR_TTL_MS * 3) return Status.STALE;
             return Status.DEAD;
         }
+
+        enum Status { ONLINE, STALE, DEAD }
     }
+
+    static class Point { final long ts; final double value; Point(long t, double v) { ts = t; value = v; } }
+
+    static class DbPoint { final String sensor, var; final long ts; final double value; DbPoint(String s, String v, long t, double val) { sensor = s; var = v; ts = t; value = val; } }
 
     private static class SensorInfoBuilder {
         long lastSeen = 0;
@@ -494,21 +416,6 @@ public class DataStore {
             this.status = status;
             this.lastSeen = lastSeen;
             this.vars = vars;
-        }
-    }
-
-    static class Point {
-        final long ts;
-        final double value;
-        Point(long t, double v) { ts = t; value = v; }
-    }
-
-    static class DbPoint {
-        final String sensor, var;
-        final long ts;
-        final double value;
-        DbPoint(String s, String v, long t, double val) {
-            sensor = s; var = v; ts = t; value = val;
         }
     }
 }
