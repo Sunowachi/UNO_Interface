@@ -34,6 +34,7 @@ public class DataStore {
     static void shutdown() {
         dbRunning = false;
     }
+    static final ExecutorService dbExecutor = Executors.newFixedThreadPool(16);
 
     static final Map<String, SensorCache> cache = new ConcurrentHashMap<>();
     static final AtomicLong droppedPoints = new AtomicLong();
@@ -44,16 +45,16 @@ public class DataStore {
         if ("POST".equalsIgnoreCase(ex.getRequestMethod()) &&
                 ex.getRequestHeaders().getFirst("X-Sensor-Id") != null) {
 
-            // Обработка POST в отдельном потоке, мгновенный ответ
-            Executors.newSingleThreadExecutor().submit(() -> {
+            dbExecutor.submit(() -> {
                 try { handleSensorPost(ex); }
                 catch (Exception ignored) {}
             });
             HttpUtil.sendJson(ex, "{\"status\":\"queued\"}");
             return;
         }
-        handleData(ex); // GET и другие запросы
+        handleData(ex);
     }
+
 
     static void handleData(HttpExchange ex) throws IOException {
         String method = ex.getRequestMethod();

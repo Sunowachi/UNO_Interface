@@ -10,7 +10,6 @@ import java.util.concurrent.TimeUnit;
 public class Web {
 
     private static final int PORT = 8181;
-    private static final int MAX_BODY_SIZE = 64 * 1024; // 64 KB
 
     public static final long SERVER_START = System.currentTimeMillis();
 
@@ -45,7 +44,7 @@ public class Web {
         server.createContext("/", Web::handleStatic);
 
         // Фиксированное число потоков для стабильной обработки частых POST
-        server.setExecutor(Executors.newCachedThreadPool());
+        server.setExecutor(Executors.newFixedThreadPool(64));
 
         server.start();
         System.out.println("✅ Server started: http://localhost:" + PORT);
