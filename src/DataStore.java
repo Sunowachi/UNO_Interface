@@ -206,9 +206,7 @@ public class DataStore {
                 return;
             }
         }
-
         lastPostTs.put(sensorId, now);
-
         HttpUtil.sendJson(ex, "{\"status\":\"OK\"}");
     }
 
