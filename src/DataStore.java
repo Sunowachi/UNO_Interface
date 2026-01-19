@@ -192,7 +192,7 @@ public class DataStore {
                 HttpUtil.sendError(ex, 429, "too_many_metrics");
                 return;
             }
-            
+
             boolean ok = recordValue(sensorId, var, value);
             if (!ok) {
                 HttpUtil.sendError(ex, 503, "storage_overload");

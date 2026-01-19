@@ -126,7 +126,9 @@ public class Web {
 
                 // кладём данные в очередь для асинхронной записи
                 DataStore.handleData(ex);
-                HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
+
+                String json = processSensorData(ex);
+                HttpUtil.sendJson(ex, json);
                 return;
             }
 
@@ -151,6 +153,10 @@ public class Web {
                 HttpUtil.sendError(ex, 500, "internal_error");
             } catch (Exception ignored) {}
         }
+    }
+
+    private static String processSensorData(HttpExchange exchange) {
+        return "{\"status\":\"ok\"}";
     }
 
     /* ==== SENSOR REGISTRATION ==== */

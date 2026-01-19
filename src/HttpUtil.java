@@ -29,35 +29,30 @@ public class HttpUtil {
 
     /* ========= JSON RESPONSE ========= */
 
-    static void sendJson(HttpExchange ex, String json) throws IOException {
-        sendJson(ex, 200, json);
-    }
+    public static void sendJson(HttpExchange exchange, String json) throws IOException {
+        if (exchange.getResponseHeaders().containsKey("Content-Type")) {
+            return;
+        }
 
-    static void sendJson(HttpExchange ex, int code, String json) throws IOException {
-        byte[] b = json.getBytes(StandardCharsets.UTF_8);
-
-        ex.getResponseHeaders().set(
-                "Content-Type", "application/json; charset=utf-8");
-        ex.getResponseHeaders().set("Cache-Control", "no-store");
-
-        applySecurityHeaders(ex);
-
-        ex.sendResponseHeaders(code, b.length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(b);
+        byte[] responseBytes = json.getBytes("UTF-8");
+        exchange.getResponseHeaders().add("Content-Type", "application/json; charset=UTF-8");
+        exchange.sendResponseHeaders(200, responseBytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(responseBytes);
         }
     }
 
-    static void sendError(HttpExchange ex, int code, String msg) throws IOException {
-        byte[] b = msg.getBytes(StandardCharsets.UTF_8);
-        String safe = msg.replaceAll("[^a-zA-Z0-9_]", "");
-        sendJson(ex, code, "{\"error\":\"" + safe + "\"}");
-        ex.sendResponseHeaders(code, b.length);
-        try (OutputStream os = ex.getResponseBody()) {
-            os.write(b);
-        }
-        ex.close();
-
+    public static void sendError(HttpExchange exchange, int code, String message) {
+        try {
+            if (!exchange.getResponseHeaders().containsKey("Content-Type")) {
+                byte[] responseBytes = message.getBytes("UTF-8");
+                exchange.getResponseHeaders().add("Content-Type", "text/plain; charset=UTF-8");
+                exchange.sendResponseHeaders(code, responseBytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(responseBytes);
+                }
+            }
+        } catch (IOException ignored) {}
     }
 
     /* ========= JSON SERIALIZATION ========= */
