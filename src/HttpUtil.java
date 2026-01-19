@@ -49,8 +49,15 @@ public class HttpUtil {
     }
 
     static void sendError(HttpExchange ex, int code, String msg) throws IOException {
+        byte[] b = msg.getBytes(StandardCharsets.UTF_8);
         String safe = msg.replaceAll("[^a-zA-Z0-9_]", "");
         sendJson(ex, code, "{\"error\":\"" + safe + "\"}");
+        ex.sendResponseHeaders(code, b.length);
+        try (OutputStream os = ex.getResponseBody()) {
+            os.write(b);
+        }
+        ex.close();
+
     }
 
     /* ========= JSON SERIALIZATION ========= */

@@ -16,7 +16,7 @@ public class DataStore {
 
     /* ===== SENSOR PROTECTION ===== */
 
-    static final long SENSOR_MIN_POST_INTERVAL_MS = 50;
+    static final long SENSOR_MIN_POST_INTERVAL_MS = 200;
     static final int MAX_SENSOR_FIELDS = 100;
     static final int MAX_NEW_METRICS_PER_POST = 50;
     static final int MAX_ACTIVE_SENSORS = 20_000;
