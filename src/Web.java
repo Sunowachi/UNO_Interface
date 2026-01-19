@@ -43,16 +43,21 @@ public class Web {
 
         server.createContext("/", Web::handleStatic);
 
-        // фиксированный пул потоков для стабильной работы с контроллерами
-        server.setExecutor(Executors.newFixedThreadPool(100));
+        // Фиксированное число потоков для стабильной обработки частых POST
+        server.setExecutor(Executors.newFixedThreadPool(50));
 
         server.start();
         System.out.println("✅ Server started: http://localhost:" + PORT);
 
         /* ===== CACHE CLEANUP ===== */
 
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(DataStore::cleanupCache, 1, 1, TimeUnit.MINUTES);
+        ScheduledExecutorService scheduler =
+                Executors.newSingleThreadScheduledExecutor();
+
+        scheduler.scheduleAtFixedRate(
+                DataStore::cleanupCache,
+                1, 1, TimeUnit.MINUTES
+        );
 
         /* ===== SHUTDOWN HOOK ===== */
 
@@ -67,6 +72,7 @@ public class Web {
             try {
                 Thread.sleep(1500); // дать дописать batch
             } catch (InterruptedException ignored) {}
+
             System.out.println("✔ Server stopped");
         }));
     }
@@ -85,9 +91,7 @@ public class Web {
             return;
         }
 
-        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) {
-            return;
-        }
+        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
         HttpUtil.sendJson(ex,
                 "{\"startTime\":" + SERVER_START +
@@ -99,52 +103,7 @@ public class Web {
 
     static void handleData(HttpExchange ex) throws IOException {
         try {
-            if ("POST".equalsIgnoreCase(ex.getRequestMethod())) {
-
-                String ct = ex.getRequestHeaders().getFirst("Content-Type");
-                if (ct == null || !ct.startsWith("application/json")) {
-                    HttpUtil.sendError(ex, 415, "unsupported_media_type");
-                    return;
-                }
-
-                String enc = ex.getRequestHeaders().getFirst("Content-Encoding");
-                if (enc != null && !enc.equalsIgnoreCase("identity")) {
-                    HttpUtil.sendError(ex, 415, "compressed_body_not_supported");
-                    return;
-                }
-
-                if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
-                    HttpUtil.sendError(ex, 413, "payload_too_large");
-                    return;
-                }
-
-                // SENSOR AUTH
-                if (!Security.checkSensorToken(ex)) {
-                    HttpUtil.sendError(ex, 403, "forbidden");
-                    return;
-                }
-
-                // кладём данные в очередь для асинхронной записи
-                DataStore.handleData(ex);
-                HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
-                return;
-            }
-
-            if ("GET".equalsIgnoreCase(ex.getRequestMethod())) {
-                Security.Session s = Security.getSession(ex);
-                if (s == null) {
-                    HttpUtil.sendError(ex, 401, "unauthorized");
-                    return;
-                }
-
-                if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) {
-                    return;
-                }
-
-                DataStore.handleData(ex);
-                return;
-            }
-            ex.sendResponseHeaders(405, -1);
+            DataStore.handleData(ex);
         } catch (Exception e) {
             e.printStackTrace();
             try {
@@ -156,21 +115,7 @@ public class Web {
     /* ==== SENSOR REGISTRATION ==== */
 
     static void handleSensors(HttpExchange ex) throws IOException {
-        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1);
-            return;
-        }
-
-        Security.Session s = Security.getSession(ex);
-        if (s == null) {
-            HttpUtil.sendError(ex, 401, "unauthorized");
-            return;
-        }
-
-        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
-
-        HttpUtil.sendJson(ex,
-                HttpUtil.toJson(DataStore.listSensors()));
+        DataStore.handleSensors(ex);
     }
 
     static void handleSensorRegister(HttpExchange ex) throws IOException {
@@ -187,6 +132,7 @@ public class Web {
             }
 
             var json = HttpUtil.parseJson(ex);
+
             String sensorId = json.get("sensorId");
             String key = json.get("key");
 
@@ -215,6 +161,7 @@ public class Web {
 
             String ip = ex.getRemoteAddress().getAddress().getHostAddress();
             String token = Security.registerSensor(sensorId, ip);
+
             if (token == null) {
                 HttpUtil.sendError(ex, 500, "sensor_register_failed");
                 return;
@@ -223,6 +170,7 @@ public class Web {
             Audit.log(sensorId, "SENSOR_REGISTER", ip);
 
             HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
+
         } catch (Exception e) {
             e.printStackTrace();
             HttpUtil.sendError(ex, 500, "internal_error_during_register");
