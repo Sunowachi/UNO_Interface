@@ -75,9 +75,9 @@ public class Security {
             String regIp;
 
             try (PreparedStatement ps = c.prepareStatement("""
-            SELECT token_hash, last_seen, register_ip
-            FROM sensors WHERE sensor_id=?
-        """)) {
+                    SELECT token_hash, last_seen, register_ip
+                    FROM sensors WHERE sensor_id=?
+                    """)) {
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
@@ -89,9 +89,14 @@ public class Security {
 
             String incomingHash = hashToken(token);
 
-            if (!MessageDigest.isEqual(
-                    Base64.getDecoder().decode(storedHash),
-                    Base64.getDecoder().decode(incomingHash))) {
+            try {
+                if (!MessageDigest.isEqual(
+                        Base64.getDecoder().decode(storedHash),
+                        Base64.getDecoder().decode(incomingHash))) {
+                    return false;
+                }
+            } catch (IllegalArgumentException e) {
+                Audit.log(id, "SENSOR_HASH_CORRUPT", remote.getAddress().getHostAddress());
                 return false;
             }
 
@@ -107,16 +112,14 @@ public class Security {
                 return false;
             }
 
-            // ✅ ВАЖНО
             try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
+                    "UPDATE sensors SET last_seen=? WHERE sensor_id=? AND last_seen=?")) {
                 ps.setLong(1, now);
                 ps.setString(2, id);
+                ps.setLong(3, lastSeen);
                 ps.executeUpdate();
             }
-
             return true;
-
         } catch (Exception e) {
             Audit.log(id, "SENSOR_AUTH_FAIL", remote.toString());
             return false;
@@ -135,7 +138,8 @@ public class Security {
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Audit.log(id, "MARK_SENSOR_SEEN_FAIL", "");
         } finally {
             Database.release(c);
         }
@@ -152,6 +156,7 @@ public class Security {
                 return ps.executeQuery().next();
             }
         } catch (Exception e) {
+            Audit.log(id, "SENSOR_REG_CHECK_FAIL", "");
             return false;
         } finally {
             Database.release(c);
@@ -172,7 +177,7 @@ public class Security {
             System.err.println("WARNING: SENSOR_REGISTER_KEY is not set!");
         }
 
-        if (sensorId == null || sensorId.length() > 64) return null;
+        if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty()) return null;
 
         Connection c = null;
         try {
@@ -199,11 +204,11 @@ public class Security {
                 }
             }
 
+            if (isSensorRegistered(sensorId)) return null;
+
             String token = UUID.randomUUID().toString().replace("-", "");
             String hash = hashToken(token);
             long now = System.currentTimeMillis();
-
-            if (isSensorRegistered(sensorId)) return null;
 
             try (PreparedStatement ps = c.prepareStatement(
                     """
@@ -222,13 +227,15 @@ public class Security {
                 if (e.getSQLState().equals("23505")) {
                     return null;
                 }
+                throw e;
             }
 
             return token;
 
         } catch (Exception e) {
+            Audit.log(sensorId, "SENSOR_REGISTER_FAIL", ip);
             e.printStackTrace();
-            throw new RuntimeException("Sensor registration failed", e);
+            return null;
         } finally {
             Database.release(c);
         }
@@ -320,8 +327,7 @@ public class Security {
     /* ================= PASSWORDS ================= */
 
     static String hashPassword(String password) {
-        if (password == null ||
-                password.length() > MAX_PASSWORD_LENGTH) {
+        if (password == null || password.length() > MAX_PASSWORD_LENGTH) {
             throw new IllegalArgumentException("bad password");
         }
 
@@ -430,7 +436,8 @@ public class Security {
                 ps.setLong(6, now + 60_000);
                 ps.executeUpdate();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Audit.log(user, "FAILED_LOGIN_RECORD_FAIL", ip);
         } finally {
             Database.release(c);
         }
@@ -446,7 +453,8 @@ public class Security {
                 ps.setString(2, ip);
                 ps.executeUpdate();
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Audit.log(user, "FAILED_LOGIN_CLEAR_FAIL", ip);
         } finally {
             Database.release(c);
         }
