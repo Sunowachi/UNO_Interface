@@ -62,15 +62,6 @@ public class Security {
         }
     }
 
-
-    static boolean requireSensor(HttpExchange ex) throws IOException {
-        if (!checkSensorToken(ex)) {
-            HttpUtil.sendError(ex, 401, "invalid_sensor");
-            return false;
-        }
-        return true;
-    }
-
     static boolean validateSensorToken(String id, String token, InetSocketAddress remote) {
 
         if (id == null || token == null) return false;
@@ -142,23 +133,6 @@ public class Security {
         } finally {
             Database.release(c);
         }
-    }
-
-    // HTTP-адаптер
-    static boolean checkSensorToken(HttpExchange ex) {
-
-        String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-        String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
-
-        if (sensorId == null || token == null) {
-            return false;
-        }
-
-        if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
-            return false;
-        }
-
-        return checkSensorToken(sensorId, token);
     }
 
     static boolean isSensorRegistered(String id) {

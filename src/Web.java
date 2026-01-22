@@ -92,6 +92,7 @@ public class Web {
     /* ===== SENSOR DATA ===== */
 
     static void handleData(HttpExchange ex) throws IOException {
+
         long start = System.currentTimeMillis();
 
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
@@ -105,8 +106,7 @@ public class Web {
             return;
         }
 
-        long bodySize = HttpUtil.getBodySize(ex);
-        if (bodySize <= 0 || bodySize > MAX_BODY_SIZE) {
+        if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
             HttpUtil.sendError(ex, 413, "payload_too_large");
             return;
         }
@@ -114,49 +114,24 @@ public class Web {
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
         String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
-        if (sensorId == null || token == null) {
-            HttpUtil.sendError(ex, 401, "missing_sensor_auth");
-            return;
-        }
-
-        sensorId = sensorId.trim();
-
-        if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
-            HttpUtil.sendError(ex, 400, "invalid_sensor_id");
-            return;
-        }
-
-        // Проверяем регистрацию и токен ДО чтения тела
         if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
-            Audit.log(sensorId, "SENSOR_AUTH_FAIL", ex.getRemoteAddress().toString());
-            HttpUtil.sendError(ex, 403, "invalid_sensor_token");
-            return;
-        }
-
-        // Защита от перегрузки
-        if (((ThreadPoolExecutor) sensorExecutor).getQueue().size() > 10_000) {
-            HttpUtil.sendError(ex, 503, "server_overloaded");
+            HttpUtil.sendError(ex, 401, "invalid_sensor");
             return;
         }
 
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
 
-        try {
-            sensorExecutor.execute(() ->
-                    DataStore.handleSensorPost(bodyBytes, sensorId, token)
-            );
-        } catch (RejectedExecutionException e) {
-            HttpUtil.sendError(ex, 503, "executor_rejected");
-            return;
-        }
+        HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
 
-        HttpUtil.sendJson(ex, "{\"status\":\"accepted\"}");
-
-        if (System.currentTimeMillis() - start > 50) {
-            System.out.println("[handleData] slow accept: " + (System.currentTimeMillis() - start) + "ms");
-        }
+        sensorExecutor.submit(() -> {
+            try {
+                DataStore.handleSensorPost(bodyBytes, sensorId, token);
+                Security.markSensorSeen(sensorId);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
-
 
     /* ==== SENSOR REGISTRATION ==== */
 
