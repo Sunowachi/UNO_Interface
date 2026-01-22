@@ -40,6 +40,11 @@ public class DataStore {
 
     /* ====== API ====== */
 
+    static void cleanupSensorLimits() {
+        long now = System.currentTimeMillis();
+        lastPostTs.entrySet().removeIf(e -> now - e.getValue() > SENSOR_TTL_MS * 3);
+    }
+
     static void cleanupCache() {
         long now = System.currentTimeMillis();
         cache.entrySet().removeIf(e -> e.getValue().status(now) == SensorCache.Status.DEAD);
@@ -103,9 +108,11 @@ public class DataStore {
 
     /* ====== SENSOR POST ====== */
 
-    static void handleSensorPost(byte[] bodyBytes, String sensorId, String token) {
+    static void handleSensorPost(byte[] bodyBytes, String sensorId) {
 
-        if (!isValidSensorId(sensorId) || token == null || !Security.checkSensorToken(sensorId, token)) {
+        cleanupSensorLimits();
+
+        if (!isValidSensorId(sensorId)) {
             droppedPoints.incrementAndGet();
             return;
         }
@@ -117,7 +124,10 @@ public class DataStore {
 
         long now = System.currentTimeMillis();
         Long last = lastPostTs.get(sensorId);
-        if (last != null && now - last < SENSOR_MIN_POST_INTERVAL_MS) return;
+        if (last != null && now - last < SENSOR_MIN_POST_INTERVAL_MS) {
+            droppedPoints.incrementAndGet();
+            return;
+        }
 
         if (bodyBytes == null || bodyBytes.length == 0 || bodyBytes.length > 4096) {
             droppedPoints.incrementAndGet();
@@ -152,10 +162,15 @@ public class DataStore {
         long ts = System.currentTimeMillis();
         SensorCache c = cache.computeIfAbsent(sensor + ":" + var, k -> new SensorCache());
         c.add(value, ts);
+
         boolean added = dbQueue.offer(new DbPoint(sensor, var, ts, value));
-        if (!added) droppedPoints.incrementAndGet();
+        if (!added) {
+            droppedPoints.incrementAndGet();
+            Audit.log("DB_QUEUE_OVERFLOW sensor=" + sensor);
+        }
         return added;
     }
+
 
     /* ====== DB WRITER ====== */
 
@@ -299,6 +314,7 @@ public class DataStore {
         return v != null && v.matches("[a-zA-Z0-9_]{1,32}");
     }
 
+    // Это не основной парсер JSON
     private static Map<String, Double> parseSimpleJson(byte[] body) {
         try {
             String s = new String(body, StandardCharsets.UTF_8).trim();
