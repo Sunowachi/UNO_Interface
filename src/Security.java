@@ -32,6 +32,10 @@ public class Security {
     static final int MAX_SENSORS_TOTAL = 10_000;
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
 
+    enum SensorScope {
+        DATA_WRITE
+    }
+
     /* ================= PERMISSIONS ================= */
 
     enum Permission {
@@ -64,7 +68,9 @@ public class Security {
         Connection c = null;
         try {
             c = Database.borrow();
+
             String storedHash;
+            long lastSeen;
 
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT token_hash, last_seen FROM sensors WHERE sensor_id=?")) {
@@ -73,7 +79,9 @@ public class Security {
                 if (!rs.next()) return false;
 
                 storedHash = rs.getString("token_hash");
+                lastSeen = rs.getLong("last_seen");
             }
+
             String incomingHash = hashToken(token);
 
             if (!MessageDigest.isEqual(
@@ -84,12 +92,18 @@ public class Security {
 
             long now = System.currentTimeMillis();
 
+            // минимальный rate-limit: не чаще 100 мс
+            if (now - lastSeen < 100) {
+                return false;
+            }
+
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
                 ps.setLong(1, now);
                 ps.setString(2, id);
                 ps.executeUpdate();
             }
+
             return true;
 
         } catch (Exception e) {
@@ -98,6 +112,14 @@ public class Security {
         } finally {
             Database.release(c);
         }
+    }
+
+    static boolean requireSensor(HttpExchange ex) throws IOException {
+        if (!checkSensorToken(ex)) {
+            HttpUtil.sendError(ex, 401, "invalid_sensor");
+            return false;
+        }
+        return true;
     }
 
     // HTTP-адаптер
@@ -244,6 +266,7 @@ public class Security {
             new ConcurrentHashMap<>();
 
     static void cleanupSessions() {
+        long now = System.currentTimeMillis();
         sessions.entrySet().removeIf(e -> e.getValue().expired());
     }
 
