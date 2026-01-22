@@ -93,8 +93,6 @@ public class Web {
 
     static void handleData(HttpExchange ex) throws IOException {
 
-        long start = System.currentTimeMillis();
-
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -119,13 +117,9 @@ public class Web {
             return;
         }
 
-        if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
-            HttpUtil.sendError(ex, 403, "forbidden");
-            return;
-        }
-
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
 
+        // Ответ СРАЗУ, чтобы не держать HTTP соединение
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
 
         sensorExecutor.submit(() -> {
@@ -134,6 +128,7 @@ public class Web {
                 Security.markSensorSeen(sensorId);
             } catch (Exception e) {
                 e.printStackTrace();
+                Audit.log(sensorId, "SENSOR_POST_FAIL", e.getMessage());
             }
         });
     }
