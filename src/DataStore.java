@@ -22,6 +22,7 @@ public class DataStore {
     static final int MAX_ACTIVE_SENSORS = 20_000;
 
     static final Map<String, Long> lastPostTs = new ConcurrentHashMap<>();
+    static final AtomicLong lastCleanup = new AtomicLong();
 
     /* ===== DB ASYNC SETTINGS ===== */
 
@@ -42,6 +43,10 @@ public class DataStore {
 
     static void cleanupSensorLimits() {
         long now = System.currentTimeMillis();
+        long last = lastCleanup.get();
+        if (now - last < 5_000) return;
+        if (!lastCleanup.compareAndSet(last, now)) return;
+
         lastPostTs.entrySet().removeIf(e -> now - e.getValue() > SENSOR_TTL_MS * 3);
     }
 
@@ -170,7 +175,6 @@ public class DataStore {
         }
         return added;
     }
-
 
     /* ====== DB WRITER ====== */
 
