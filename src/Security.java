@@ -3,6 +3,7 @@ import com.sun.net.httpserver.HttpExchange;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -61,7 +62,10 @@ public class Security {
         }
     }
 
-    static boolean checkSensorToken(String id, String token) {
+
+
+
+    static boolean validateSensorToken(String id, String token, InetSocketAddress remote) {
 
         if (id == null || token == null) return false;
 
@@ -71,15 +75,19 @@ public class Security {
 
             String storedHash;
             long lastSeen;
+            String regIp;
 
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT token_hash, last_seen FROM sensors WHERE sensor_id=?")) {
+            try (PreparedStatement ps = c.prepareStatement("""
+            SELECT token_hash, last_seen, register_ip
+            FROM sensors WHERE sensor_id=?
+        """)) {
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
 
-                storedHash = rs.getString("token_hash");
-                lastSeen = rs.getLong("last_seen");
+                storedHash = rs.getString(1);
+                lastSeen = rs.getLong(2);
+                regIp = rs.getString(3);
             }
 
             String incomingHash = hashToken(token);
@@ -90,54 +98,48 @@ public class Security {
                 return false;
             }
 
-            long now = System.currentTimeMillis();
-
-            // минимальный rate-limit: не чаще 100 мс
-            if (now - lastSeen < 100) {
+            String ip = remote.getAddress().getHostAddress();
+            if (!Objects.equals(ip, regIp)) {
+                Audit.log(id, "SENSOR_IP_MISMATCH", ip);
                 return false;
             }
 
-            try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
-                ps.setLong(1, now);
-                ps.setString(2, id);
-                ps.executeUpdate();
+            long now = System.currentTimeMillis();
+
+            // replay / flood защита
+            if (now <= lastSeen || now - lastSeen < 100) {
+                return false;
             }
 
             return true;
 
         } catch (Exception e) {
             e.printStackTrace();
+            Audit.log(id, "SENSOR_AUTH_FAIL", remote.toString());
             return false;
         } finally {
             Database.release(c);
         }
     }
 
-    static boolean requireSensor(HttpExchange ex) throws IOException {
-        if (!checkSensorToken(ex)) {
-            HttpUtil.sendError(ex, 401, "invalid_sensor");
-            return false;
+    static void markSensorSeen(String id) {
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
+                ps.setLong(1, System.currentTimeMillis());
+                ps.setString(2, id);
+                ps.executeUpdate();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            Database.release(c);
         }
-        return true;
     }
 
     // HTTP-адаптер
-    static boolean checkSensorToken(HttpExchange ex) {
 
-        String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-        String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
-
-        if (sensorId == null || token == null) {
-            return false;
-        }
-
-        if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
-            return false;
-        }
-
-        return checkSensorToken(sensorId, token);
-    }
 
     static boolean isSensorRegistered(String id) {
         if (id == null) return false;
@@ -157,7 +159,11 @@ public class Security {
     }
 
     static boolean checkSensorRegisterKey(String key) {
-        return SENSOR_REGISTER_KEY.equals(key.trim());
+        if (key == null) return false;
+        return MessageDigest.isEqual(
+                SENSOR_REGISTER_KEY.getBytes(StandardCharsets.UTF_8),
+                key.trim().getBytes(StandardCharsets.UTF_8)
+        );
     }
 
     static String registerSensor(String sensorId, String ip) {
