@@ -171,7 +171,7 @@ public class DataStore {
         boolean added = dbQueue.offer(new DbPoint(sensor, var, ts, value));
         if (!added) {
             droppedPoints.incrementAndGet();
-            Audit.log("DB_QUEUE_OVERFLOW sensor=" + sensor);
+            Audit.log("system", "DB_QUEUE_OVERFLOW", "sensor=" + sensor);
         }
         return added;
     }
