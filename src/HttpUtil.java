@@ -45,7 +45,7 @@ public class HttpUtil {
     public static void sendError(HttpExchange exchange, int code, String message) {
         try {
             if (!exchange.getResponseHeaders().containsKey("Content-Type")) {
-                byte[] responseBytes = message.getBytes("UTF-8");
+                byte[] responseBytes = message.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().add("Content-Type", "text/plain; charset=UTF-8");
                 exchange.sendResponseHeaders(code, responseBytes.length);
                 try (OutputStream os = exchange.getResponseBody()) {
