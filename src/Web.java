@@ -11,12 +11,6 @@ public class Web {
     private static final int MAX_BODY_SIZE = 64 * 1024; // 64 KB
     private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(50);
 
-    private static final ThreadPoolExecutor sex = new ThreadPoolExecutor(
-            50, 50,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>()
-    );
-
     public static final long SERVER_START = System.currentTimeMillis();
 
     public static void main(String[] args) throws IOException {
@@ -31,7 +25,7 @@ public class Web {
 
         /* ===== HTTP SERVER ===== */
 
-        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 100);
+        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 50);
 
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
@@ -99,44 +93,70 @@ public class Web {
 
     static void handleData(HttpExchange ex) throws IOException {
         long start = System.currentTimeMillis();
-        System.out.println("[handleData] Incoming request: " + ex.getRequestMethod() + " from " + ex.getRemoteAddress());
 
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Проверки Content-Type и размера
         String ct = ex.getRequestHeaders().getFirst("Content-Type");
         if (ct == null || !ct.startsWith("application/json")) {
             HttpUtil.sendError(ex, 415, "unsupported_media_type");
             return;
         }
 
-        if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
+        long bodySize = HttpUtil.getBodySize(ex);
+        if (bodySize <= 0 || bodySize > MAX_BODY_SIZE) {
             HttpUtil.sendError(ex, 413, "payload_too_large");
             return;
         }
 
-        // Читаем тело полностью
-        byte[] bodyBytes = ex.getRequestBody().readAllBytes();
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
         String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
-        // Ответ клиенту сразу
-        HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
-        System.out.println("[handleData] Response sent in " + (System.currentTimeMillis() - start) + "ms");
+        if (sensorId == null || token == null) {
+            HttpUtil.sendError(ex, 401, "missing_sensor_auth");
+            return;
+        }
 
-        // Асинхронная обработка данных
-        sensorExecutor.submit(() -> {
-            try {
-                DataStore.handleSensorPost(bodyBytes, sensorId, token);
-            } catch (Exception e) {
-                System.err.println("[sensorExecutor] Exception:");
-                e.printStackTrace();
-            }
-        });
+        sensorId = sensorId.trim();
+
+        if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
+            HttpUtil.sendError(ex, 400, "invalid_sensor_id");
+            return;
+        }
+
+        // Проверяем регистрацию и токен ДО чтения тела
+        if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
+            Audit.log(sensorId, "SENSOR_AUTH_FAIL", ex.getRemoteAddress().toString());
+            HttpUtil.sendError(ex, 403, "invalid_sensor_token");
+            return;
+        }
+
+        // Защита от перегрузки
+        if (((ThreadPoolExecutor) sensorExecutor).getQueue().size() > 10_000) {
+            HttpUtil.sendError(ex, 503, "server_overloaded");
+            return;
+        }
+
+        byte[] bodyBytes = ex.getRequestBody().readAllBytes();
+
+        try {
+            sensorExecutor.execute(() ->
+                    DataStore.handleSensorPost(bodyBytes, sensorId, token)
+            );
+        } catch (RejectedExecutionException e) {
+            HttpUtil.sendError(ex, 503, "executor_rejected");
+            return;
+        }
+
+        HttpUtil.sendJson(ex, "{\"status\":\"accepted\"}");
+
+        if (System.currentTimeMillis() - start > 50) {
+            System.out.println("[handleData] slow accept: " + (System.currentTimeMillis() - start) + "ms");
+        }
     }
+
 
     /* ==== SENSOR REGISTRATION ==== */
 
@@ -155,14 +175,6 @@ public class Web {
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
         HttpUtil.sendJson(ex, HttpUtil.toJson(DataStore.listSensors()));
-    }
-
-    private static void logExecutorStatus(String prefix) {
-        System.out.println("[sensorExecutor] " + prefix +
-                " | ActiveThreads=" + sex.getActiveCount() +
-                " | QueueSize=" + sex.getQueue().size() +
-                " | CompletedTasks=" + sex.getCompletedTaskCount()
-        );
     }
 
     static void handleSensorRegister(HttpExchange ex) throws IOException {
