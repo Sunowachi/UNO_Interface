@@ -124,7 +124,7 @@ public class Web {
 
         sensorExecutor.submit(() -> {
             try {
-                DataStore.handleSensorPost(bodyBytes, sensorId, token);
+                DataStore.handleSensorPost(bodyBytes, sensorId);
                 Security.markSensorSeen(sensorId);
             } catch (Exception e) {
                 e.printStackTrace();
