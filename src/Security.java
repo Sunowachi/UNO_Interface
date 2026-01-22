@@ -103,15 +103,21 @@ public class Security {
 
             long now = System.currentTimeMillis();
 
-            // replay / flood защита
             if (now <= lastSeen || now - lastSeen < 100) {
                 return false;
+            }
+
+            // ✅ ВАЖНО
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
+                ps.setLong(1, now);
+                ps.setString(2, id);
+                ps.executeUpdate();
             }
 
             return true;
 
         } catch (Exception e) {
-            e.printStackTrace();
             Audit.log(id, "SENSOR_AUTH_FAIL", remote.toString());
             return false;
         } finally {

@@ -119,6 +119,11 @@ public class Web {
             return;
         }
 
+        if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
+            HttpUtil.sendError(ex, 403, "forbidden");
+            return;
+        }
+
         byte[] bodyBytes = ex.getRequestBody().readAllBytes();
 
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
