@@ -29,30 +29,47 @@ public class HttpUtil {
 
     /* ========= JSON RESPONSE ========= */
 
-    public static void sendJson(HttpExchange exchange, String json) throws IOException {
-        if (exchange.getResponseHeaders().containsKey("Content-Type")) {
+    public static void sendJson(HttpExchange ex, String json) throws IOException {
+
+        if (ex.getResponseHeaders().containsKey("Content-Type")) {
+            Audit.log("-", "DOUBLE_RESPONSE_ATTEMPT",
+                    ex.getRemoteAddress().toString());
             return;
         }
 
-        byte[] responseBytes = json.getBytes("UTF-8");
-        exchange.getResponseHeaders().add("Content-Type", "application/json; charset=UTF-8");
-        exchange.sendResponseHeaders(200, responseBytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(responseBytes);
+        byte[] data = json.getBytes(StandardCharsets.UTF_8);
+
+        applySecurityHeaders(ex);
+        ex.getResponseHeaders().set(
+                "Content-Type",
+                "application/json; charset=UTF-8"
+        );
+
+        ex.sendResponseHeaders(200, data.length);
+        try (OutputStream os = ex.getResponseBody()) {
+            os.write(data);
         }
     }
 
-    public static void sendError(HttpExchange exchange, int code, String message) {
+    public static void sendError(HttpExchange ex, int code, String message) {
         try {
-            if (!exchange.getResponseHeaders().containsKey("Content-Type")) {
-                byte[] responseBytes = message.getBytes(StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().add("Content-Type", "text/plain; charset=UTF-8");
-                exchange.sendResponseHeaders(code, responseBytes.length);
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(responseBytes);
-                }
+            if (ex.getResponseHeaders().containsKey("Content-Type")) return;
+
+            byte[] data = message.getBytes(StandardCharsets.UTF_8);
+
+            applySecurityHeaders(ex);
+            ex.getResponseHeaders().set(
+                    "Content-Type",
+                    "text/plain; charset=UTF-8"
+            );
+
+            ex.sendResponseHeaders(code, data.length);
+            try (OutputStream os = ex.getResponseBody()) {
+                os.write(data);
             }
-        } catch (IOException ignored) {}
+        } catch (IOException e) {
+            Audit.log("-", "SEND_ERROR_FAIL", e.getMessage());
+        }
     }
 
     /* ========= JSON SERIALIZATION ========= */
@@ -135,22 +152,17 @@ public class HttpUtil {
     /* ========= STRICT JSON PARSE (AUTH / KEYS ONLY) ========= */
 
     static Map<String, String> parseJson(HttpExchange ex) throws IOException {
+
         try {
             String ct = Optional.ofNullable(
-                            ex.getRequestHeaders().getFirst("Content-Type"))
+                            ex.getRequestHeaders()
+                                    .getFirst("Content-Type"))
                     .orElse("")
                     .toLowerCase();
 
-            if (!ct.contains("application/json")) {
-                return Map.of();
-            }
+            if (!ct.contains("application/json")) return Map.of();
 
-            byte[] raw;
-            try {
-                raw = ex.getRequestBody().readAllBytes();
-            } catch (Exception e) {
-                return Map.of();
-            }
+            byte[] raw = ex.getRequestBody().readAllBytes();
             if (raw.length == 0 || raw.length > MAX_JSON_SIZE) return Map.of();
 
             String json = new String(raw, StandardCharsets.UTF_8).trim();
@@ -162,6 +174,7 @@ public class HttpUtil {
             if (json.isEmpty()) return map;
 
             for (String pair : json.split(",")) {
+
                 String[] kv = pair.split(":", 2);
                 if (kv.length != 2) return Map.of();
 
@@ -171,6 +184,8 @@ public class HttpUtil {
                 if (!key.matches("\"[a-zA-Z0-9_]+\"")) return Map.of();
                 if (!val.matches("\"[^\"]*\"")) return Map.of();
 
+                if (key.length() > 64 || val.length() > 512) return Map.of();
+
                 map.put(
                         key.substring(1, key.length() - 1),
                         val.substring(1, val.length() - 1)
@@ -179,6 +194,7 @@ public class HttpUtil {
                 if (map.size() > 10) return Map.of();
             }
             return map;
+
         } catch (Exception e) {
             return Map.of();
         }
@@ -254,17 +270,32 @@ public class HttpUtil {
     }
 
     static void clearCookie(HttpExchange ex, String k) {
-        ex.getResponseHeaders().add(
-                "Set-Cookie",
-                k + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
-        );
+
+        boolean https = FORCE_SECURE_COOKIE ||
+                "https".equalsIgnoreCase(
+                        ex.getRequestHeaders()
+                                .getFirst("X-Forwarded-Proto")
+                );
+
+        String cookie = k +
+                "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict" +
+                (https ? "; Secure" : "");
+
+        ex.getResponseHeaders().add("Set-Cookie", cookie);
     }
 
     /* ========= STATIC ========= */
 
     static void handleStatic(HttpExchange ex) throws IOException {
 
-        Path root = Path.of("web").toAbsolutePath().normalize();
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        Path root = Path.of("web")
+                .toAbsolutePath()
+                .normalize();
 
         String reqPath = ex.getRequestURI().getPath();
         if (reqPath.contains("..")) {
@@ -272,7 +303,10 @@ public class HttpUtil {
             return;
         }
 
-        Path path = root.resolve(reqPath.substring(1)).normalize();
+        Path path = root
+                .resolve(reqPath.substring(1))
+                .normalize();
+
         if (!path.startsWith(root)) {
             ex.sendResponseHeaders(403, -1);
             return;
@@ -301,13 +335,17 @@ public class HttpUtil {
 
         byte[] data = Files.readAllBytes(path);
 
-        ex.getResponseHeaders().set("Content-Type", getMimeType(name));
+        applySecurityHeaders(ex);
+        ex.getResponseHeaders().set(
+                "Content-Type",
+                getMimeType(name)
+        );
         ex.getResponseHeaders().set(
                 "Cache-Control",
-                name.endsWith(".html") ? "no-store" : "public, max-age=3600"
+                name.endsWith(".html")
+                        ? "no-store"
+                        : "public, max-age=3600"
         );
-
-        applySecurityHeaders(ex);
 
         ex.sendResponseHeaders(200, data.length);
         try (OutputStream os = ex.getResponseBody()) {
@@ -343,7 +381,11 @@ public class HttpUtil {
     static void sendConfig(HttpExchange ex) throws IOException {
         if (!CONFIG_FILE.exists()) {
             CONFIG_FILE.getParentFile().mkdirs();
-            Files.writeString(CONFIG_FILE.toPath(), "{ \"sensors\": [] }");
+            Files.writeString(
+                    CONFIG_FILE.toPath(),
+                    "{ \"sensors\": [] }",
+                    StandardCharsets.UTF_8
+            );
         }
         sendJson(ex, Files.readString(CONFIG_FILE.toPath()));
     }
@@ -356,20 +398,32 @@ public class HttpUtil {
             return;
         }
 
-        Files.writeString(CONFIG_FILE.toPath(), json);
+        Path tmp = Files.createTempFile("config", ".json");
+        Files.writeString(tmp, json, StandardCharsets.UTF_8);
+
+        Files.move(
+                tmp,
+                CONFIG_FILE.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE
+        );
         sendJson(ex, "{\"status\":\"OK\"}");
     }
 
     /* ========= RANGE ========= */
 
     static long parseRange(HttpExchange ex) {
+
         String q = ex.getRequestURI().getQuery();
         if (q == null) return 0;
 
         for (String p : q.split("&")) {
             if (p.startsWith("rangeMs=")) {
                 try {
-                    return Math.max(0, Long.parseLong(p.substring(8)));
+                    return Math.max(
+                            0,
+                            Long.parseLong(p.substring(8))
+                    );
                 } catch (NumberFormatException ignored) {
                     return 0;
                 }
