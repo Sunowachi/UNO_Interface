@@ -70,6 +70,7 @@ public class Web {
     /* ================= HANDLERS ================= */
 
     static void handleInit(HttpExchange ex) throws IOException {
+
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -83,9 +84,11 @@ public class Web {
 
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
-        HttpUtil.sendJson(ex,
+        HttpUtil.sendJson(
+                ex,
                 "{\"startTime\":" + SERVER_START +
-                        ",\"sensors\":" + DataStore.buildSensorsJson(0) + "}"
+                        ",\"sensors\":" +
+                        DataStore.buildSensorsJson(0) + "}"
         );
     }
 
@@ -109,26 +112,34 @@ public class Web {
             return;
         }
 
-        String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
-        String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
+        String sensorId =
+                ex.getRequestHeaders().getFirst("X-Sensor-Id");
+        String token =
+                ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
-        if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
+        if (!Security.validateSensorToken(
+                sensorId, token, ex.getRemoteAddress()
+        )) {
             HttpUtil.sendError(ex, 401, "invalid_sensor");
             return;
         }
 
-        byte[] bodyBytes = ex.getRequestBody().readAllBytes();
+        final byte[] body;
 
-        // Ответ СРАЗУ, чтобы не держать HTTP соединение
+        try {
+            body = ex.getRequestBody().readAllBytes();
+        } catch (Exception e) {
+            HttpUtil.sendError(ex, 400, "bad_payload");
+            return;
+        }
+
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
 
         sensorExecutor.submit(() -> {
             try {
-                DataStore.handleSensorPost(bodyBytes, sensorId);
-                Security.markSensorSeen(sensorId);
+                DataStore.handleSensorPost(body, sensorId);
             } catch (Exception e) {
-                e.printStackTrace();
-                Audit.log(sensorId, "SENSOR_POST_FAIL", e.getMessage());
+                Audit.log(sensorId, "SENSOR_POST_FAIL", "-");
             }
         });
     }
@@ -136,6 +147,7 @@ public class Web {
     /* ==== SENSOR REGISTRATION ==== */
 
     static void handleSensors(HttpExchange ex) throws IOException {
+
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -149,10 +161,14 @@ public class Web {
 
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
-        HttpUtil.sendJson(ex, HttpUtil.toJson(DataStore.listSensors()));
+        HttpUtil.sendJson(
+                ex,
+                HttpUtil.toJson(DataStore.listSensors())
+        );
     }
 
     static void handleSensorRegister(HttpExchange ex) throws IOException {
+
         try {
             if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
                 ex.sendResponseHeaders(405, -1);
@@ -166,6 +182,7 @@ public class Web {
             }
 
             var json = HttpUtil.parseJson(ex);
+
             String sensorId = json.get("sensorId");
             String key = json.get("key");
 
@@ -187,24 +204,24 @@ public class Web {
                 return;
             }
 
-            if (Security.isSensorRegistered(sensorId)) {
-                HttpUtil.sendError(ex, 409, "already_registered");
-                return;
-            }
-
             String ip = ex.getRemoteAddress().getAddress().getHostAddress();
+
             String token = Security.registerSensor(sensorId, ip);
+
             if (token == null) {
-                HttpUtil.sendError(ex, 500, "sensor_register_failed");
+                HttpUtil.sendError(ex, 409, "already_registered");
                 return;
             }
 
             Audit.log(sensorId, "SENSOR_REGISTER", ip);
 
-            HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
+            HttpUtil.sendJson(
+                    ex,
+                    "{\"token\":\"" + token + "\"}"
+            );
+
         } catch (Exception e) {
-            e.printStackTrace();
-            HttpUtil.sendError(ex, 500, "internal_error_during_register");
+            HttpUtil.sendError(ex, 500, "internal_error");
         }
     }
 
