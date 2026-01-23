@@ -24,7 +24,7 @@ public class Database {
             System.getenv().getOrDefault("DB_USER", "postgres");
 
     private static final String DB_PASS =
-            System.getenv().getOrDefault("DB_PASS", "1");
+            System.getenv("DB_PASS");
 
     /* ========= POOL ========= */
 
@@ -48,6 +48,13 @@ public class Database {
     /* ========= INIT ========= */
 
     static void init() {
+
+        if (DB_PASS == null || DB_PASS.length() < 4) {
+            throw new IllegalStateException(
+                    "DB_PASS must be provided via environment variable"
+            );
+        }
+
         try {
             Class.forName("org.postgresql.Driver");
 
@@ -76,6 +83,7 @@ public class Database {
     private static Connection createConnection() throws SQLException {
         Connection c = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
         c.setAutoCommit(true);
+        c.setNetworkTimeout(null, 3000);
         return c;
     }
 
@@ -119,7 +127,7 @@ public class Database {
 
         st.execute("""
             CREATE TABLE IF NOT EXISTS users(
-                username TEXT PRIMARY KEY,
+                username TEXT PRIMARY KEY CHECK (length(username) <= 64),
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL CHECK (role IN ('developer','admin','observer','worker'))
             )
@@ -127,11 +135,11 @@ public class Database {
 
         st.execute("""
             CREATE TABLE IF NOT EXISTS sensors(
-                sensor_id TEXT PRIMARY KEY,
+                sensor_id TEXT PRIMARY KEY CHECK (length(sensor_id) <= 64),
                 token_hash TEXT NOT NULL,
                 created_at BIGINT NOT NULL,
                 last_seen BIGINT NOT NULL,
-                register_ip TEXT NOT NULL
+                register_ip TEXT NOT NULL CHECK (length(register_ip) <= 45)
             )
         """);
 
@@ -139,16 +147,19 @@ public class Database {
             CREATE TABLE IF NOT EXISTS history(
                 id BIGSERIAL PRIMARY KEY,
                 sensor_id TEXT NOT NULL,
-                var_name TEXT NOT NULL,
+                var_name TEXT NOT NULL CHECK (length(var_name) <= 64),
                 ts BIGINT NOT NULL,
-                value DOUBLE PRECISION NOT NULL CHECK (value = value)
+                value DOUBLE PRECISION NOT NULL CHECK (value = value),
+                FOREIGN KEY (sensor_id)
+                    REFERENCES sensors(sensor_id)
+                    ON DELETE CASCADE
             )
         """);
 
         st.execute("""
             CREATE TABLE IF NOT EXISTS failed_logins(
-                username TEXT NOT NULL,
-                ip TEXT NOT NULL,
+                username TEXT NOT NULL CHECK (length(username) <= 64),
+                ip TEXT NOT NULL CHECK (length(ip) <= 45),
                 count INT NOT NULL,
                 last_fail BIGINT NOT NULL,
                 blocked_until BIGINT NOT NULL,
@@ -164,10 +175,10 @@ public class Database {
     /* ========= USERS ========= */
 
     static User findUser(String username) {
+
         if (username == null || username.length() > 64) return null;
 
         Connection c = borrow();
-        if (c == null) return null;
 
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT password_hash, role FROM users WHERE username=?")) {
@@ -198,8 +209,6 @@ public class Database {
         String hash = Security.hashPassword(password);
 
         Connection c = borrow();
-        if (c == null)
-            throw new RuntimeException("DB unavailable");
 
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
