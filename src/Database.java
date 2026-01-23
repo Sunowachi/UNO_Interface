@@ -20,6 +20,7 @@ public class Database {
                     "jdbc:postgresql://localhost:5432/sensors"
             );
 
+    // Укажите пользователя, который будет подключаться как сервер к БД. Сервер должен иметь права на редактирование БД
     private static final String DB_USER =
             System.getenv().getOrDefault("DB_USER", "postgres");
 
