@@ -24,18 +24,22 @@ public class Security {
     static final int MAX_PASSWORD_LENGTH = 256;
 
     static final String SENSOR_REGISTER_KEY =
-            System.getenv()
-                    .getOrDefault("SENSOR_REGISTER_KEY", "CHANGE_ME")
-                    .trim();
+            System.getenv("SENSOR_REGISTER_KEY") != null
+                    ? System.getenv("SENSOR_REGISTER_KEY").trim()
+                    : null;
+
+    static {
+        if (SENSOR_REGISTER_KEY == null || SENSOR_REGISTER_KEY.isEmpty()) {
+            throw new IllegalStateException(
+                    "SENSOR_REGISTER_KEY must be set via environment variable"
+            );
+        }
+    }
 
     /* ===== SENSOR LIMITS ===== */
 
     static final int MAX_SENSORS_TOTAL = 10_000;
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
-
-    enum SensorScope {
-        DATA_WRITE
-    }
 
     /* ================= PERMISSIONS ================= */
 
@@ -56,7 +60,9 @@ public class Security {
     static String hashToken(String token) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return Base64.getEncoder().encodeToString(md.digest(token.getBytes(StandardCharsets.UTF_8)));
+            return Base64.getEncoder().encodeToString(
+                    md.digest(token.getBytes(StandardCharsets.UTF_8))
+            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -78,6 +84,7 @@ public class Security {
                     SELECT token_hash, last_seen, register_ip
                     FROM sensors WHERE sensor_id=?
                     """)) {
+
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
@@ -89,14 +96,9 @@ public class Security {
 
             String incomingHash = hashToken(token);
 
-            try {
-                if (!MessageDigest.isEqual(
-                        Base64.getDecoder().decode(storedHash),
-                        Base64.getDecoder().decode(incomingHash))) {
-                    return false;
-                }
-            } catch (IllegalArgumentException e) {
-                Audit.log(id, "SENSOR_HASH_CORRUPT", remote.getAddress().getHostAddress());
+            if (!MessageDigest.isEqual(
+                    Base64.getDecoder().decode(storedHash),
+                    Base64.getDecoder().decode(incomingHash))) {
                 return false;
             }
 
@@ -114,12 +116,15 @@ public class Security {
 
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=? AND last_seen=?")) {
+
                 ps.setLong(1, now);
                 ps.setString(2, id);
                 ps.setLong(3, lastSeen);
                 ps.executeUpdate();
             }
+
             return true;
+
         } catch (Exception e) {
             Audit.log(id, "SENSOR_AUTH_FAIL", remote.toString());
             return false;
@@ -173,11 +178,8 @@ public class Security {
 
     static String registerSensor(String sensorId, String ip) {
 
-        if ("CHANGE_ME".equals(SENSOR_REGISTER_KEY)) {
-            System.err.println("WARNING: SENSOR_REGISTER_KEY is not set!");
-        }
-
-        if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty()) return null;
+        if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty())
+            return null;
 
         Connection c = null;
         try {
@@ -186,32 +188,27 @@ public class Security {
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT COUNT(*) FROM sensors")) {
                 ResultSet rs = ps.executeQuery();
-                if (rs.next() && rs.getInt(1) >= MAX_SENSORS_TOTAL) {
+                if (rs.next() && rs.getInt(1) >= MAX_SENSORS_TOTAL)
                     return null;
-                }
             }
 
-            try (PreparedStatement ps = c.prepareStatement(
-                    """
+            try (PreparedStatement ps = c.prepareStatement("""
                     SELECT COUNT(*) FROM sensors
                     WHERE created_at > ? AND register_ip = ?
                     """)) {
+
                 ps.setLong(1, System.currentTimeMillis() - 3_600_000);
                 ps.setString(2, ip);
                 ResultSet rs = ps.executeQuery();
-                if (rs.next() && rs.getInt(1) >= MAX_SENSOR_REG_PER_IP_PER_HOUR) {
+                if (rs.next() && rs.getInt(1) >= MAX_SENSOR_REG_PER_IP_PER_HOUR)
                     return null;
-                }
             }
-
-            if (isSensorRegistered(sensorId)) return null;
 
             String token = UUID.randomUUID().toString().replace("-", "");
             String hash = hashToken(token);
             long now = System.currentTimeMillis();
 
-            try (PreparedStatement ps = c.prepareStatement(
-                    """
+            try (PreparedStatement ps = c.prepareStatement("""
                     INSERT INTO sensors
                     (sensor_id, token_hash, created_at, last_seen, register_ip)
                     VALUES (?,?,?,?,?)
@@ -223,18 +220,15 @@ public class Security {
                 ps.setLong(4, now);
                 ps.setString(5, ip);
                 ps.executeUpdate();
-            } catch (SQLException e) {
-                if (e.getSQLState().equals("23505")) {
-                    return null;
-                }
-                throw e;
             }
 
             return token;
 
-        } catch (Exception e) {
+        } catch (SQLException e) {
+            if ("23505".equals(e.getSQLState())) {
+                return null;
+            }
             Audit.log(sensorId, "SENSOR_REGISTER_FAIL", ip);
-            e.printStackTrace();
             return null;
         } finally {
             Database.release(c);
@@ -250,22 +244,18 @@ public class Security {
 
         volatile long lastActive;
         volatile long lastPing;
-        volatile String csrf;
+        final String csrf;
 
         Session(String u, String r) {
             username = u;
             role = r;
             createdAt = System.currentTimeMillis();
-            rotateCsrf();
+            csrf = UUID.randomUUID().toString();
             touch();
         }
 
         void touch() {
             lastActive = System.currentTimeMillis();
-        }
-
-        void rotateCsrf() {
-            csrf = UUID.randomUUID().toString();
         }
 
         boolean expired() {
@@ -275,11 +265,9 @@ public class Security {
         }
     }
 
-    static final Map<String, Session> sessions =
-            new ConcurrentHashMap<>();
+    static final Map<String, Session> sessions = new ConcurrentHashMap<>();
 
     static void cleanupSessions() {
-        long now = System.currentTimeMillis();
         sessions.entrySet().removeIf(e -> e.getValue().expired());
     }
 
@@ -298,6 +286,9 @@ public class Security {
     }
 
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
+        String method = ex.getRequestMethod();
+        if ("GET".equalsIgnoreCase(method)) return true;
+
         String token = ex.getRequestHeaders().getFirst("X-CSRF-Token");
         if (!Objects.equals(token, s.csrf)) {
             HttpUtil.sendError(ex, 403, "csrf");
@@ -307,17 +298,12 @@ public class Security {
     }
 
     static boolean require(Session s, HttpExchange ex, Permission p) throws IOException {
-
-        if (!ROLE_PERMS
-                .getOrDefault(s.role, Set.of())
-                .contains(p)) {
-
+        if (!ROLE_PERMS.getOrDefault(s.role, Set.of()).contains(p)) {
             HttpUtil.sendError(ex, 403, "forbidden");
             Audit.log(
                     s.username,
                     "ACCESS_DENIED",
-                    ex.getRemoteAddress()
-                            .getAddress().getHostAddress()
+                    ex.getRemoteAddress().getAddress().getHostAddress()
             );
             return false;
         }
@@ -327,9 +313,8 @@ public class Security {
     /* ================= PASSWORDS ================= */
 
     static String hashPassword(String password) {
-        if (password == null || password.length() > MAX_PASSWORD_LENGTH) {
+        if (password == null || password.length() > MAX_PASSWORD_LENGTH)
             throw new IllegalArgumentException("bad password");
-        }
 
         try {
             byte[] salt = new byte[16];
@@ -347,8 +332,7 @@ public class Security {
                     .generateSecret(spec)
                     .getEncoded();
 
-            return Base64.getEncoder().encodeToString(salt) +
-                    ":" +
+            return Base64.getEncoder().encodeToString(salt) + ":" +
                     Base64.getEncoder().encodeToString(hash);
 
         } catch (Exception e) {
@@ -398,6 +382,7 @@ public class Security {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT blocked_until FROM failed_logins WHERE username=? AND ip=?")) {
+
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ResultSet rs = ps.executeQuery();
@@ -411,16 +396,23 @@ public class Security {
     }
 
     static void recordFailedLogin(String user, String ip) {
+
         long now = System.currentTimeMillis();
+
         Connection c = null;
         try {
             c = Database.borrow();
+
             try (PreparedStatement ps = c.prepareStatement("""
                 INSERT INTO failed_logins(username,ip,count,last_fail,blocked_until)
-                VALUES (?,?,?,?,?)
+                VALUES (?,?,?,?,0)
                 ON CONFLICT (username,ip)
                 DO UPDATE SET
-                    count = failed_logins.count + 1,
+                    count = CASE
+                        WHEN failed_logins.blocked_until < ?
+                        THEN 1
+                        ELSE failed_logins.count + 1
+                    END,
                     last_fail = EXCLUDED.last_fail,
                     blocked_until = CASE
                         WHEN failed_logins.count + 1 >= 5
@@ -428,14 +420,16 @@ public class Security {
                         ELSE failed_logins.blocked_until
                     END
             """)) {
+
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ps.setInt(3, 1);
                 ps.setLong(4, now);
-                ps.setLong(5, 0);
+                ps.setLong(5, now);
                 ps.setLong(6, now + 60_000);
                 ps.executeUpdate();
             }
+
         } catch (Exception e) {
             Audit.log(user, "FAILED_LOGIN_RECORD_FAIL", ip);
         } finally {
@@ -449,6 +443,7 @@ public class Security {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "DELETE FROM failed_logins WHERE username=? AND ip=?")) {
+
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ps.executeUpdate();
@@ -531,7 +526,6 @@ public class Security {
             return;
         }
 
-        s.rotateCsrf();
         HttpUtil.sendJson(ex,
                 "{\"username\":\"" + s.username +
                         "\",\"role\":\"" + s.role +
