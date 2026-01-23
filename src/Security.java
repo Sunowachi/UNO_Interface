@@ -133,41 +133,6 @@ public class Security {
         }
     }
 
-    static void markSensorSeen(String id) {
-        Connection c = null;
-        try {
-            c = Database.borrow();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE sensors SET last_seen=? WHERE sensor_id=?")) {
-                ps.setLong(1, System.currentTimeMillis());
-                ps.setString(2, id);
-                ps.executeUpdate();
-            }
-        } catch (Exception e) {
-            Audit.log(id, "MARK_SENSOR_SEEN_FAIL", "");
-        } finally {
-            Database.release(c);
-        }
-    }
-
-    static boolean isSensorRegistered(String id) {
-        if (id == null) return false;
-        Connection c = null;
-        try {
-            c = Database.borrow();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT 1 FROM sensors WHERE sensor_id=?")) {
-                ps.setString(1, id);
-                return ps.executeQuery().next();
-            }
-        } catch (Exception e) {
-            Audit.log(id, "SENSOR_REG_CHECK_FAIL", "");
-            return false;
-        } finally {
-            Database.release(c);
-        }
-    }
-
     static boolean checkSensorRegisterKey(String key) {
         if (key == null) return false;
         return MessageDigest.isEqual(
