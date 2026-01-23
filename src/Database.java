@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Database {
 
-    /* ========= CONSOLE ========= */
+    /* ========= CONSOLE COLORS ========= */
 
     public static final String WHITE  = "\u001B[0m";
     public static final String RED    = "\u001B[31m";
@@ -23,6 +23,27 @@ public class Database {
     private static final String DB_USER =
             System.getenv().getOrDefault("DB_USER", "postgres");
 
+    /*
+    Чтобы задать пароль для доступа к БД, нужно ввести следующие команды в терминале серверной машины:
+    Для bash (Linux):
+
+        export DB_PASS=ПАРОЛЬ ОТ БД
+        java -jar server.jar
+
+    Для ini (systemd/сервиса) задать в файле .env значения:
+
+        DB_PASS=ПАРОЛЬ ОТ БД
+
+    Для powershell (Windows). После установки пароля необходимо перезапустить терминал:
+
+        setx DB_PASS "ПАРОЛЬ ОТ БД"
+        java -jar server.jar
+
+    Для yaml (Docker):
+
+        environment:
+          DB_PASS: ПАРОЛЬ ОТ БД
+     */
     private static final String DB_PASS =
             System.getenv("DB_PASS");
 
