@@ -26,8 +26,16 @@ let fetchInterval = null;
 let timerInterval = null;
 let uiInitialized = false;
 let initRunning = false;
+let appState = 'idle';
 
 export async function init() {
+
+  if (appState !== 'idle') {
+    console.warn('[init] пропущен, текущее состояние:', appState);
+    return;
+  }
+
+  appState = 'initializing';
   if (initRunning) return; // защита от повторного запуска
   initRunning = true;
 
@@ -92,14 +100,19 @@ export async function init() {
     if (!fetchInterval) fetchInterval = setInterval(fetchData, 2000);
     if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
 
+    appState = 'ready';
+
   } catch (e) {
     console.error('Ошибка в init:', e);
+    appState = 'idle';
+    throw e;
   } finally {
     initRunning = false;
   }
 }
 
 function clearIntervals() {
+  appState = 'idle';
   if (fetchInterval) { clearInterval(fetchInterval); fetchInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }

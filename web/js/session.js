@@ -7,6 +7,7 @@ import {
   setCsrfToken,
   csrfToken
 } from './constants.js';
+
 import { clearIntervals } from './api.js';
 
 const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 минут
@@ -36,10 +37,10 @@ function stopIdleWatch() {
 
 export async function lockSession() {
 
-  clearIntervals();
-
   if (sessionLocked) return;
   sessionLocked = true;
+
+  clearIntervals();
 
   stopIdleWatch();
   stopPing();
