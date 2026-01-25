@@ -102,3 +102,17 @@
 2026-01-25 18:57:39 | pid=11972 | thread=pool-2-thread-13 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-25 18:58:55 | pid=11972 | thread=pool-2-thread-74 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-25 18:59:19 | pid=22708 | thread=pool-2-thread-1 | user=testSensorA | action=SENSOR_IP_MISMATCH | ip=127.0.0.1
+2026-01-25 18:59:36 | pid=22708 | thread=pool-2-thread-9 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:49838
+2026-01-25 18:59:42 | pid=22708 | thread=pool-2-thread-10 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:56137
+2026-01-25 18:59:47 | pid=22708 | thread=pool-2-thread-11 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:61873
+2026-01-25 18:59:52 | pid=22708 | thread=pool-2-thread-12 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51443
+2026-01-25 18:59:57 | pid=22708 | thread=pool-2-thread-13 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:65275
+2026-01-25 19:00:02 | pid=22708 | thread=pool-2-thread-15 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64881
+2026-01-25 19:00:07 | pid=22708 | thread=pool-2-thread-16 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64789
+2026-01-25 19:00:12 | pid=22708 | thread=pool-2-thread-18 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63275
+2026-01-25 19:01:16 | pid=22708 | thread=pool-2-thread-64 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:01:19 | pid=22708 | thread=pool-2-thread-69 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57113
+2026-01-25 19:01:49 | pid=1648 | thread=pool-2-thread-19 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:01:55 | pid=1648 | thread=pool-2-thread-27 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53549
+2026-01-25 19:02:00 | pid=1648 | thread=pool-2-thread-31 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54335
+2026-01-25 19:02:05 | pid=1648 | thread=pool-2-thread-34 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:62181

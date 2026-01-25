@@ -8,7 +8,8 @@ import {
   setAllSensors,
   currentUser,
   ROLE_PERMISSIONS,
-  PERMISSIONS
+  PERMISSIONS,
+  csrfToken
 } from './constants.js';
 
 import { lockSession } from './session.js';
