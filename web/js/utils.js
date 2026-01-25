@@ -23,12 +23,17 @@ const DEFAULT_STEP_MS = 1000;
 /* ================== PERMISSIONS ================== */
 
 export function hasPermission(permission) {
+
+  if (!permission) return false;
+
   if (!currentUser || !currentUser.role) return false;
 
   const perms = ROLE_PERMISSIONS[currentUser.role];
+
   if (!perms) return false;
 
   if (perms.has(PERMISSIONS.DEV_ALL)) return true;
+
   return perms.has(permission);
 }
 
@@ -49,6 +54,9 @@ export function buildIpVarMap() {
 
   for (const key of Object.keys(allSensors || {})) {
     if (typeof key !== 'string') continue;
+
+    const sensorId = parts[0].trim();
+    const varName = parts[1].trim();
 
     const parts = key.split(':', 2);
     if (parts.length !== 2) continue;
@@ -78,21 +86,23 @@ export function getSelectedTimeRangeMs() {
 
   const totalMinutes = d * 1440 + h * 60 + m;
   return totalMinutes > 0 ? totalMinutes * 60_000 : 0;
+
+  const safe = Math.max(totalMinutes, 0);
+  return safe * 60_000;
 }
 
 /* ================== ALERTS ================== */
 
 export function getAlertClass(vs, value) {
-  if (!Number.isFinite(value)) return null;
-  if (!vs) return null;
+  if (!Number.isFinite(value) || !vs) return null;
 
   const low = Number(vs.lowLimit);
   const warn = Number(vs.warnLimit);
   const alarm = Number(vs.alarmLimit);
 
-  if (Number.isFinite(low) && value < low) return 'blink-blue';
   if (Number.isFinite(alarm) && value >= alarm) return 'blink-red';
   if (Number.isFinite(warn) && value >= warn) return 'blink-yellow';
+  if (Number.isFinite(low) && value < low) return 'blink-blue';
 
   return null;
 }
@@ -160,6 +170,7 @@ export async function fetchData() {
 
           let t = row.ts ?? row.time ?? row.t ?? Date.now();
           if (typeof t === 'string') t = Date.parse(t);
+          if (!Number.isFinite(t)) t = Date.now();
           if (t < 1e12) t *= 1000;
 
           values.push(v);
@@ -196,11 +207,10 @@ export async function fetchData() {
 
 /* ================== FORMAT ================== */
 
-export function formatTimeHHMMSS(ms) {
+export function formatTimeHHMMSS(ms, useUTC = false) {
   const d = new Date(ms);
-  return [
-    d.getHours(),
-    d.getMinutes(),
-    d.getSeconds()
-  ].map(v => String(v).padStart(2, '0')).join(':');
+  const h = useUTC ? d.getUTCHours() : d.getHours();
+  const m = useUTC ? d.getUTCMinutes() : d.getMinutes();
+  const s = useUTC ? d.getUTCSeconds() : d.getSeconds();
+  return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
 }
