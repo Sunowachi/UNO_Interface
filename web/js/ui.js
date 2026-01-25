@@ -22,6 +22,7 @@ import { saveConfigWithMessage } from './sensors.js';
 import { getAlertClass, pickHigherAlertClass, hasPermission } from './utils.js';
 
 let editingId = null;
+let toastTimer = null;
 
 function getCsrfToken() {
   return document.cookie
@@ -42,8 +43,8 @@ export function hideApp() {
 }
 
 async function login(e) {
-  e?.preventDefault();
 
+  e?.preventDefault();
   setCurrentUser(null);
 
   const username = document.getElementById("loginUser").value;
@@ -210,7 +211,6 @@ export function updateSensorPanel() {
     li.textContent = 'Нет настроенных датчиков';
     li.style.color = '#777';
     list.appendChild(li);
-
     setCurrentSensor(null);
 
     // очищаем все графики динамически
@@ -231,8 +231,8 @@ export function updateSensorPanel() {
       for (const v of vars) {
         const sData =
           allSensors[v] ||
-          allSensors[`${sCfg.id}_${v}`] ||
-          allSensors[`${sCfg.id}_${v.toLowerCase()}`];
+          allSensors[`${sCfg.id}:${v}`] ||
+          allSensors[`${sCfg.id}:${v.toLowerCase()}`];
 
         if (sData && Array.isArray(sData.values)) {
           const arr = sData.values;
@@ -313,7 +313,6 @@ export function updateDevicePanel() {
 
   for (const key of Object.keys(allSensors)) {
 
-    // "10.10.10.50_temp1" → ["10.10.10.50", "temp1"]
     const idx = key.indexOf('_');
     if (idx === -1) continue;
     const ip = key.slice(0, idx);
@@ -566,6 +565,7 @@ export async function onDeleteSensorClick() {
   await saveConfigWithMessage();
   updateSensorPanel();
   drawCurrent();
+  editingId = null;
 }
 
 export function closeEditModal() {
@@ -586,7 +586,11 @@ export function closeCancelConfirm() {
 
 export function onCancelSensorClick() { openCancelConfirm(); }
 
-export function onCancelConfirmOk() { closeCancelConfirm(); closeEditModal(); }
+export function onCancelConfirmOk() {
+  closeCancelConfirm();
+  closeEditModal();
+  editingId = null;
+}
 
 export function onCancelConfirmBack() { closeCancelConfirm(); }
 
@@ -604,7 +608,7 @@ export async function onSaveSensorClick() {
 
   // === ЧТЕНИЕ И ОБНОВЛЕНИЕ ID ДАТЧИКА ===
   const sensorIdInput = document.getElementById('sensorId');
-  let newId = sensorIdInput ? sensorIdInput.value.trim() : '';
+  let newId = (sensorIdInput?.value.trim() || String(sCfg.id));
 
   if (!/^[a-zA-Z0-9_-]+$/.test(newId)) {
     alert('ID датчика может содержать только буквы, цифры, "_" и "-"');
@@ -721,14 +725,16 @@ export function updateTimer() {
   const timerEl = document.getElementById('timer');
   if (!timerEl) return;
 
-  const elapsed = Math.floor((Date.now() - serverStart) / 1000);
-  timerEl.textContent = 'Время работы: ' + elapsed + ' сек';
+  const elapsedSec = Math.floor((Date.now() - serverStart) / 1000);
+  const h = Math.floor(elapsedSec / 3600);
+  const m = Math.floor((elapsedSec % 3600) / 60);
+  const s = elapsedSec % 60;
+  timerEl.textContent = `Время работы: ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
 }
 
 // === ТОСТ ===
 export function showToast(message) {
   let toast = document.getElementById('toastMessage');
-
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'toastMessage';
@@ -739,7 +745,8 @@ export function showToast(message) {
   toast.textContent = message;
   toast.classList.add('toast-show');
 
-  setTimeout(() => {
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
     toast.classList.remove('toast-show');
   }, 2500);
 }
