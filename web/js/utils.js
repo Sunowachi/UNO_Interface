@@ -105,7 +105,12 @@ export async function fetchData() {
       body: JSON.stringify({ sensors: sensorsPayload, rangeMs })
     });
 
-    if (res.status === 401 || res.status === 403) { lockSession(); return; }
+    if (res.status === 401 || res.status === 403) {
+      console.warn('[fetchData] Сессия недействительна, останавливаем опрос');
+      lockSession();
+      return;
+    }
+
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
     const data = await res.json();

@@ -104,14 +104,10 @@ export async function initSession() {
       startIdleWatch();
       startPing();
 
-      const { init } = await import('./api.js');
-      await init(); // ждем init полностью
-
       closeLoginModal();
       showApp();
   } catch (err) {
       if (err.status === 401 || err.status === 403) {
-          // сессия не авторизована — открываем логин
           setCurrentUser(null);
           hideApp();
           openLoginModal();

@@ -79,7 +79,9 @@ async function login(e) {
     return;
   }
 
-  await initSession();
+  closeLoginModal();
+  showApp();
+
 }
 
 export function openLoginModal() {document.getElementById("loginModal").classList.add("show");}

@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   hideApp();
   setupButtonHandlers();
   setupTimeRangeControls();
-  await initSession();
 
+  await initSession();
   await init();
 });
