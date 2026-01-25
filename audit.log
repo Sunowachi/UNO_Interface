@@ -121,3 +121,6 @@
 2026-01-25 19:02:20 | pid=1648 | thread=pool-2-thread-45 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51202
 2026-01-25 19:02:25 | pid=1648 | thread=pool-2-thread-48 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:62587
 2026-01-25 19:02:30 | pid=1648 | thread=pool-2-thread-52 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64583
+2026-01-25 19:05:28 | pid=1648 | thread=pool-2-thread-77 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:05:33 | pid=1648 | thread=pool-2-thread-82 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53602
+2026-01-25 19:11:18 | pid=1648 | thread=pool-2-thread-38 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

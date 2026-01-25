@@ -9,7 +9,7 @@ import {
 } from './constants.js';
 import { applyPermissions } from './ui.js';
 
-const IDLE_TIMEOUT = 1 * 60 * 1000; // 1 минута
+const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 минут
 let idleTimer = null;
 let lastActivity = Date.now();
 let pingTimer = null;
@@ -23,20 +23,15 @@ function resetIdleTimer() {
 
 function startIdleWatch() {
   stopIdleWatch();
-
   idleTimer = setInterval(() => {
     const idleTime = Date.now() - lastActivity;
-    if (idleTime >= IDLE_TIMEOUT) {
-      lockSession();
-    }
+    if (idleTime >= IDLE_TIMEOUT) lockSession();
   }, 1000);
 }
 
 function stopIdleWatch() {
-  if (idleTimer) {
-    clearInterval(idleTimer);
-    idleTimer = null;
-  }
+  if (idleTimer) clearInterval(idleTimer);
+  idleTimer = null;
 }
 
 export async function lockSession() {
@@ -63,7 +58,6 @@ export async function lockSession() {
 
 export function startPing() {
   stopPing();
-
   pingTimer = setInterval(async () => {
     try {
       const res = await fetch('/auth/ping', {
@@ -71,69 +65,42 @@ export function startPing() {
         credentials: 'include',
         headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
       });
-
-      if (res.status === 401 || res.status === 403) {
-        lockSession();
-      }
-
-    } catch {
-
-    }
+      if (res.status === 401 || res.status === 403) lockSession();
+    } catch {}
   }, 30_000);
 }
 
 export function stopPing() {
-  if (pingTimer) {
-    clearInterval(pingTimer);
-    pingTimer = null;
-  }
+  if (pingTimer) clearInterval(pingTimer);
+  pingTimer = null;
 }
 
 function setupActivityListeners() {
-
   if (listenersInstalled) return;
-    listenersInstalled = true;
+  listenersInstalled = true;
 
   const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'];
-
-  events.forEach(e =>
-    window.addEventListener(e, () => {
-      resetIdleTimer();
-    })
-  );
-
+  events.forEach(e => window.addEventListener(e, resetIdleTimer));
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      resetIdleTimer();
-    }
+    if (!document.hidden) resetIdleTimer();
   });
 }
 
 export async function initSession() {
-
   stopIdleWatch();
   stopPing();
 
   try {
-    const res = await fetch('/auth/me', {
-      credentials: 'include'
-    });
-
+    const res = await fetch('/auth/me', { credentials: 'include' });
     if (!res.ok) throw new Error();
 
     const data = await res.json();
-
     setCsrfToken(data.csrf);
-
-    setCurrentUser({
-      username: data.username,
-      role: data.role,
-      csrf: data.csrf
-    });
+    setCurrentUser({ username: data.username, role: data.role, csrf: data.csrf });
 
     applyPermissions(data.role);
-    resetIdleTimer();
     setupActivityListeners();
+    resetIdleTimer();
     startIdleWatch();
     startPing();
 
@@ -142,7 +109,6 @@ export async function initSession() {
 
     closeLoginModal();
     showApp();
-
   } catch {
     setCurrentUser(null);
     hideApp();
