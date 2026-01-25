@@ -38,7 +38,7 @@ function stopIdleWatch() {
   }
 }
 
-async function lockSession() {
+export async function lockSession() {
   if (sessionLocked) return;
   sessionLocked = true;
 

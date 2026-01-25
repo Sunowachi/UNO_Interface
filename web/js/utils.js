@@ -11,6 +11,7 @@ import {
   PERMISSIONS
 } from './constants.js';
 
+import { lockSession } from './session.js';
 import { syncNewSensors } from './sensors.js';
 import { updateSensorPanel, updateDevicePanel } from './ui.js';
 import { drawCurrent } from './charts.js';
@@ -116,15 +117,15 @@ export async function fetchData() {
 
     const body = JSON.stringify({ rangeMs });
 
-    const res = await fetch(url, {
-      method: 'POST',                  // POST вместо GET
+    const res = await fetch('/data', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body
+      body: JSON.stringify({ rangeMs })
     });
 
     if (res.status === 401 || res.status === 403) {
-      forceLogout();
+      lockSession();
       return;
     }
 
@@ -191,7 +192,6 @@ export async function fetchData() {
     console.error('Ошибка fetchData:', e);
   }
 }
-
 
 /* ================== FORMAT ================== */
 
