@@ -14,4 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupButtonHandlers();
   setupTimeRangeControls();
   await initSession();
+
+  await init();
 });

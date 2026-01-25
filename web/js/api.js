@@ -31,10 +31,11 @@ let timerInterval = null;
 let uiInitialized = false;
 
 export async function init() {
-  try {
-    // безопасно очищаем интервалы перед новым запуском
-    clearIntervals();
+  if (window.appInitialized) return; // защита от повторного запуска
+  window.appInitialized = true;
 
+  try {
+    clearIntervals();
     console.log('init: запрос /init');
 
     const res = await fetch('/init', { credentials: 'include' });
@@ -53,15 +54,6 @@ export async function init() {
     } catch (e) {
       console.error('Ошибка парсинга JSON /init:', e);
       console.error('Невалидный ответ сервера:', text);
-      return;
-    }
-
-    if (!data?.startTime || typeof data.startTime !== 'number') {
-      console.error('Некорректный startTime:', data?.startTime);
-      return;
-    }
-    if (!data?.sensors || typeof data.sensors !== 'object') {
-      console.error('Некорректный sensors:', data?.sensors);
       return;
     }
 
@@ -88,16 +80,12 @@ export async function init() {
     updateDevicePanel();
     updateTimer();
 
-    // безопасно запускаем сессию и опрос данных
-    await initSession();
-
-    // интервалы запускаем только один раз
-    fetchInterval = setInterval(fetchData, 2000);
-    timerInterval = setInterval(updateTimer, 1000);
+    // запуск периодических обновлений только один раз
+    if (!fetchInterval) fetchInterval = setInterval(fetchData, 2000);
+    if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
 
   } catch (e) {
     console.error('Ошибка в init:', e);
-    clearIntervals();
   }
 }
 
