@@ -1,7 +1,7 @@
 console.log('sensors.js загружен');
 
 import { config, setConfig, csrfToken, PERMISSIONS } from './constants.js';
-import { showToast, updateSensorPanel } from './ui.js';
+import { forceLogout, showToast, updateSensorPanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 
 /* ================== CONSTANTS ================== */
@@ -12,7 +12,9 @@ const SAVE_DEBOUNCE_MS = 2000;
 /* ================== UTILS ================== */
 
 function normalizeVars(input) {
-  if (Array.isArray(input)) return input;
+  if (Array.isArray(input)) {
+    return input.map(String).map(v => v.trim()).filter(Boolean);
+  }
 
   if (typeof input === 'string') {
     return input
@@ -111,8 +113,13 @@ export async function syncConfigInitial() {
 
       sCfg.vars = normalizeVars(sCfg.vars);
 
-      if (sCfg.vars.length === 0 && varsFromData.length > 0) {
-        sCfg.vars = varsFromData;
+      const merged = new Set([
+        ...sCfg.vars,
+        ...varsFromData
+      ]);
+
+      if (merged.size !== sCfg.vars.length) {
+        sCfg.vars = Array.from(merged);
         updated = true;
       }
     }
@@ -127,6 +134,7 @@ export async function syncConfigInitial() {
     } else {
       showToast('❌ Недостаточно прав для сохранения конфигурации');
     }
+    updateSensorPanel();
   }
 }
 
@@ -156,6 +164,17 @@ export async function syncNewSensors() {
       };
       config.sensors.push(sCfg);
       updated = true;
+    }
+    else if (!sCfg.deleted) {
+      const merged = new Set([
+        ...normalizeVars(sCfg.vars),
+        ...Array.from(varSet).filter(isValidVarName)
+      ]);
+
+      if (merged.size !== sCfg.vars.length) {
+        sCfg.vars = Array.from(merged);
+        updated = true;
+      }
     }
   }
 
