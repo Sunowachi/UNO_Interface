@@ -84,11 +84,21 @@ export function pickHigherAlertClass(currentClass, newClass) {
 /* ================== DATA FETCH ================== */
 
 export async function fetchData() {
+  if (!csrfToken) {
+    console.warn('[fetchData] CSRF-токен ещё не установлен, пропускаем fetch');
+    return;
+  }
+
   try {
     const rangeMs = getSelectedTimeRangeMs();
     const res = await fetch('/data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) },
+      headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken,
+              'X-Sensor-Id': sensorId,
+              'X-Sensor-Token': token
+            },
       credentials: 'include',
       body: JSON.stringify({ rangeMs })
     });

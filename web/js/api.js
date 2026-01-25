@@ -117,6 +117,7 @@ export async function init() {
 
     // 6) Запускаем периодический опрос сервера
     clearIntervals();
+    await fetchData();
     fetchInterval = setInterval(fetchData, 2000);
     timerInterval = setInterval(updateTimer, 1000);
 

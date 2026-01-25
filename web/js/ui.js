@@ -82,13 +82,9 @@ async function login(e) {
   await initSession();
 }
 
-export function openLoginModal() {
-    document.getElementById("loginModal").classList.add("show");
-}
+export function openLoginModal() {document.getElementById("loginModal").classList.add("show");}
 
-export function closeLoginModal() {
-    document.getElementById("loginModal").classList.remove("show");
-}
+export function closeLoginModal() {document.getElementById("loginModal").classList.remove("show");}
 
 export function applyPermissions(role) {
   const perms = ROLE_PERMISSIONS[role] || new Set();

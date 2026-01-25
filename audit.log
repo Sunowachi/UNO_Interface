@@ -124,3 +124,11 @@
 2026-01-25 19:05:28 | pid=1648 | thread=pool-2-thread-77 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-25 19:05:33 | pid=1648 | thread=pool-2-thread-82 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53602
 2026-01-25 19:11:18 | pid=1648 | thread=pool-2-thread-38 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:15:42 | pid=1648 | thread=pool-2-thread-26 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:20:25 | pid=1648 | thread=pool-2-thread-99 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:23:08 | pid=1648 | thread=pool-2-thread-38 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:23:09 | pid=1648 | thread=pool-2-thread-47 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:23:16 | pid=1648 | thread=pool-2-thread-77 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:23:22 | pid=1648 | thread=pool-2-thread-9 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:23:25 | pid=1648 | thread=pool-2-thread-18 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 19:23:52 | pid=1648 | thread=pool-2-thread-59 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
