@@ -91,8 +91,6 @@ export async function fetchData() {
 
   try {
     const rangeMs = getSelectedTimeRangeMs();
-
-    // Формируем payload для всех сенсоров с токенами
     const sensorsPayload = {};
     for (const key of Object.keys(allSensors)) {
       const sensorId = key.split(':')[0];
