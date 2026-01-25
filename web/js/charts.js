@@ -83,13 +83,20 @@ export function drawCurrent() {
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
     const color = vs.color || defaultColor;
 
-    let rawValues = sData.values.slice(); // копия
-    const lastVal = rawValues[rawValues.length - 1];
+    let rawValues = sData.values.slice();
 
     const processingMode = vs.processing || 'none';
     let processedValues = (processingMode && processingMode !== 'none')
       ? applyProcessing(rawValues, processingMode)
       : null;
+
+      if (
+        processedValues &&
+        processedValues.length !== rawValues.length
+      ) {
+        console.warn(`DSP изменил длину данных для ${varName}`);
+        processedValues = null;
+      }
 
     const showRaw = (typeof vs.showRaw === 'boolean') ? vs.showRaw : true;
     const showProcessed = (processingMode !== 'none')
@@ -121,6 +128,10 @@ export function drawCurrent() {
       console.warn(`Нет точек в выбранном диапазоне времени для ${varName}`);
       return;
     }
+
+    const lastVal = rawValues.length
+      ? rawValues[rawValues.length - 1]
+      : NaN;
 
     // ОБЩАЯ ОБЁРТКА
     const wrapper = document.createElement('div');
@@ -203,14 +214,18 @@ export function drawCurrent() {
       e.preventDefault();
     });
 
-    window.addEventListener('mousemove', (e) => {
+    canvas.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
       const dx = e.clientX - dragStartX;
       scrollWrapper.scrollLeft = startScrollLeft - dx;
     });
 
-    window.addEventListener('mouseup', () => {
-      if (!isDragging) return;
+    canvas.addEventListener('mouseup', () => {
+      isDragging = false;
+      scrollWrapper.style.cursor = 'grab';
+    });
+
+    canvas.addEventListener('mouseleave', () => {
       isDragging = false;
       scrollWrapper.style.cursor = 'grab';
     });
@@ -264,6 +279,13 @@ export function drawCurrent() {
     }
   });
 }
+
+const pointsCount = Math.max(
+  rawValues?.length || 0,
+  processedValues?.length || 0
+);
+
+canvas.width = Math.max(700, pointsCount * 8);
 
 export function drawChart(id, rawData, processedData, times, options = {}) {
   const canvas = document.getElementById(id);
