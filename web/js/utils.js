@@ -98,16 +98,16 @@ export async function fetchData() {
       sensorsPayload[sensorId] = allSensors[key].token;
     }
 
-    await fetch('/data', {
+    const res = await fetch('/data', {
         method: 'POST',
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
             ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(sensorsPayload)
     });
-
+    
     if (res.status === 401 || res.status === 403) { lockSession(); return; }
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
