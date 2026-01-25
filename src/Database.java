@@ -50,13 +50,6 @@ public class Database {
 
     static void init() {
 
-        if (DB_PASS == null || DB_PASS.length() < 4) {
-            System.out.println("DB_PASS=" + System.getenv("DB_PASS"));
-            throw new IllegalStateException(
-                    "DB_PASS must be provided via environment variable"
-            );
-        }
-
         try {
             Class.forName("org.postgresql.Driver");
 
