@@ -129,11 +129,13 @@ export async function fetchData() {
           values.push(v);
           times.push(t);
         }
+
         if (!values.length) continue;
-        if (values.length > MAX_POINTS) {
-          values.splice(0, values.length - MAX_POINTS);
-          times.splice(0, times.length - MAX_POINTS);
+        if (values.length > 5000) {
+          values.splice(0, values.length - 5000);
+          times.splice(0, times.length - 5000);
         }
+
         newAll[key] = { values };
         sensorTimes[key] = times;
       }
@@ -145,7 +147,8 @@ export async function fetchData() {
     drawCurrent();
     updateDevicePanel();
 
-    console.debug('[fetchData] sensors count:', Object.keys(newAll).length);
+    // краткий лог вместо полного объекта
+    console.debug('[fetchData] обновлено сенсоров:', Object.keys(newAll).length);
 
   } catch (e) {
     console.error('Ошибка fetchData:', e);

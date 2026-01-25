@@ -1,7 +1,6 @@
 console.log('api.js загружен');
 
 import {
-  allSensors,
   config,
   currentSensor,
   setServerStart,
@@ -21,23 +20,22 @@ import {
 import { drawCurrent } from './charts.js';
 import { fetchData } from './utils.js';
 
-import {
-  syncConfigInitial,
-  loadConfig
-} from './sensors.js';
+import { syncConfigInitial, loadConfig } from './sensors.js';
 
 let fetchInterval = null;
 let timerInterval = null;
 let uiInitialized = false;
+let initRunning = false;
 
 export async function init() {
-  if (window.appInitialized) return; // защита от повторного запуска
-  window.appInitialized = true;
+  if (initRunning) return; // защита от повторного запуска
+  initRunning = true;
 
   try {
+    // очищаем интервалы, если они уже есть
     clearIntervals();
-    console.log('init: запрос /init');
 
+    console.log('init: запрос /init');
     const res = await fetch('/init', { credentials: 'include' });
 
     if (res.status === 401 || res.status === 403) {
@@ -49,11 +47,18 @@ export async function init() {
 
     const text = await res.text();
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
+    try { data = JSON.parse(text); }
+    catch (e) {
       console.error('Ошибка парсинга JSON /init:', e);
-      console.error('Невалидный ответ сервера:', text);
+      return;
+    }
+
+    if (!data?.startTime || typeof data.startTime !== 'number') {
+      console.error('Некорректный startTime:', data?.startTime);
+      return;
+    }
+    if (!data?.sensors || typeof data.sensors !== 'object') {
+      console.error('Некорректный sensors:', data?.sensors);
       return;
     }
 
@@ -80,16 +85,17 @@ export async function init() {
     updateDevicePanel();
     updateTimer();
 
-    // запуск периодических обновлений только один раз
+    // Запускаем интервалы только если они ещё не активны
     if (!fetchInterval) fetchInterval = setInterval(fetchData, 2000);
     if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
 
   } catch (e) {
     console.error('Ошибка в init:', e);
+  } finally {
+    initRunning = false;
   }
 }
 
-// очистка интервалов
 function clearIntervals() {
   if (fetchInterval) { clearInterval(fetchInterval); fetchInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
