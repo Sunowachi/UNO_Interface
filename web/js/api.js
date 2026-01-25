@@ -87,8 +87,6 @@ export async function init() {
     setAllSensors(data.sensors);
 
     // 1) СНАЧАЛА грузим конфиг с диска
-    await loadConfig();
-
     const cfgLoaded = await loadConfig();
     if (!cfgLoaded) {
       console.warn('Конфиг не загружен с диска, используем серверный конфиг');

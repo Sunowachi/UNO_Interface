@@ -91,27 +91,32 @@ export async function initSession() {
   stopPing();
 
   try {
-    const res = await fetch('/auth/me', { credentials: 'include' });
-    if (!res.ok) throw new Error();
+      const res = await fetch('/auth/me', { credentials: 'include' });
+      if (!res.ok) throw res;
 
-    const data = await res.json();
-    setCsrfToken(data.csrf);
-    setCurrentUser({ username: data.username, role: data.role, csrf: data.csrf });
+      const data = await res.json();
+      setCsrfToken(data.csrf);
+      setCurrentUser({ username: data.username, role: data.role, csrf: data.csrf });
 
-    applyPermissions(data.role);
-    setupActivityListeners();
-    resetIdleTimer();
-    startIdleWatch();
-    startPing();
+      applyPermissions(data.role);
+      setupActivityListeners();
+      resetIdleTimer();
+      startIdleWatch();
+      startPing();
 
-    const { init } = await import('./api.js');
-    init();
+      const { init } = await import('./api.js');
+      await init(); // ждем init полностью
 
-    closeLoginModal();
-    showApp();
-  } catch {
-    setCurrentUser(null);
-    hideApp();
-    openLoginModal();
+      closeLoginModal();
+      showApp();
+  } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+          // сессия не авторизована — открываем логин
+          setCurrentUser(null);
+          hideApp();
+          openLoginModal();
+      } else {
+          console.error('Ошибка при инициализации сессии:', err);
+      }
   }
 }

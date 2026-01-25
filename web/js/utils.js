@@ -98,14 +98,14 @@ export async function fetchData() {
       sensorsPayload[sensorId] = allSensors[key].token;
     }
 
-    const res = await fetch('/data', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken
-      },
-      credentials: 'include',
-      body: JSON.stringify({ rangeMs, sensors: sensorsPayload })
+    await fetch('/data', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+        },
+        body: JSON.stringify(payload)
     });
 
     if (res.status === 401 || res.status === 403) { lockSession(); return; }
