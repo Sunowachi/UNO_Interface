@@ -99,3 +99,6 @@
 2026-01-25 18:55:41 | pid=11972 | thread=pool-2-thread-82 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59059
 2026-01-25 18:55:42 | pid=11972 | thread=pool-2-thread-97 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-25 18:55:46 | pid=11972 | thread=pool-2-thread-2 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:49789
+2026-01-25 18:57:39 | pid=11972 | thread=pool-2-thread-13 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 18:58:55 | pid=11972 | thread=pool-2-thread-74 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 18:59:19 | pid=22708 | thread=pool-2-thread-1 | user=testSensorA | action=SENSOR_IP_MISMATCH | ip=127.0.0.1

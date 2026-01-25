@@ -119,7 +119,10 @@ export async function fetchData() {
 
     const res = await fetch('/data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+      },
       credentials: 'include',
       body: JSON.stringify({ rangeMs })
     });

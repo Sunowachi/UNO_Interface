@@ -15,6 +15,7 @@ let lastActivity = Date.now();
 let pingTimer = null;
 let listenersInstalled = false;
 let sessionLocked = false;
+let uiInitialized = false;
 
 function resetIdleTimer() {
   lastActivity = Date.now();
