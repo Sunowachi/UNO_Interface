@@ -54,12 +54,14 @@ export function drawCurrent() {
   vars.forEach((varName, idx) => {
     // Определяем точный ключ, под которым пришли данные
     let dataKey = null;
-    if (allSensors[varName]) {
-      dataKey = varName;
-    } else if (allSensors[`${sCfg.id}_${varName}`]) {
-      dataKey = `${sCfg.id}_${varName}`;
-    } else if (allSensors[`${sCfg.id}_${varName.toLowerCase()}`]) {
-      dataKey = `${sCfg.id}_${varName.toLowerCase()}`;
+
+    const keyColon      = `${sCfg.id}:${varName}`;
+    const keyLowerColon = `${sCfg.id}:${varName.toLowerCase()}`;
+
+    if (allSensors[keyColon]) {
+      dataKey = keyColon;
+    } else if (allSensors[keyLowerColon]) {
+      dataKey = keyLowerColon;
     }
 
     if (!dataKey) {
