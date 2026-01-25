@@ -112,25 +112,26 @@ export function pickHigherAlertClass(currentClass, newClass) {
 export async function fetchData() {
   try {
     const rangeMs = getSelectedTimeRangeMs();
-    const url = rangeMs > 0
-      ? `/data?rangeMs=${encodeURIComponent(rangeMs)}&_=${Date.now()}`
-      : `/data?_=${Date.now()}`;
+    const url = `/data`;
 
-    const res = await fetch(url, { credentials: 'include' });
+    const body = JSON.stringify({ rangeMs });
+
+    const res = await fetch(url, {
+      method: 'POST',                  // POST вместо GET
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body
+    });
 
     if (res.status === 401 || res.status === 403) {
       forceLogout();
       return;
     }
 
-    if (!res.ok) {
-      throw new Error('HTTP ' + res.status);
-    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
 
-    const text = await res.text();
-    if (!text.trim()) return;
-
-    const data = JSON.parse(text);
+    // читаем тело один раз
+    const data = await res.json();
 
     if (!data || typeof data !== 'object' || !data.sensors) {
       console.error('Некорректный формат /data:', data);
@@ -138,9 +139,7 @@ export async function fetchData() {
     }
 
     const incoming = data.sensors;
-
     const newAll = {};
-    const now = Date.now();
 
     for (const [sensorId, vars] of Object.entries(incoming)) {
       if (!vars || typeof vars !== 'object') continue;
@@ -149,7 +148,6 @@ export async function fetchData() {
         if (!Array.isArray(rows)) continue;
 
         const key = `${sensorId}:${varName}`;
-
         const values = [];
         const times = [];
 
@@ -187,14 +185,13 @@ export async function fetchData() {
     drawCurrent();
     updateDevicePanel();
 
-    console.debug(
-        '[fetchData] sensors:',
-        Object.keys(newAll).length
-      );
+    console.debug('[fetchData] sensors:', Object.keys(newAll).length);
+
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }
 }
+
 
 /* ================== FORMAT ================== */
 
