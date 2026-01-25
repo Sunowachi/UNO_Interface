@@ -114,8 +114,6 @@ export function pickHigherAlertClass(currentClass, newClass) {
 export async function fetchData() {
   try {
     const rangeMs = getSelectedTimeRangeMs();
-    const url = `/data`;
-
     const body = JSON.stringify({ rangeMs });
 
     const res = await fetch('/data', {
@@ -125,7 +123,7 @@ export async function fetchData() {
         ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
       },
       credentials: 'include',
-      body: JSON.stringify({ rangeMs })
+      body
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -135,7 +133,6 @@ export async function fetchData() {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
-    // читаем тело один раз
     const data = await res.json();
 
     if (!data || typeof data !== 'object' || !data.sensors) {
