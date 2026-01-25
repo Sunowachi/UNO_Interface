@@ -20,6 +20,7 @@ import {
 
 export function drawCurrent() {
   const container = document.getElementById('chartsContainer');
+  const RAW_COLOR = '#999999';
 
   if (!currentSensor || !container) {
     if (container) container.innerHTML = "";
@@ -104,7 +105,6 @@ export function drawCurrent() {
       : false;
 
     const titleText = unit ? `${baseLabel} (${unit})` : baseLabel;
-    const alertClass = getAlertClass(vs, lastVal);
 
     // === Применяем диапазон времени (если задан) ===
     // Режем только если times валидны и синхронизированы с values.
@@ -132,6 +132,8 @@ export function drawCurrent() {
     const lastVal = rawValues.length
       ? rawValues[rawValues.length - 1]
       : NaN;
+
+    const alertClass = getAlertClass(vs, lastVal);
 
     // ОБЩАЯ ОБЁРТКА
     const wrapper = document.createElement('div');
@@ -188,7 +190,13 @@ export function drawCurrent() {
     const canvas = document.createElement('canvas');
     const chartId = `chart_${sCfg.id}_${varName}`;
     canvas.id = chartId;
-    canvas.width = 700; // базовая ширина, drawChart выставит корректную
+
+    const pointsCount = Math.max(
+      rawValues?.length || 0,
+      processedValues?.length || 0
+    );
+
+    canvas.width = Math.max(700, pointsCount * 8);
     canvas.height = 220;
     canvas.style.display = 'block';
 
@@ -241,7 +249,7 @@ export function drawCurrent() {
     if (showRaw) {
       const rawSpan = document.createElement('span');
       rawSpan.textContent = '■ RAW (сырые данные)';
-      rawSpan.style.color = '#666';
+      rawSpan.style.color = RAW_COLOR;
       rawSpan.style.marginRight = '10px';
       legend.appendChild(rawSpan);
     }
@@ -266,7 +274,7 @@ export function drawCurrent() {
       showProcessed ? processedValues : null,
       times,
       {
-        rawColor: '#999999',
+        rawColor: RAW_COLOR,
         processedColor: color,
         ylabel: titleText
       }
@@ -279,13 +287,6 @@ export function drawCurrent() {
     }
   });
 }
-
-const pointsCount = Math.max(
-  rawValues?.length || 0,
-  processedValues?.length || 0
-);
-
-canvas.width = Math.max(700, pointsCount * 8);
 
 export function drawChart(id, rawData, processedData, times, options = {}) {
   const canvas = document.getElementById(id);
