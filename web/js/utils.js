@@ -91,16 +91,23 @@ export async function fetchData() {
 
   try {
     const rangeMs = getSelectedTimeRangeMs();
+
+    // Формируем payload для всех сенсоров с токенами
+    const sensorsPayload = {};
+    for (const key of Object.keys(allSensors)) {
+      const sensorId = key.split(':')[0];
+      if (!sensorId || !allSensors[key]?.token) continue;
+      sensorsPayload[sensorId] = allSensors[key].token;
+    }
+
     const res = await fetch('/data', {
       method: 'POST',
       headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-Token': csrfToken,
-              'X-Sensor-Id': sensorId,
-              'X-Sensor-Token': token
-            },
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken
+      },
       credentials: 'include',
-      body: JSON.stringify({ rangeMs })
+      body: JSON.stringify({ rangeMs, sensors: sensorsPayload })
     });
 
     if (res.status === 401 || res.status === 403) { lockSession(); return; }
@@ -129,7 +136,10 @@ export async function fetchData() {
           times.push(t);
         }
         if (!values.length) continue;
-        if (values.length > MAX_POINTS) { values.splice(0, values.length - MAX_POINTS); times.splice(0, times.length - MAX_POINTS); }
+        if (values.length > MAX_POINTS) {
+          values.splice(0, values.length - MAX_POINTS);
+          times.splice(0, times.length - MAX_POINTS);
+        }
         newAll[key] = { values };
         sensorTimes[key] = times;
       }
