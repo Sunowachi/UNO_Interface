@@ -39,6 +39,9 @@ export async function init() {
     const res = await fetch('/init', { credentials: 'include' });
 
     if (res.status === 401 || res.status === 403) {
+      clearIntervals();
+      uiInitialized = false;
+      initRunning = false;
       forceLogout();
       return;
     }

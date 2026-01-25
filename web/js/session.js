@@ -1,13 +1,13 @@
 console.log('sessions.js загружен');
 
-import { openLoginModal, hideApp, showApp, closeLoginModal } from './ui.js';
+import { openLoginModal, hideApp, showApp, closeLoginModal, applyPermissions } from './ui.js';
 import {
   setCurrentUser,
   currentUser,
   setCsrfToken,
   csrfToken
 } from './constants.js';
-import { applyPermissions } from './ui.js';
+import { clearIntervals } from './api.js';
 
 const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 минут
 let idleTimer = null;
@@ -35,6 +35,9 @@ function stopIdleWatch() {
 }
 
 export async function lockSession() {
+
+  clearIntervals();
+
   if (sessionLocked) return;
   sessionLocked = true;
 
