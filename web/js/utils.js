@@ -99,15 +99,12 @@ export async function fetchData() {
     }
 
     const res = await fetch('/data', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
-        },
-        body: JSON.stringify(sensorsPayload)
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ sensors: sensorsPayload, rangeMs })
     });
-    
+
     if (res.status === 401 || res.status === 403) { lockSession(); return; }
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
@@ -123,7 +120,6 @@ export async function fetchData() {
         const key = `${sensorId}:${varName}`;
         const values = [], times = [];
         for (const row of rows) {
-          if (!row) continue;
           const v = Number(row.value ?? row.v ?? row);
           if (!Number.isFinite(v)) continue;
           let t = row.ts ?? row.time ?? row.t ?? Date.now();
@@ -149,7 +145,8 @@ export async function fetchData() {
     drawCurrent();
     updateDevicePanel();
 
-    console.debug('[fetchData] sensors:', Object.keys(newAll).length);
+    console.debug('[fetchData] sensors count:', Object.keys(newAll).length);
+
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }
