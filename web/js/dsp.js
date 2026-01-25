@@ -3,12 +3,23 @@ console.log('dsp.js загружен');
 // ЦИФРОВАЯ ОБРАБОТКА СИГНАЛОВ (DSP)
 export function movingAverage(values, windowSize) {
   const res = [];
+
   for (let i = 0; i < values.length; i++) {
     const start = Math.max(0, i - windowSize + 1);
-    const slice = values.slice(start, i + 1);
-    const sum = slice.reduce((acc, v) => acc + (Number(v) || 0), 0);
+    const slice = values
+      .slice(start, i + 1)
+      .map(Number)
+      .filter(Number.isFinite);
+
+    if (slice.length === 0) {
+      res.push(null);
+      continue;
+    }
+
+    const sum = slice.reduce((acc, v) => acc + v, 0);
     res.push(sum / slice.length);
   }
+
   return res;
 }
 
@@ -35,24 +46,38 @@ export function medianFilter(values, windowSize) {
 
 export function diffSeries(values) {
   const res = [];
+
   for (let i = 0; i < values.length; i++) {
-    if (i === 0) res.push(0);
-    else res.push(values[i] - values[i - 1]);
+    const curr = Number(values[i]);
+    const prev = Number(values[i - 1]);
+
+    if (i === 0 || !Number.isFinite(curr) || !Number.isFinite(prev)) {
+      res.push(null);
+    } else {
+      res.push(curr - prev);
+    }
   }
+
   return res;
 }
 
+
 export function applyProcessing(values, mode, windowSize = 10) {
   if (!Array.isArray(values) || values.length === 0) return [];
-  switch (mode) {
-    case 'moving_avg':
-      return movingAverage(values, windowSize);
-    case 'median':
-      return medianFilter(values, windowSize);
-    case 'diff':
-      return diffSeries(values);
-    case 'none':
-    default:
-      return values.slice(); // копия сырых данных
-  }
+  const result = (() => {
+    switch (mode) {
+      case 'moving_avg':
+        return movingAverage(values, windowSize);
+      case 'median':
+        return medianFilter(values, windowSize);
+      case 'diff':
+        return diffSeries(values);
+      case 'none':
+      default:
+        return values.slice();
+    }
+  })();
+  return Array.isArray(result) && result.length === values.length
+    ? result
+    : values.map(() => null);
 }
