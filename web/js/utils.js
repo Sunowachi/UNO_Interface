@@ -55,22 +55,16 @@ export function buildIpVarMap() {
   for (const key of Object.keys(allSensors || {})) {
     if (typeof key !== 'string') continue;
 
-    const sensorId = parts[0].trim();
-    const varName = parts[1].trim();
-
     const parts = key.split(':', 2);
     if (parts.length !== 2) continue;
 
-    const sensorId = parts[0];
-    const varName = parts[1];
+    const sensorId = parts[0].trim();
+    const varName = parts[1].trim();
 
     if (!isValidSensorId(sensorId)) continue;
     if (!isValidVarName(varName)) continue;
 
-    if (!map[sensorId]) {
-      map[sensorId] = new Set();
-    }
-
+    if (!map[sensorId]) map[sensorId] = new Set();
     map[sensorId].add(varName);
   }
 
@@ -84,11 +78,8 @@ export function getSelectedTimeRangeMs() {
   const h = Number(timeRange.hours) || 0;
   const m = Number(timeRange.minutes) || 0;
 
-  const totalMinutes = d * 1440 + h * 60 + m;
-  return totalMinutes > 0 ? totalMinutes * 60_000 : 0;
-
-  const safe = Math.max(totalMinutes, 0);
-  return safe * 60_000;
+  const totalMinutes = Math.max(d * 1440 + h * 60 + m, 0);
+  return totalMinutes * 60_000;
 }
 
 /* ================== ALERTS ================== */
