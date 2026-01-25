@@ -74,18 +74,12 @@ export async function init() {
       return;
     }
 
-    if (!data || typeof data !== 'object') {
-      console.error('Некорректная структура данных /init:', data);
+    if (!data?.startTime || typeof data.startTime !== 'number') {
+      console.error('Некорректный startTime:', data?.startTime);
       return;
     }
-
-    if (typeof data.startTime !== 'number') {
-      console.error('Некорректный startTime:', data.startTime);
-      return;
-    }
-
-    if (typeof data.sensors !== 'object' || data.sensors === null) {
-      console.error('Некорректный sensors:', data.sensors);
+    if (!data?.sensors || typeof data.sensors !== 'object') {
+      console.error('Некорректный sensors:', data?.sensors);
       return;
     }
 
@@ -95,11 +89,16 @@ export async function init() {
     // 1) СНАЧАЛА грузим конфиг с диска
     await loadConfig();
 
+    const cfgLoaded = await loadConfig();
+    if (!cfgLoaded) {
+      console.warn('Конфиг не загружен с диска, используем серверный конфиг');
+    }
+
     // 2) Один раз синхронизируем конфиг с тем, что пришло от сервера
     await syncConfigInitial();
 
     // 3) Если ещё не выбран датчик – выбрать первый
-    if (!currentSensor && config.sensors.length > 0) {
+    if (!currentSensor && Array.isArray(config.sensors) && config.sensors.length > 0) {
       setCurrentSensor(config.sensors[0].id);
     }
 
@@ -117,10 +116,8 @@ export async function init() {
     updateTimer();
 
     // 6) Запускаем периодический опрос сервера
-    if (fetchInterval) clearInterval(fetchInterval);
+    clearIntervals();
     fetchInterval = setInterval(fetchData, 2000);
-
-    if (timerInterval) clearInterval(timerInterval);
     timerInterval = setInterval(updateTimer, 1000);
 
   } catch (e) {
@@ -136,4 +133,9 @@ export async function init() {
       timerInterval = null;
     }
   }
+}
+
+function clearIntervals() {
+  if (fetchInterval) { clearInterval(fetchInterval); fetchInterval = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }

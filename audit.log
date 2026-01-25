@@ -33,3 +33,6 @@
 2026-01-25 17:35:31 | pid=6516 | thread=pool-2-thread-96 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:58128
 2026-01-25 17:35:57 | pid=6516 | thread=pool-2-thread-25 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-25 17:36:00 | pid=6516 | thread=pool-2-thread-29 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53120
+2026-01-25 17:45:09 | pid=6516 | thread=pool-2-thread-24 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 17:51:01 | pid=6516 | thread=pool-2-thread-13 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 17:54:12 | pid=6516 | thread=pool-2-thread-17 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
