@@ -18,3 +18,4 @@
 2026-01-19 15:34:37 | pid=13264 | thread=pool-1-thread-10 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-19 18:57:29 | pid=16868 | thread=pool-3-thread-14 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-25 16:17:15 | pid=15924 | thread=pool-2-thread-15 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-25 16:41:12 | pid=6516 | thread=pool-2-thread-4 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

@@ -130,52 +130,65 @@ export async function fetchData() {
     if (!text.trim()) return;
 
     const data = JSON.parse(text);
-    const incoming = data.sensors || data;
+
+    if (!data || typeof data !== 'object' || !data.sensors) {
+      console.error('Некорректный формат /data:', data);
+      return;
+    }
+
+    const incoming = data.sensors;
 
     const newAll = {};
     const now = Date.now();
 
-    for (const [key, src] of Object.entries(incoming)) {
-      if (!src || !Array.isArray(src.values)) continue;
+    for (const [sensorId, vars] of Object.entries(incoming)) {
+      if (!vars || typeof vars !== 'object') continue;
 
-      const values = src.values
-        .map(Number)
-        .filter(v => Number.isFinite(v));
+      for (const [varName, rows] of Object.entries(vars)) {
+        if (!Array.isArray(rows)) continue;
 
-      if (values.length === 0) continue;
+        const key = `${sensorId}:${varName}`;
 
-      let times;
+        const values = [];
+        const times = [];
 
-      if (Array.isArray(src.times) && src.times.length === values.length) {
-        times = src.times.map(t =>
-          typeof t === 'number'
-            ? (t < 1e12 ? t * 1000 : t)
-            : Date.parse(t)
-        );
-      } else {
-        const step = DEFAULT_STEP_MS;
-        const start = now - step * (values.length - 1);
-        times = Array.from({ length: values.length },
-          (_, i) => start + i * step);
+        for (const row of rows) {
+          if (!row) continue;
+
+          const v = Number(row.value ?? row.v ?? row);
+          if (!Number.isFinite(v)) continue;
+
+          let t = row.ts ?? row.time ?? row.t ?? Date.now();
+          if (typeof t === 'string') t = Date.parse(t);
+          if (t < 1e12) t *= 1000;
+
+          values.push(v);
+          times.push(t);
+        }
+
+        if (!values.length) continue;
+
+        if (values.length > MAX_POINTS) {
+          values.splice(0, values.length - MAX_POINTS);
+          times.splice(0, times.length - MAX_POINTS);
+        }
+
+        newAll[key] = { values };
+        sensorTimes[key] = times;
       }
-
-      // Ограничение размера
-      if (values.length > MAX_POINTS) {
-        values.splice(0, values.length - MAX_POINTS);
-        times.splice(0, times.length - MAX_POINTS);
-      }
-
-      newAll[key] = { values };
-      sensorTimes[key] = times;
     }
 
-    setAllSensors({ ...allSensors, ...newAll });
+    setAllSensors(Object.assign({}, allSensors, newAll));
 
     await syncNewSensors();
     updateSensorPanel();
     drawCurrent();
     updateDevicePanel();
 
+    console.debug(
+        '[fetchData] sensors:',
+        Object.keys(newAll).length
+      );
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }
