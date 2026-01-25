@@ -20,34 +20,12 @@ public class Database {
                     "jdbc:postgresql://localhost:5432/sensors"
             );
 
-    // Укажите пользователя, который будет подключаться как сервер к БД. Сервер должен иметь права на редактирование БД
+    // Сервер должен иметь права на редактирование БД!
     private static final String DB_USER =
             System.getenv().getOrDefault("DB_USER", "postgres");
 
-    /*
-    Чтобы задать пароль для доступа к БД, нужно ввести следующие команды в терминале серверной машины:
-    Для bash (Linux):
-
-        export DB_PASS=ПАРОЛЬ ОТ БД
-        java -jar server.jar
-
-    Для ini (systemd/сервиса) задать в файле .env значения:
-
-        DB_PASS=ПАРОЛЬ ОТ БД
-
-    Для powershell (Windows). После установки пароля необходимо перезапустить терминал:
-
-        setx DB_PASS "ПАРОЛЬ ОТ БД"
-        java -jar server.jar
-
-    Для yaml (Docker):
-
-        environment:
-          DB_PASS: ПАРОЛЬ ОТ БД
-     */
-
-
-    private static final String DB_PASS = System.getenv("DB_PASS");
+    private static final String DB_PASS =
+            System.getenv().getOrDefault("DB_PASS", "1");
 
     /* ========= POOL ========= */
 
