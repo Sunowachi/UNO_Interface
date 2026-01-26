@@ -243,11 +243,11 @@ public class HttpUtil {
         for (String c : cookies) {
             for (String p : c.split(";")) {
                 p = p.trim();
-                if (p.length() > name.length() + 1 &&
-                        p.startsWith(name) &&
-                        p.charAt(name.length()) == '=') {
-                    return p.substring(name.length() + 1);
-                }
+                int eq = p.indexOf('=');
+                if (eq == -1) continue;
+                String key = p.substring(0, eq);
+                String val = p.substring(eq + 1);
+                if (name.equals(key)) return val;
             }
         }
         return null;
@@ -260,10 +260,24 @@ public class HttpUtil {
                         ex.getRequestHeaders().getFirst("X-Forwarded-Proto")
                 );
 
+        String domainAttr = "";
+        String cookieDomain = System.getenv("COOKIE_DOMAIN");
+        if (cookieDomain != null && !cookieDomain.isBlank()) {
+            domainAttr = "; Domain=" + cookieDomain.trim();
+        }
+
+        String sameSite = System.getenv("COOKIE_SAMESITE");
+        if (sameSite == null || sameSite.isBlank()) sameSite = "Strict";
+
+        if ("None".equalsIgnoreCase(sameSite) && !https) {
+            sameSite = "Strict";
+        }
+
         String cookie = k + "=" + v +
                 "; Path=/" +
+                domainAttr +
                 "; HttpOnly" +
-                "; SameSite=Strict" +
+                "; SameSite=" + sameSite +
                 (https ? "; Secure" : "");
 
         ex.getResponseHeaders().add("Set-Cookie", cookie);
@@ -277,8 +291,22 @@ public class HttpUtil {
                                 .getFirst("X-Forwarded-Proto")
                 );
 
+        String domainAttr = "";
+        String cookieDomain = System.getenv("COOKIE_DOMAIN");
+        if (cookieDomain != null && !cookieDomain.isBlank()) {
+            domainAttr = "; Domain=" + cookieDomain.trim();
+        }
+
+        String sameSite = System.getenv("COOKIE_SAMESITE");
+        if (sameSite == null || sameSite.isBlank()) sameSite = "Strict";
+        if ("None".equalsIgnoreCase(sameSite) && !https) {
+            sameSite = "Strict";
+        }
+
         String cookie = k +
-                "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict" +
+                "=; Path=/; Max-Age=0" +
+                domainAttr +
+                "; HttpOnly; SameSite=" + sameSite +
                 (https ? "; Secure" : "");
 
         ex.getResponseHeaders().add("Set-Cookie", cookie);

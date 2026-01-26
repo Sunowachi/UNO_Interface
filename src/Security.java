@@ -242,8 +242,14 @@ public class Security {
         if (sid == null) return null;
 
         Session s = sessions.get(sid);
-        if (s == null || s.expired()) {
+        if (s == null) {
+            String sidPreview = sid.length() > 8 ? sid.substring(0, 8) : sid;
+            Audit.log("-", "SESSION_MISS", ex.getRemoteAddress().toString() + " sid=" + sidPreview);
+            return null;
+        }
+        if (s.expired()) {
             sessions.remove(sid);
+            Audit.log(s.username, "SESSION_EXPIRED", ex.getRemoteAddress().toString());
             return null;
         }
         s.touch();
