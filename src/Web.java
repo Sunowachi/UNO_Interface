@@ -84,11 +84,13 @@ public class Web {
 
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
+        long rangeMs = HttpUtil.parseRange(ex);
+
         HttpUtil.sendJson(
                 ex,
                 "{\"startTime\":" + SERVER_START +
                         ",\"sensors\":" +
-                        DataStore.buildSensorsJson(0) + "}"
+                        DataStore.buildSensorsJson(rangeMs) + "}"
         );
     }
 

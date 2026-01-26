@@ -103,12 +103,12 @@ export async function init() {
     appState = 'ready';
 
   } catch (e) {
-    console.error('Ошибка в init:', e);
-    appState = 'idle';
-    throw e;
-  } finally {
-    initRunning = false;
-  }
+      console.error('Ошибка в init:', e);
+      appState = 'idle';
+      throw e;
+    } finally {
+      initRunning = false;
+    }
 }
 
 export function clearIntervals() {

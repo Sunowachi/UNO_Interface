@@ -91,18 +91,11 @@ export async function fetchData() {
 
   try {
     const rangeMs = getSelectedTimeRangeMs();
-    const sensorsPayload = {};
-    for (const key of Object.keys(allSensors)) {
-      const sensorId = key.split(':')[0];
-      if (!sensorId || !allSensors[key]?.token) continue;
-      sensorsPayload[sensorId] = allSensors[key].token;
-    }
 
-    const res = await fetch('/data', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      body: JSON.stringify({ sensors: sensorsPayload, rangeMs })
+    console.log('[fetchData] запрос /init?rangeMs=' + rangeMs);
+    const res = await fetch('/init?rangeMs=' + encodeURIComponent(String(rangeMs)), {
+      method: 'GET',
+      credentials: 'include'
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -113,8 +106,10 @@ export async function fetchData() {
 
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
-    const data = await res.json();
-    if (!data?.sensors) { console.error('Некорректный формат /data:', data); return; }
+    const text = await res.text();
+    const data = JSON.parse(text);
+
+    if (!data?.sensors) { console.error('Некорректный формат /init:', data); return; }
 
     const newAll = {};
     for (const [sensorId, vars] of Object.entries(data.sensors)) {

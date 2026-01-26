@@ -221,3 +221,5 @@
 2026-01-26 18:22:13 | pid=26840 | thread=pool-2-thread-22 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-26 18:24:03 | pid=26840 | thread=pool-2-thread-33 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-26 18:32:16 | pid=25788 | thread=pool-2-thread-38 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-26 18:38:54 | pid=1884 | thread=pool-2-thread-22 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-26 18:57:26 | pid=22488 | thread=pool-2-thread-17 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

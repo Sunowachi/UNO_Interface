@@ -211,7 +211,6 @@ export async function saveConfigSilent() {
     if (!res.ok) {
       throw new Error('HTTP error: ' + res.status);
     }
-
   } catch (e) {
     console.error('Ошибка автосохранения:', e);
   }
