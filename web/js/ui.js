@@ -13,7 +13,8 @@ import {
   PERMISSIONS,
   setCurrentUser,
   ROLE_PERMISSIONS,
-  currentUser
+  currentUser,
+  csrfToken
 } from './constants.js';
 
 import { initSession } from './session.js';
@@ -24,13 +25,6 @@ import { getAlertClass, pickHigherAlertClass, hasPermission } from './utils.js';
 
 let editingId = null;
 let toastTimer = null;
-
-function getCsrfToken() {
-  return document.cookie
-    .split('; ')
-    .find(c => c.startsWith('XSRF-TOKEN='))
-    ?.split('=')[1];
-}
 
 export function showApp() {
   if (!currentUser) return;
@@ -55,7 +49,7 @@ async function login(e) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': getCsrfToken()
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
       },
       body: JSON.stringify({ username, password }),
       credentials: 'include'
@@ -95,7 +89,6 @@ async function login(e) {
     openLoginModal();
     showLoginError('Ошибка инициализации приложения');
   }
-
 }
 
 export function openLoginModal() {document.getElementById("loginModal").classList.add("show");}
