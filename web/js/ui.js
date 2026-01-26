@@ -52,13 +52,13 @@ async function login(e) {
   const password = document.getElementById("loginPass").value;
 
   const res = await fetch('/auth/login', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': getCsrfToken()
-    },
-    body: JSON.stringify({ username, password }),
-    credentials: 'same-origin'
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCsrfToken()
+      },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include'
   });
 
   const data = await res.json();
