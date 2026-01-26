@@ -407,6 +407,7 @@ public class HttpUtil {
     static final File CONFIG_FILE = new File("web/config.json");
 
     static void sendConfig(HttpExchange ex) throws IOException {
+
         if (!CONFIG_FILE.exists()) {
             CONFIG_FILE.getParentFile().mkdirs();
             Files.writeString(
@@ -415,7 +416,55 @@ public class HttpUtil {
                     StandardCharsets.UTF_8
             );
         }
-        sendJson(ex, Files.readString(CONFIG_FILE.toPath()));
+
+        String content;
+        try {
+            content = Files.readString(CONFIG_FILE.toPath(), StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            Files.writeString(
+                    CONFIG_FILE.toPath(),
+                    "{ \"sensors\": [] }",
+                    StandardCharsets.UTF_8
+            );
+            sendJson(ex, "{ \"sensors\": [] }");
+            return;
+        }
+
+        if (content.isEmpty()) {
+            Files.writeString(
+                    CONFIG_FILE.toPath(),
+                    "{ \"sensors\": [] }",
+                    StandardCharsets.UTF_8
+            );
+            sendJson(ex, "{ \"sensors\": [] }");
+            return;
+        }
+
+        boolean ok = false;
+        try {
+            if (content.startsWith("{")) {
+                int idx = content.indexOf("\"sensors\"");
+                if (idx != -1) {
+                    int arrStart = content.indexOf('[', idx);
+                    if (arrStart != -1) {
+                        ok = true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            ok = false;
+        }
+
+        if (!ok) {
+            Files.writeString(
+                    CONFIG_FILE.toPath(),
+                    "{ \"sensors\": [] }",
+                    StandardCharsets.UTF_8
+            );
+            sendJson(ex, "{ \"sensors\": [] }");
+            return;
+        }
+        sendJson(ex, content);
     }
 
     static void saveConfig(HttpExchange ex) throws IOException {
