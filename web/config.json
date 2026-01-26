@@ -1,0 +1,39 @@
+{
+  "sensors": [
+    {
+      "id": "testSensorA",
+      "name": "testSensorA",
+      "vars": [
+        "hum",
+        "temp"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "hum",
+          "label": "hum",
+          "color": "#ff0000",
+          "unit": "",
+          "lowLimit": 10,
+          "warnLimit": 50,
+          "alarmLimit": 80,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "temp",
+          "label": "temp",
+          "color": "#0000ff",
+          "unit": "",
+          "lowLimit": 10,
+          "warnLimit": 50,
+          "alarmLimit": 80,
+          "processing": "median",
+          "showRaw": true,
+          "showProcessed": true
+        }
+      ]
+    }
+  ]
+}

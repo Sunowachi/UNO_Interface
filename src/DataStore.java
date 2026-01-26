@@ -286,7 +286,7 @@ public class DataStore {
         for (var e : data.entrySet()) {
             if (!first) sb.append(",");
             first = false;
-            String safeKey = e.getKey().replaceAll("[^a-zA-Z0-9_\\-]", "_");
+            String safeKey = e.getKey().replaceAll("[^a-zA-Z0-9_\\-:]", "_");
             sb.append("\"").append(safeKey).append("\":")
                     .append(pointsToJson(e.getValue()));
         }
