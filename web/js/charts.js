@@ -33,10 +33,10 @@ export function drawCurrent() {
     return;
   }
 
-  const vars = (sCfg.vars || '')
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean);
+  // Нормализация vars: поддерживаем либо строку с запятыми, либо массив
+  const vars = Array.isArray(sCfg.vars)
+    ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
+    : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
   container.innerHTML = '';
 

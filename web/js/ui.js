@@ -240,8 +240,12 @@ export function updateSensorPanel() {
 
     const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
 
-    if (sCfg.vars) {
-      const vars = sCfg.vars.split(',').map(v => v.trim()).filter(Boolean);
+    // Нормализуем vars — поддерживаем либо строку с запятыми, либо массив
+    const vars = Array.isArray(sCfg.vars)
+      ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
+      : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+
+    if (vars) {
       for (const v of vars) {
         const sData =
           allSensors[v] ||
@@ -371,7 +375,14 @@ export function openEditModal(id) {
 
   if (sensorIdInput) sensorIdInput.value = sCfg.id != null ? String(sCfg.id) : '';
   if (sensorNameInput) sensorNameInput.value = sCfg.name || '';
-  if (sensorVarsInput) sensorVarsInput.value = sCfg.vars || '';
+  // Если vars — массив, переводим в строку через запятую; иначе оставляем как есть
+  if (sensorVarsInput) {
+    if (Array.isArray(sCfg.vars)) {
+      sensorVarsInput.value = sCfg.vars.join(',');
+    } else {
+      sensorVarsInput.value = sCfg.vars || '';
+    }
+  }
 
   buildVarSettingsUI(sCfg);
 
