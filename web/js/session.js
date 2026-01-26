@@ -56,6 +56,7 @@ export async function lockSession() {
   uiInitialized = false;
   listenersInstalled = false;
   setCurrentUser(null);
+  setCsrfToken(null);
   hideApp();
   openLoginModal();
 }
@@ -63,14 +64,25 @@ export async function lockSession() {
 export function startPing() {
   stopPing();
   pingTimer = setInterval(async () => {
+    // Не делаем ping если сессия заблокирована или нет CSRF токена
+    if (sessionLocked || !csrfToken) return;
+    
     try {
       const res = await fetch('/auth/ping', {
         method: 'POST',
         credentials: 'include',
         headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
       });
-      if (res.status === 401 || res.status === 403) lockSession();
-    } catch {}
+      
+      // Только блокируем сессию если точно получили 401/403
+      if (res.status === 401 || res.status === 403) {
+        console.warn('[ping] Сессия недействительна, блокируем');
+        lockSession();
+      }
+    } catch (e) {
+      // Игнорируем сетевые ошибки, не блокируем сессию из-за них
+      console.debug('[ping] Ошибка сети:', e);
+    }
   }, 30_000);
 }
 
@@ -94,6 +106,9 @@ export async function initSession() {
   stopIdleWatch();
   stopPing();
 
+  // Сбрасываем флаг блокировки сессии при попытке инициализации
+  sessionLocked = false;
+
   try {
       const res = await fetch('/auth/me', { credentials: 'include' });
       if (!res.ok) throw res;
@@ -112,7 +127,9 @@ export async function initSession() {
       showApp();
   } catch (err) {
       if (err.status === 401 || err.status === 403) {
+          sessionLocked = false; // Сбрасываем флаг при ошибке авторизации
           setCurrentUser(null);
+          setCsrfToken(null);
           hideApp();
           openLoginModal();
       } else {

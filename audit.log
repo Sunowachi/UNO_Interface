@@ -214,3 +214,6 @@
 2026-01-25 21:48:52 | pid=7452 | thread=pool-2-thread-89 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:60196
 2026-01-25 21:51:27 | pid=11832 | thread=pool-2-thread-19 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54194
 2026-01-25 21:51:27 | pid=11832 | thread=pool-2-thread-19 | user=- | action=SEND_ERROR_FAIL | ip=stream is closed
+2026-01-26 14:11:45 | pid=25672 | thread=pool-2-thread-52 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-26 14:20:31 | pid=25672 | thread=pool-2-thread-75 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-26 14:20:52 | pid=12016 | thread=pool-2-thread-6 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

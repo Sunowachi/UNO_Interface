@@ -17,6 +17,7 @@ import {
 } from './constants.js';
 
 import { initSession } from './session.js';
+import { init } from './api.js';
 import { drawCurrent, clearChart } from './charts.js';
 import { saveConfigWithMessage } from './sensors.js';
 import { getAlertClass, pickHigherAlertClass, hasPermission } from './utils.js';
@@ -79,14 +80,36 @@ async function login(e) {
     return;
   }
 
+  // Очищаем ошибку при успешном логине
+  const errorEl = document.getElementById("loginError");
+  if (errorEl) errorEl.textContent = '';
+
+  // После успешного логина инициализируем сессию и приложение
   closeLoginModal();
-  showApp();
+  try {
+    await initSession();
+    await init();
+  } catch (err) {
+    console.error('Ошибка инициализации после логина:', err);
+    hideApp();
+    openLoginModal();
+    showLoginError('Ошибка инициализации приложения');
+  }
 
 }
 
 export function openLoginModal() {document.getElementById("loginModal").classList.add("show");}
 
 export function closeLoginModal() {document.getElementById("loginModal").classList.remove("show");}
+
+function showLoginError(message) {
+  const errorEl = document.getElementById("loginError");
+  if (errorEl) {
+    errorEl.textContent = message;
+    errorEl.style.color = '#ff0000';
+    errorEl.style.marginTop = '10px';
+  }
+}
 
 export function applyPermissions(role) {
   const perms = ROLE_PERMISSIONS[role] || new Set();

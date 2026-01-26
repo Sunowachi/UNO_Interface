@@ -111,7 +111,7 @@ export async function init() {
   }
 }
 
-function clearIntervals() {
+export function clearIntervals() {
   appState = 'idle';
   if (fetchInterval) { clearInterval(fetchInterval); fetchInterval = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }

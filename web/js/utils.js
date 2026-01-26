@@ -152,9 +152,6 @@ export async function fetchData() {
     drawCurrent();
     updateDevicePanel();
 
-    // краткий лог вместо полного объекта
-    console.debug('[fetchData] обновлено сенсоров:', Object.keys(newAll).length);
-
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }
