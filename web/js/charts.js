@@ -18,6 +18,15 @@ import {
   formatTimeHHMMSS
 } from './utils.js';
 
+/*
+  Исправления и улучшения:
+  - Добавлен оверлейный canvas и всплывающая подсказка (tooltip) для показа точного значения в момент времени.
+  - Реализён поиск ближайшей точки по времени (бинпоиск) — точное соответствие времени->значение.
+  - Оверлей рисуется отдельно, основной график не перерисовывается при наведении (ускорение).
+  - Учтён scroll контейнера при вычислении позиции мыши (просчет координат относительно полного canvas).
+  - Комментарии на русском.
+*/
+
 export function drawCurrent() {
   const container = document.getElementById('chartsContainer');
   const RAW_COLOR = '#999999';
@@ -91,13 +100,13 @@ export function drawCurrent() {
       ? applyProcessing(rawValues, processingMode)
       : null;
 
-      if (
-        processedValues &&
-        processedValues.length !== rawValues.length
-      ) {
-        console.warn(`DSP изменил длину данных для ${varName}`);
-        processedValues = null;
-      }
+    if (
+      processedValues &&
+      processedValues.length !== rawValues.length
+    ) {
+      console.warn(`DSP изменил длину данных для ${varName}`);
+      processedValues = null;
+    }
 
     const showRaw = (typeof vs.showRaw === 'boolean') ? vs.showRaw : true;
     const showProcessed = (processingMode !== 'none')
@@ -138,6 +147,9 @@ export function drawCurrent() {
     // ОБЩАЯ ОБЁРТКА
     const wrapper = document.createElement('div');
     wrapper.className = 'chart-wrapper';
+    wrapper.style.display = 'flex';
+    wrapper.style.gap = '10px';
+    wrapper.style.alignItems = 'flex-start';
 
     // ЛЕВАЯ ПАНЕЛЬКА С ПОСЛЕДНИМ ЗНАЧЕНИЕМ
     const valueCard = document.createElement('div');
@@ -186,6 +198,8 @@ export function drawCurrent() {
     scrollWrapper.style.width = '100%';
     scrollWrapper.style.paddingBottom = '6px';
     scrollWrapper.style.cursor = 'grab';
+    // Для корректного позиционирования tooltip/overlay
+    scrollWrapper.style.position = 'relative';
 
     const canvas = document.createElement('canvas');
     const chartId = `chart_${sCfg.id}_${varName}`;
@@ -288,6 +302,27 @@ export function drawCurrent() {
   });
 }
 
+/* ================= ВСПОМОГАТЕЛИ ================= */
+
+// бинарный поиск ближайшего индекса в сортированном массиве times
+function findNearestIndex(arr, target) {
+  if (!Array.isArray(arr) || arr.length === 0) return -1;
+  let lo = 0, hi = arr.length - 1;
+  if (target <= arr[0]) return 0;
+  if (target >= arr[hi]) return hi;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (arr[mid] === target) return mid;
+    if (arr[mid] < target) lo = mid + 1;
+    else hi = mid;
+  }
+  // lo - первый элемент >= target
+  const prev = lo - 1;
+  return (Math.abs(arr[lo] - target) < Math.abs(arr[prev] - target)) ? lo : prev;
+}
+
+/* ================== РИСОВАНИЕ ГРАФИКА ================== */
+
 export function drawChart(id, rawData, processedData, times, options = {}) {
   const canvas = document.getElementById(id);
   if (!canvas) return;
@@ -311,10 +346,10 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
 
   const series = [];
   if (Array.isArray(rawData) && rawData.length) {
-    series.push({ data: rawData, color: options.rawColor || '#777' });
+    series.push({ data: rawData, color: options.rawColor || '#777', name: 'RAW' });
   }
   if (Array.isArray(processedData) && processedData.length) {
-    series.push({ data: processedData, color: options.processedColor || '#d00' });
+    series.push({ data: processedData, color: options.processedColor || '#d00', name: 'PROC' });
   }
   if (!series.length) return;
 
@@ -349,6 +384,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     tSpan = Math.max(1, tEnd - tStart);
   }
 
+  // сетка Y
   ctx.strokeStyle = '#ddd';
   ctx.setLineDash([4, 4]);
   for (let i = 0; i <= 5; i++) {
@@ -360,6 +396,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   }
   ctx.setLineDash([]);
 
+  // оси
   ctx.strokeStyle = '#000';
   ctx.beginPath();
   ctx.moveTo(left, top);
@@ -367,6 +404,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   ctx.lineTo(w - right, h - bottom);
   ctx.stroke();
 
+  // подписи Y
   ctx.fillStyle = '#333';
   ctx.font = '12px sans-serif';
   ctx.textAlign = 'right';
@@ -378,6 +416,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     ctx.fillText(v.toFixed(1), left - 8, y);
   }
 
+  // подпись Y вертикально
   if (options.ylabel) {
     ctx.save();
     ctx.translate(18, h / 2);
@@ -387,6 +426,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     ctx.restore();
   }
 
+  // временная ось
   if (useTimes) {
     const span = tSpan;
 
@@ -421,6 +461,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     }
   }
 
+  // рисуем линии
   series.forEach(s => {
     ctx.strokeStyle = s.color;
     ctx.lineWidth = 2;
@@ -448,6 +489,163 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
 
     ctx.stroke();
   });
+
+  // ====== overlay canvas + tooltip: показываем точное значение при наведении ======
+  const scrollWrapper = canvas.parentElement; // ожидаем, что canvas вложен в scrollWrapper
+  if (!scrollWrapper) return;
+
+  // создаём (или переиспользуем) оверлейный canvas
+  const overlayId = id + '_overlay';
+  let overlay = document.getElementById(overlayId);
+  if (!overlay) {
+    overlay = document.createElement('canvas');
+    overlay.id = overlayId;
+    overlay.style.position = 'absolute';
+    overlay.style.left = '0';
+    overlay.style.top = '0';
+    overlay.style.pointerEvents = 'auto';
+    overlay.style.background = 'transparent';
+    scrollWrapper.appendChild(overlay);
+  }
+  // привязываем размеры оверлея к основному canvas (включая высокий DPI)
+  overlay.width = canvas.width;
+  overlay.height = canvas.height;
+  overlay.style.width = canvas.style.width || canvas.width + 'px';
+  overlay.style.height = canvas.style.height || canvas.height + 'px';
+
+  const octx = overlay.getContext('2d');
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  // tooltip элемент
+  const tipId = id + '_tip';
+  let tip = document.getElementById(tipId);
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = tipId;
+    tip.style.position = 'absolute';
+    tip.style.pointerEvents = 'none';
+    tip.style.background = 'rgba(0,0,0,0.8)';
+    tip.style.color = '#fff';
+    tip.style.padding = '6px 8px';
+    tip.style.borderRadius = '6px';
+    tip.style.fontSize = '12px';
+    tip.style.whiteSpace = 'nowrap';
+    tip.style.transform = 'translate(-50%, -110%)';
+    tip.style.display = 'none';
+    scrollWrapper.appendChild(tip);
+  }
+
+  function clearOverlay() {
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    tip.style.display = 'none';
+  }
+
+  // Обработчики мыши
+  overlay.onmousemove = function (e) {
+    // rect и scrollLeft используются, чтобы получить координату в системе полного canvas
+    const rect = canvas.getBoundingClientRect();
+    const scrollLeft = scrollWrapper.scrollLeft || 0;
+    const xCanvas = (e.clientX - rect.left) + scrollLeft;
+    const yCanvas = (e.clientY - rect.top);
+
+    // ограничиваем по границам области рисования
+    if (xCanvas < left || xCanvas > left + cw) {
+      clearOverlay();
+      return;
+    }
+
+    // вычисляем время, соответствующее x
+    let tAtX;
+    if (useTimes) {
+      tAtX = tStart + ((xCanvas - left) / cw) * tSpan;
+    } else {
+      // если времён нет — сопоставляем индекс по относительной позиции
+      const idxFloat = ((xCanvas - left) / cw) * (series[0].data.length - 1);
+      const idx = Math.round(idxFloat);
+      tAtX = idx; // в режиме без times используем индекс вместо времени
+    }
+
+    // находим ближайшую точку (по времени или по индексу)
+    let idx;
+    if (useTimes) {
+      idx = findNearestIndex(times, tAtX);
+    } else {
+      idx = Math.max(0, Math.min(series[0].data.length - 1, Math.round(tAtX)));
+    }
+    if (idx < 0) {
+      clearOverlay();
+      return;
+    }
+
+    // собираем значения всех серий в этой точке
+    const values = series.map(s => {
+      const v = s.data[idx];
+      return Number.isFinite(v) ? v : NaN;
+    });
+
+    // позиция по X для выбранного индекса
+    const xPos = useTimes ? left + ((times[idx] - tStart) / tSpan) * cw : left + (idx / (series[0].data.length - 1)) * cw;
+
+    // чистим и рисуем вертикальную линию и маркеры
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+
+    // вертикальная линия
+    octx.strokeStyle = 'rgba(0,0,0,0.6)';
+    octx.lineWidth = 1;
+    octx.setLineDash([4, 2]);
+    octx.beginPath();
+    octx.moveTo(xPos, top);
+    octx.lineTo(xPos, h - bottom);
+    octx.stroke();
+    octx.setLineDash([]);
+
+    // маркеры для каждой серии (показываем только конечную Y если число больших)
+    for (let si = 0; si < series.length; si++) {
+      const v = values[si];
+      if (!Number.isFinite(v)) continue;
+      const yPos = top + ch - ((v - min) / (max - min)) * ch;
+      octx.fillStyle = series[si].color;
+      octx.beginPath();
+      octx.arc(xPos, yPos, 4, 0, Math.PI * 2);
+      octx.fill();
+      octx.strokeStyle = '#fff';
+      octx.lineWidth = 1;
+      octx.stroke();
+    }
+
+    // формируем текст тултипа: время + значения
+    let timeText = useTimes ? formatTimeHHMMSS(times[idx]) : `idx:${idx}`;
+    let txt = `<b>${timeText}</b><br>`;
+    for (let si = 0; si < series.length; si++) {
+      const nm = series[si].name || `s${si}`;
+      const v = values[si];
+      const vtxt = Number.isFinite(v) ? v.toFixed(3) : '—';
+      txt += `<span style="color:${series[si].color}">●</span> ${nm}: ${vtxt}`;
+      if (si < series.length - 1) txt += '<br>';
+    }
+
+    // показываем tooltip рядом с линией
+    tip.innerHTML = txt;
+    tip.style.display = 'block';
+
+    // вычисляем позицию tooltip относительно scrollWrapper (overlay и canvas используют ту же систему координат)
+    // left = xPos, top = top (смещение вверху области рисования)
+    const tipX = xPos;
+    // ставим чуть выше верхней области графика
+    const tipY = top + 6;
+
+    tip.style.left = tipX + 'px';
+    tip.style.top = tipY + 'px';
+  };
+
+  overlay.onmouseleave = function () {
+    clearOverlay();
+  };
+
+  // При клике — фиксируем/анимируем (пока просто очищаем оверлей)
+  overlay.onclick = function () {
+    // впоследствии можно добавить "фиксацию" точки
+  };
 }
 
 export function clearChart(id) {
@@ -455,13 +653,10 @@ export function clearChart(id) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const overlay = document.getElementById(id + '_overlay');
+  if (overlay) {
+    const octx = overlay.getContext('2d');
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+  }
 }
-
-
-
-
-
-
-
-
-
