@@ -147,10 +147,14 @@ export function setCurrentSensor(value) {
 // Словарь для хранения положения скролла для каждого chart (chartId -> scrollLeft)
 export let chartScroll = {};
 
+// Флаг, указывающий, следует ли "идти за хвостом" (автоскроллить в конец при новых данных)
+// chartFollow[chartId] = true/false
+export let chartFollow = {};
+
 // Точки в пикселях между соседними измерениями на оси X (виртуальная плотность)
 export const CHART_POINT_PX = 8;
 
-// Ограничения размера canvas в пикселях (чтобы холст не рос бесконечно)
+// Ограничения размера canvas в пикселях (чтобы холст не рос ��есконечно)
 export const CHART_MIN_CANVAS_PX = 700;
 export const CHART_MAX_CANVAS_PX = 2400;
 

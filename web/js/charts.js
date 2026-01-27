@@ -9,6 +9,7 @@ import {
   COLOR_CHOICES,
   PROCESSING_LABELS,
   chartScroll,
+  chartFollow,
   CHART_POINT_PX,
   CHART_MIN_CANVAS_PX,
   CHART_MAX_CANVAS_PX,
@@ -29,16 +30,18 @@ import {
   Повышение удобства прокрутки и обновлений:
   - добавлено сохранение позиции прокрутки для каждого chart (chartScroll),
     позиция обновляется при событии scroll.
+  - добавлен chartFollow (флаг «находиться у конца»). Если пользователь находится
+    у конца графика (почти прокручен в самый правый край), то при приходе новых данных
+    мы автоматически прокручиваем к новому концу. Если пользователь просматривает исторический
+    фрагмент — позиция сохраняется.
   - холст (canvas) теперь остаётся в разумных пределах по ширине
     (CHART_MIN_CANVAS_PX..CHART_MAX_CANVAS_PX), а "виртуальная" ширина содержимого
     (контента, определяющего scrollbar) соответствует количеству точек * CHART_POINT_PX,
     но ограничена CHART_MAX_CONTENT_PX — это предотвращает бесконечный рост DOM.
   - при отрисовке рисуем только видимую область данных, рассчитывая индекс начальной точки
     согласно scrollLeft и CHART_POINT_PX. Это экономит работу при больших наборах данных.
-  - добавлен обработчик scroll для плавного обновления overlay'а и сохранения позиции.
-  - при обновлении данных (fetchData -> drawCurrent) позиция прокрутки восстанавливается
-    из chartScroll, если пользователь её установил; по умолчанию позиция прокрутки
-    устанавливается в конец (последние данные).
+  - добавлен обработчик scroll для плавного обновления и сохранения позиции + follow-флага.
+  - восстановление позиции при обновлениях учитывает follow-флаг.
 */
 
 export function drawCurrent() {
@@ -61,8 +64,9 @@ export function drawCurrent() {
     ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
     : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
-  // Сохраняем предыдущие позиции прокрутки для существующих графиков
+  // Сохраняем предыдущие позиции прокрутки и follow-флаги для существующих графиков
   const prevScrolls = Object.assign({}, chartScroll);
+  const prevFollows = Object.assign({}, chartFollow);
 
   container.innerHTML = '';
 
@@ -227,7 +231,7 @@ export function drawCurrent() {
       processedValues?.length || 0
     );
 
-    // виртуальная ширина контента, которая определяет scrollbar
+    // виртуальн��я ширина контента, которая определяет scrollbar
     const virtualContentWidth = Math.min(
       CHART_MAX_CONTENT_PX,
       Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX)
@@ -240,7 +244,7 @@ export function drawCurrent() {
     spacer.style.height = canvas.height + 'px';
 
     // Размер видимого canvas в CSS-пикселях (по ширине контейнера)
-    // canvas элемент центрируем абсолютом над spacer и будем рендерить в нём видимую част��.
+    // canvas элемент центрируем абсолютом над spacer и будем рендерить в нём видимую часть.
     const visibleCssWidth = Math.max(CHART_MIN_CANVAS_PX, Math.min(CHART_MAX_CANVAS_PX,  // ограничиваем реальный холст
       Math.round(Math.min(virtualContentWidth, Math.max(700, Math.floor((window.innerWidth || 900) * 0.6))))));
 
@@ -296,7 +300,7 @@ export function drawCurrent() {
     scrollWrapper.appendChild(canvas);
     chartContainer.appendChild(scrollWrapper);
 
-    // ЛЕГЕНДА под графиком: RAW и обработанная ��иния
+    // ЛЕГЕНДА под графиком: RAW и обработанная линия
     const legend = document.createElement('div');
     legend.style.fontSize = '12px';
     legend.style.marginTop = '4px';
@@ -324,13 +328,33 @@ export function drawCurrent() {
 
     // Восстанавливаем позицию скролла, если была
     const saved = prevScrolls[chartId];
-    if (typeof saved === 'number') {
-      // Ожидаем следующий event loop, чт��бы размеры DOM применились
+    const wasFollow = Boolean(prevFollows[chartId]);
+
+    // Вычисляем maxLeft для текущей виртуальной ширины и текущей видимой ширины
+    function computeMaxLeft() {
+      const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
+      return maxLeft;
+    }
+
+    if (typeof saved === 'number' || wasFollow) {
+      // Ожидаем следующий event loop, чтобы размеры DOM применились
       requestAnimationFrame(() => {
-        // clamp значение
-        const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
-        scrollWrapper.scrollLeft = Math.max(0, Math.min(saved, maxLeft));
-        // после установки скролла — отрисовать видимую часть
+        const maxLeft = computeMaxLeft();
+
+        if (wasFollow) {
+          // если ранее пользователь был у конца — остаёмся у нового конца
+          scrollWrapper.scrollLeft = maxLeft;
+          chartFollow[chartId] = true;
+          chartScroll[chartId] = scrollWrapper.scrollLeft;
+        } else {
+          // иначе пытаемся восстановить прежнюю позицию (с учётом нового max)
+          const clamped = Math.max(0, Math.min(saved || 0, maxLeft));
+          scrollWrapper.scrollLeft = clamped;
+          chartFollow[chartId] = Math.abs(clamped - maxLeft) <= 4; // если почти в конце — помечаем follow
+          chartScroll[chartId] = scrollWrapper.scrollLeft;
+        }
+
+        // после установки скролла — отрисовать видим��ю часть
         drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
           rawColor: RAW_COLOR,
           processedColor: color,
@@ -340,8 +364,11 @@ export function drawCurrent() {
     } else {
       // по умолчанию — в конец (последние точки)
       requestAnimationFrame(() => {
-        const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
+        const maxLeft = computeMaxLeft();
         scrollWrapper.scrollLeft = maxLeft;
+        chartFollow[chartId] = true;
+        chartScroll[chartId] = scrollWrapper.scrollLeft;
+
         drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
           rawColor: RAW_COLOR,
           processedColor: color,
@@ -350,9 +377,14 @@ export function drawCurrent() {
       });
     }
 
-    // Сохраняем скролл при прокрутке пользователем и перерисовываем область overlay при скролле
+    // Сохраняем скролл при прокрутке пользователем и перерисовываем область при скролле
     scrollWrapper.addEventListener('scroll', () => {
-      chartScroll[chartId] = scrollWrapper.scrollLeft;
+      const maxLeft = computeMaxLeft();
+      const cur = scrollWrapper.scrollLeft;
+      chartScroll[chartId] = cur;
+      // если пользователь прокрутил почти до конца — помечаем follow=true
+      chartFollow[chartId] = Math.abs(cur - maxLeft) <= 4;
+      // пе��ерисовываем видимую часть (эффект плавной подрисовки)
       drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
         rawColor: RAW_COLOR,
         processedColor: color,
@@ -361,7 +393,7 @@ export function drawCurrent() {
     }, { passive: true });
 
     // Если данные обновляются (fetchData), drawCurrent перезапустит этот цикл и
-    // восстановит позицию из chartScroll — тем самым пользовательский сдвиг сохраняется.
+    // восстановит позицию из chartScroll/chartFollow — тем самым пользовательский сдвиг сохраняется.
   });
 }
 
@@ -385,6 +417,12 @@ function findNearestIndex(arr, target) {
 
 /* ================== ОТДЕЛЬНАЯ ОТРИСОВКА ВИДИМОЙ ОБЛАСТИ ================== */
 
+/*
+  drawChartViewport рисует только видимую часть данных в предоставленный canvas.
+  canvas размещён абсолютом над spacer'ом; scrollWrapper даёт scrollLeft.
+  Мы рассчитываем, какие индексы данных попадают в текущую видимую область,
+  и рисуем только их, что экономит ресурсы и позволяет держать атрибут width холста в пределах.
+*/
 function drawChartViewport(id, canvas, rawData, processedData, times, options = {}, scrollWrapper) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
