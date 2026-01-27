@@ -20,10 +20,11 @@ import {
 
 /*
   Исправления и улучшения:
-  - Добавлен оверлейный canvas и всплывающая подсказка (tooltip) для показа точного значения в момент времени.
-  - Реализён поиск ближайшей точки по времени (бинпоиск) — точное соответствие времени->значение.
-  - Оверлей рисуется отдельно, основной график не перерисовывается при наведении (ускорение).
-  - Учтён scroll контейнера при вычислении позиции мыши (просчет координат относительно полного canvas).
+  - Тултип теперь рисуется прямо на overlay-canvas, чтобы избежать изменений inline-стилей DOM и нарушений CSP.
+  - Убран DOM-элемент tooltip; вместо этого рисуем фон и текст в overlay-канвасе.
+  - Создание overlay привязывается к CSS-классу (chart-overlay) вместо установки style.* напрямую.
+  - Поиск ближайшей точки по времени (бинпоиск) для точного соответствия время->значение.
+  - Оверлей рисуется отдельно, основной график не перерисовывается при наведении.
   - Комментарии на русском.
 */
 
@@ -198,7 +199,7 @@ export function drawCurrent() {
     scrollWrapper.style.width = '100%';
     scrollWrapper.style.paddingBottom = '6px';
     scrollWrapper.style.cursor = 'grab';
-    // Для корректного позиционирования tooltip/overlay
+    // Для корректного позиционирования overlay используем relative
     scrollWrapper.style.position = 'relative';
 
     const canvas = document.createElement('canvas');
@@ -304,7 +305,7 @@ export function drawCurrent() {
 
 /* ================= ВСПОМОГАТЕЛИ ================= */
 
-// бинарный поиск ближайшего индекса в сортированном массиве times
+// бинарный поиск ближайшего индекса в сор��ированном массиве times
 function findNearestIndex(arr, target) {
   if (!Array.isArray(arr) || arr.length === 0) return -1;
   let lo = 0, hi = arr.length - 1;
@@ -500,44 +501,20 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   if (!overlay) {
     overlay = document.createElement('canvas');
     overlay.id = overlayId;
-    overlay.style.position = 'absolute';
-    overlay.style.left = '0';
-    overlay.style.top = '0';
-    overlay.style.pointerEvents = 'auto';
-    overlay.style.background = 'transparent';
+    // привязываем стиль через CSS-класс, чтобы не использовать inline-style
+    overlay.className = 'chart-overlay';
     scrollWrapper.appendChild(overlay);
   }
-  // привязываем размеры оверлея к основному canvas (включая высокий DPI)
+  // привязываем размеры оверлея к основному canvas (атрибуты width/height, не style)
   overlay.width = canvas.width;
   overlay.height = canvas.height;
-  overlay.style.width = canvas.style.width || canvas.width + 'px';
-  overlay.style.height = canvas.style.height || canvas.height + 'px';
+  // не устанавливаем overlay.style.width/height чтобы не задать inline-стили (CSP)
 
   const octx = overlay.getContext('2d');
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
-  // tooltip элемент
-  const tipId = id + '_tip';
-  let tip = document.getElementById(tipId);
-  if (!tip) {
-    tip = document.createElement('div');
-    tip.id = tipId;
-    tip.style.position = 'absolute';
-    tip.style.pointerEvents = 'none';
-    tip.style.background = 'rgba(0,0,0,0.8)';
-    tip.style.color = '#fff';
-    tip.style.padding = '6px 8px';
-    tip.style.borderRadius = '6px';
-    tip.style.fontSize = '12px';
-    tip.style.whiteSpace = 'nowrap';
-    tip.style.transform = 'translate(-50%, -110%)';
-    tip.style.display = 'none';
-    scrollWrapper.appendChild(tip);
-  }
-
   function clearOverlay() {
     octx.clearRect(0, 0, overlay.width, overlay.height);
-    tip.style.display = 'none';
   }
 
   // Обработчики мыши
@@ -599,7 +576,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     octx.stroke();
     octx.setLineDash([]);
 
-    // маркеры для каждой серии (показываем только конечную Y если число больших)
+    // маркеры для каждой серии
     for (let si = 0; si < series.length; si++) {
       const v = values[si];
       if (!Number.isFinite(v)) continue;
@@ -615,36 +592,90 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
 
     // формируем текст тултипа: время + значения
     let timeText = useTimes ? formatTimeHHMMSS(times[idx]) : `idx:${idx}`;
-    let txt = `<b>${timeText}</b><br>`;
+    const lines = [];
+    lines.push({ text: timeText, bold: true });
+
     for (let si = 0; si < series.length; si++) {
       const nm = series[si].name || `s${si}`;
       const v = values[si];
       const vtxt = Number.isFinite(v) ? v.toFixed(3) : '—';
-      txt += `<span style="color:${series[si].color}">●</span> ${nm}: ${vtxt}`;
-      if (si < series.length - 1) txt += '<br>';
+      lines.push({ text: `${nm}: ${vtxt}`, color: series[si].color, bold: false });
     }
 
-    // показываем tooltip рядом с линией
-    tip.innerHTML = txt;
-    tip.style.display = 'block';
+    // рисуем прямоугольник тултипа и текст в overlay-canvas
+    const padding = 6;
+    const lineHeight = 16;
+    octx.font = 'bold 12px sans-serif';
+    let maxW = octx.measureText(lines[0].text).width;
+    octx.font = '12px sans-serif';
+    for (let i = 1; i < lines.length; i++) {
+      const wtxt = octx.measureText(lines[i].text).width;
+      // добавим место под цветной кружок и отступ
+      maxW = Math.max(maxW, wtxt + 12 + 6);
+    }
 
-    // вычисляем позицию tooltip относительно scrollWrapper (overlay и canvas используют ту же систему координат)
-    // left = xPos, top = top (смещение вверху области рисования)
-    const tipX = xPos;
-    // ставим чуть выше верхней области графика
-    const tipY = top + 6;
+    const boxW = Math.round(maxW + padding * 2);
+    const boxH = Math.round(lines.length * lineHeight + padding * 2);
 
-    tip.style.left = tipX + 'px';
-    tip.style.top = tipY + 'px';
+    // ограничиваем положение бокса, чтоб�� он не выходил за область графика
+    let boxX = Math.round(xPos - boxW / 2);
+    if (boxX < left) boxX = left + 4;
+    if (boxX + boxW > w - right) boxX = w - right - boxW - 4;
+    // ставим чуть ниже верхней границы области рисования
+    let boxY = top + 6;
+
+    // фон
+    octx.fillStyle = 'rgba(0,0,0,0.8)';
+    // скруглённый прямоугольник (упрощённый)
+    const r = 6;
+    octx.beginPath();
+    octx.moveTo(boxX + r, boxY);
+    octx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, r);
+    octx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, r);
+    octx.arcTo(boxX, boxY + boxH, boxX, boxY, r);
+    octx.arcTo(boxX, boxY, boxX + boxW, boxY, r);
+    octx.closePath();
+    octx.fill();
+
+    // текст и цветные кружки
+    let tx = boxX + padding;
+    let ty = boxY + padding + 12; // базовая линия первого текста
+
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      if (ln.bold) {
+        octx.font = 'bold 12px sans-serif';
+        octx.fillStyle = '#fff';
+        octx.textAlign = 'left';
+        octx.textBaseline = 'alphabetic';
+        octx.fillText(ln.text, tx, ty);
+        ty += lineHeight;
+      } else {
+        // цветной кружок
+        const dotX = tx + 4;
+        const dotY = ty - 6;
+        octx.fillStyle = ln.color || '#fff';
+        octx.beginPath();
+        octx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+        octx.fill();
+
+        octx.font = '12px sans-serif';
+        octx.fillStyle = '#fff';
+        octx.textAlign = 'left';
+        octx.textBaseline = 'alphabetic';
+        octx.fillText(ln.text, tx + 12, ty);
+        ty += lineHeight;
+      }
+    }
   };
 
   overlay.onmouseleave = function () {
     clearOverlay();
   };
 
-  // При клике — фиксируем/анимируем (пока просто очищаем оверлей)
+  // При клике — пока ничего специфичного
   overlay.onclick = function () {
-    // впоследствии можно добавить "фиксацию" точки
+    // можно добавить фиксацию точки
   };
 }
 
