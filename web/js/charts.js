@@ -7,7 +7,12 @@ import {
   currentSensor,
   timeRange,
   COLOR_CHOICES,
-  PROCESSING_LABELS
+  PROCESSING_LABELS,
+  chartScroll,
+  CHART_POINT_PX,
+  CHART_MIN_CANVAS_PX,
+  CHART_MAX_CANVAS_PX,
+  CHART_MAX_CONTENT_PX
 } from './constants.js';
 
 import { applyProcessing } from './dsp.js';
@@ -19,13 +24,21 @@ import {
 } from './utils.js';
 
 /*
-  Исправления и улучшения:
-  - Тултип теперь рисуется прямо на overlay-canvas, чтобы избежать изменений inline-стилей DOM и нарушений CSP.
-  - Убран DOM-элемент tooltip; вместо этого рисуем фон и текст в overlay-канвасе.
-  - Создание overlay привязывается к CSS-классу (chart-overlay) вместо установки style.* напрямую.
-  - Поиск ближайшей точки по времени (бинпоиск) для точного соответствия время->значение.
-  - Оверлей рисуется отдельно, основной график не перерисовывается при наведении.
-  - Комментарии на русском.
+  Комментарии в коде — на русском.
+
+  Повышение удобства прокрутки и обновлений:
+  - добавлено сохранение позиции прокрутки для каждого chart (chartScroll),
+    позиция обновляется при событии scroll.
+  - холст (canvas) теперь остаётся в разумных пределах по ширине
+    (CHART_MIN_CANVAS_PX..CHART_MAX_CANVAS_PX), а "виртуальная" ширина содержимого
+    (контента, определяющего scrollbar) соответствует количеству точек * CHART_POINT_PX,
+    но ограничена CHART_MAX_CONTENT_PX — это предотвращает бесконечный рост DOM.
+  - при отрисовке рисуем только видимую область данных, рассчитывая индекс начальной точки
+    согласно scrollLeft и CHART_POINT_PX. Это экономит работу при больших наборах данных.
+  - добавлен обработчик scroll для плавного обновления overlay'а и сохранения позиции.
+  - при обновлении данных (fetchData -> drawCurrent) позиция прокрутки восстанавливается
+    из chartScroll, если пользователь её установил; по умолчанию позиция прокрутки
+    устанавливается в конец (последние данные).
 */
 
 export function drawCurrent() {
@@ -47,6 +60,9 @@ export function drawCurrent() {
   const vars = Array.isArray(sCfg.vars)
     ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
     : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+
+  // Сохраняем предыдущие позиции прокрутки для существующих графиков
+  const prevScrolls = Object.assign({}, chartScroll);
 
   container.innerHTML = '';
 
@@ -211,9 +227,35 @@ export function drawCurrent() {
       processedValues?.length || 0
     );
 
-    canvas.width = Math.max(700, pointsCount * 8);
-    canvas.height = 220;
+    // виртуальная ширина контента, которая определяет scrollbar
+    const virtualContentWidth = Math.min(
+      CHART_MAX_CONTENT_PX,
+      Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX)
+    );
+
+    // создаём spacer — невидимый блок, который заставит scrollWrapper иметь нужную ширину
+    const spacer = document.createElement('div');
+    spacer.className = 'chart-content-spacer';
+    spacer.style.width = String(virtualContentWidth) + 'px';
+    spacer.style.height = canvas.height + 'px';
+
+    // Размер видимого canvas в CSS-пикселях (по ширине контейнера)
+    // canvas элемент центрируем абсолютом над spacer и будем рендерить в нём видимую част��.
+    const visibleCssWidth = Math.max(CHART_MIN_CANVAS_PX, Math.min(CHART_MAX_CANVAS_PX,  // ограничиваем реальный холст
+      Math.round(Math.min(virtualContentWidth, Math.max(700, Math.floor((window.innerWidth || 900) * 0.6))))));
+
+    // Устанавливаем размеры холста (атрибуты width/height в device-pixel)
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(visibleCssWidth * dpr);
+    canvas.height = 220 * dpr;
+    // задаём CSS ширину/высоту (inline стили используются для точной подгонки)
+    canvas.style.width = visibleCssWidth + 'px';
+    canvas.style.height = '220px';
     canvas.style.display = 'block';
+    canvas.style.position = 'absolute';
+    canvas.style.left = '0px';
+    canvas.style.top = '0px';
+    canvas.style.zIndex = '1';
 
     // === Скролл прямо по графику (колесо/тачпад) ===
     canvas.addEventListener('wheel', (e) => {
@@ -237,26 +279,24 @@ export function drawCurrent() {
       e.preventDefault();
     });
 
-    canvas.addEventListener('mousemove', (e) => {
+    window.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
       const dx = e.clientX - dragStartX;
       scrollWrapper.scrollLeft = startScrollLeft - dx;
     });
 
-    canvas.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
       isDragging = false;
       scrollWrapper.style.cursor = 'grab';
     });
 
-    canvas.addEventListener('mouseleave', () => {
-      isDragging = false;
-      scrollWrapper.style.cursor = 'grab';
-    });
-
+    // Добавляем spacer и холст в wrapper
+    scrollWrapper.appendChild(spacer);
     scrollWrapper.appendChild(canvas);
     chartContainer.appendChild(scrollWrapper);
 
-    // ЛЕГЕНДА под графиком: RAW и обработанная линия
+    // ЛЕГЕНДА под графиком: RAW и обработанная ��иния
     const legend = document.createElement('div');
     legend.style.fontSize = '12px';
     legend.style.marginTop = '4px';
@@ -282,30 +322,52 @@ export function drawCurrent() {
     wrapper.appendChild(chartContainer);
     container.appendChild(wrapper);
 
-    // Рисуем график
-    drawChart(
-      chartId,
-      showRaw ? rawValues : null,
-      showProcessed ? processedValues : null,
-      times,
-      {
+    // Восстанавливаем позицию скролла, если была
+    const saved = prevScrolls[chartId];
+    if (typeof saved === 'number') {
+      // Ожидаем следующий event loop, чт��бы размеры DOM применились
+      requestAnimationFrame(() => {
+        // clamp значение
+        const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
+        scrollWrapper.scrollLeft = Math.max(0, Math.min(saved, maxLeft));
+        // после установки скролла — отрисовать видимую часть
+        drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
+          rawColor: RAW_COLOR,
+          processedColor: color,
+          ylabel: titleText
+        }, scrollWrapper);
+      });
+    } else {
+      // по умолчанию — в конец (последние точки)
+      requestAnimationFrame(() => {
+        const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
+        scrollWrapper.scrollLeft = maxLeft;
+        drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
+          rawColor: RAW_COLOR,
+          processedColor: color,
+          ylabel: titleText
+        }, scrollWrapper);
+      });
+    }
+
+    // Сохраняем скролл при прокрутке пользователем и перерисовываем область overlay при скролле
+    scrollWrapper.addEventListener('scroll', () => {
+      chartScroll[chartId] = scrollWrapper.scrollLeft;
+      drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
         rawColor: RAW_COLOR,
         processedColor: color,
         ylabel: titleText
-      }
-    );
+      }, scrollWrapper);
+    }, { passive: true });
 
-    if (rangeMs > 0) {
-      requestAnimationFrame(() => {
-        scrollWrapper.scrollLeft = Math.max(0, scrollWrapper.scrollWidth - scrollWrapper.clientWidth);
-      });
-    }
+    // Если данные обновляются (fetchData), drawCurrent перезапустит этот цикл и
+    // восстановит позицию из chartScroll — тем самым пользовательский сдвиг сохраняется.
   });
 }
 
 /* ================= ВСПОМОГАТЕЛИ ================= */
 
-// бинарный поиск ближайшего индекса в сор��ированном массиве times
+// бинарный поиск ближайшего индекса в сортированном массиве times
 function findNearestIndex(arr, target) {
   if (!Array.isArray(arr) || arr.length === 0) return -1;
   let lo = 0, hi = arr.length - 1;
@@ -317,25 +379,32 @@ function findNearestIndex(arr, target) {
     if (arr[mid] < target) lo = mid + 1;
     else hi = mid;
   }
-  // lo - первый элемент >= target
   const prev = lo - 1;
   return (Math.abs(arr[lo] - target) < Math.abs(arr[prev] - target)) ? lo : prev;
 }
 
-/* ================== РИСОВАНИЕ ГРАФИКА ================== */
+/* ================== ОТДЕЛЬНАЯ ОТРИСОВКА ВИДИМОЙ ОБЛАСТИ ================== */
 
-export function drawChart(id, rawData, processedData, times, options = {}) {
-  const canvas = document.getElementById(id);
+function drawChartViewport(id, canvas, rawData, processedData, times, options = {}, scrollWrapper) {
   if (!canvas) return;
-
   const ctx = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
+  if (!ctx) return;
+
+  // приводим device-pixel размеры
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.round(parseFloat(canvas.style.width) || canvas.clientWidth || 800);
+  const cssH = Math.round(parseFloat(canvas.style.height) || canvas.clientHeight || 220);
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // работаем в CSS-пикселях
+
+  const w = cssW;
+  const h = cssH;
 
   const left = 80;
   const right = 40;
   const top = 25;
-  const bottom = 55;
+  const bottom = 70;
 
   ctx.clearRect(0, 0, w, h);
 
@@ -375,34 +444,50 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   const cw = w - left - right;
   const ch = h - top - bottom;
 
-  let tStart = 0;
-  let tEnd = 1;
-  let tSpan = 1;
+  // параметры виртуальной области
+  const pointsCount = Math.max(
+    rawData?.length || 0,
+    processedData?.length || 0
+  );
 
+  const virtualWidth = Math.min(CHART_MAX_CONTENT_PX, Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX));
+
+  // текущий сдвиг в пикселях относительно глобальной виртуальной области
+  const scrollLeft = scrollWrapper ? scrollWrapper.scrollLeft : (virtualWidth - cw);
+  // диапазон видимых глобальных координат
+  const viewLeft = scrollLeft;
+  const viewRight = scrollLeft + cw;
+
+  // вычисляем индексы видимых точек
+  const firstIdx = Math.max(0, Math.floor((viewLeft - left) / CHART_POINT_PX));
+  const lastIdx = Math.min(pointsCount - 1, Math.ceil((viewRight - left) / CHART_POINT_PX));
+
+  // если используем times — определяем видимый временной интервал
+  let tStart = 0, tEnd = 1, tSpan = 1;
   if (useTimes) {
     tStart = times[0];
     tEnd = times[times.length - 1];
     tSpan = Math.max(1, tEnd - tStart);
   }
 
-  // сетка Y
+  // Сетка Y
   ctx.strokeStyle = '#ddd';
   ctx.setLineDash([4, 4]);
   for (let i = 0; i <= 5; i++) {
     const y = top + (ch / 5) * i;
     ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(w - right, y);
+    ctx.moveTo(left - viewLeft, y);
+    ctx.lineTo(left - viewLeft + cw, y);
     ctx.stroke();
   }
   ctx.setLineDash([]);
 
-  // оси
+  // Оси
   ctx.strokeStyle = '#000';
   ctx.beginPath();
-  ctx.moveTo(left, top);
-  ctx.lineTo(left, h - bottom);
-  ctx.lineTo(w - right, h - bottom);
+  ctx.moveTo(left - viewLeft, top);
+  ctx.lineTo(left - viewLeft, h - bottom);
+  ctx.lineTo(left - viewLeft + cw, h - bottom);
   ctx.stroke();
 
   // подписи Y
@@ -414,20 +499,20 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   for (let i = 0; i <= 5; i++) {
     const v = max - (max - min) * i / 5;
     const y = top + (ch / 5) * i;
-    ctx.fillText(v.toFixed(1), left - 8, y);
+    ctx.fillText(v.toFixed(1), left - 8 - viewLeft, y);
   }
 
   // подпись Y вертикально
   if (options.ylabel) {
     ctx.save();
-    ctx.translate(18, h / 2);
+    ctx.translate(18 - viewLeft, h / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText(options.ylabel, 0, 0);
     ctx.restore();
   }
 
-  // временная ось
+  // временная ось (рисуем подписи для видимой интервала)
   if (useTimes) {
     const span = tSpan;
 
@@ -443,13 +528,18 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
+    // определяем временной шаг в пикселях для подписи
+    const pxPerMs = (virtualWidth - left - right) / Math.max(1, tSpan);
+    // находим первый t в видимой области кратный STEP
+    const tViewStart = tStart + ((viewLeft - left) / pxPerMs);
+    const tViewEnd = tStart + ((viewRight - left) / pxPerMs);
     for (
-      let t = Math.ceil(tStart / STEP) * STEP;
-      t <= tEnd;
+      let t = Math.ceil(tViewStart / STEP) * STEP;
+      t <= tViewEnd;
       t += STEP
     ) {
-      const x = left + ((t - tStart) / tSpan) * cw;
-
+      const xGlobal = left + ((t - tStart) / tSpan) * (virtualWidth - left - right);
+      const x = xGlobal - viewLeft;
       ctx.strokeStyle = '#ddd';
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -462,7 +552,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     }
   }
 
-  // рисуем линии
+  // рисуем линии — только для видимого диапазона индексов
   series.forEach(s => {
     ctx.strokeStyle = s.color;
     ctx.lineWidth = 2;
@@ -470,15 +560,13 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
 
     let started = false;
 
-    s.data.forEach((v, i) => {
-      if (!Number.isFinite(v)) return;
+    for (let i = firstIdx; i <= lastIdx; i++) {
+      const v = s.data[i];
+      if (!Number.isFinite(v)) continue;
 
-      const x = useTimes
-        ? left + ((times[i] - tStart) / tSpan) * cw
-        : left + (i / (s.data.length - 1)) * cw;
-
-      const y =
-        top + ch - ((v - min) / (max - min)) * ch;
+      const xGlobal = left + i * CHART_POINT_PX;
+      const x = xGlobal - viewLeft;
+      const y = top + ch - ((v - min) / (max - min)) * ch;
 
       if (!started) {
         ctx.moveTo(x, y);
@@ -486,73 +574,44 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
       } else {
         ctx.lineTo(x, y);
       }
-    });
-
+    }
     ctx.stroke();
   });
 
-  // ====== overlay canvas + tooltip: показываем точное значение при наведении ======
-  const scrollWrapper = canvas.parentElement; // ожидаем, что canvas вложен в scrollWrapper
-  if (!scrollWrapper) return;
-
-  // создаём (или переиспользуем) оверлейный canvas
-  const overlayId = id + '_overlay';
-  let overlay = document.getElementById(overlayId);
-  if (!overlay) {
-    overlay = document.createElement('canvas');
-    overlay.id = overlayId;
-    // привязываем стиль через CSS-класс, чтобы не использовать inline-style
-    overlay.className = 'chart-overlay';
-    scrollWrapper.appendChild(overlay);
-  }
-  // привязываем размеры оверлея к основному canvas (атрибуты width/height, не style)
-  overlay.width = canvas.width;
-  overlay.height = canvas.height;
-  // не устанавливаем overlay.style.width/height чтобы не задать inline-стили (CSP)
-
-  const octx = overlay.getContext('2d');
-  octx.clearRect(0, 0, overlay.width, overlay.height);
-
-  function clearOverlay() {
-    octx.clearRect(0, 0, overlay.width, overlay.height);
-  }
-
-  // Обработчики мыши
-  overlay.onmousemove = function (e) {
-    // rect и scrollLeft используются, чтобы получить координату в системе полного canvas
+  canvas.onmousemove = function (e) {
     const rect = canvas.getBoundingClientRect();
-    const scrollLeft = scrollWrapper.scrollLeft || 0;
-    const xCanvas = (e.clientX - rect.left) + scrollLeft;
-    const yCanvas = (e.clientY - rect.top);
+    const clientX = e.clientX;
+    const xInCanvas = clientX - rect.left; // CSS-пиксели внутри canvas
+    const xGlobal = viewLeft + xInCanvas;
 
-    // ограничиваем по границам области рисования
-    if (xCanvas < left || xCanvas > left + cw) {
-      clearOverlay();
+    // ограничиваем
+    if (xGlobal < left || xGlobal > left + (pointsCount - 1) * CHART_POINT_PX) {
+      // перерисуем без overlay (просто сброс)
+      drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
       return;
     }
 
-    // вычисляем время, соответствующее x
-    let tAtX;
-    if (useTimes) {
-      tAtX = tStart + ((xCanvas - left) / cw) * tSpan;
-    } else {
-      // если времён нет — сопоставляем индекс по относительной позиции
-      const idxFloat = ((xCanvas - left) / cw) * (series[0].data.length - 1);
-      const idx = Math.round(idxFloat);
-      tAtX = idx; // в режиме без times используем индекс вместо времени
-    }
-
-    // находим ближайшую точку (по времени или по индексу)
-    let idx;
-    if (useTimes) {
-      idx = findNearestIndex(times, tAtX);
-    } else {
-      idx = Math.max(0, Math.min(series[0].data.length - 1, Math.round(tAtX)));
-    }
-    if (idx < 0) {
-      clearOverlay();
+    // находим индекс ближайшей точки
+    const idx = Math.round((xGlobal - left) / CHART_POINT_PX);
+    if (idx < 0 || idx >= pointsCount) {
+      drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
       return;
     }
+
+    // перерисовываем базовый слой
+    drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
+
+    // рисуем overlay элементы напрямую
+    // вертикальная линия
+    const xLocal = left + idx * CHART_POINT_PX - viewLeft;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 2]);
+    ctx.beginPath();
+    ctx.moveTo(xLocal, top);
+    ctx.lineTo(xLocal, h - bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
     // собираем значения всех серий в этой точке
     const values = series.map(s => {
@@ -560,41 +619,24 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
       return Number.isFinite(v) ? v : NaN;
     });
 
-    // позиция по X для выбранного индекса
-    const xPos = useTimes ? left + ((times[idx] - tStart) / tSpan) * cw : left + (idx / (series[0].data.length - 1)) * cw;
-
-    // чистим и рисуем вертикальную линию и маркеры
-    octx.clearRect(0, 0, overlay.width, overlay.height);
-
-    // вертикальная линия
-    octx.strokeStyle = 'rgba(0,0,0,0.6)';
-    octx.lineWidth = 1;
-    octx.setLineDash([4, 2]);
-    octx.beginPath();
-    octx.moveTo(xPos, top);
-    octx.lineTo(xPos, h - bottom);
-    octx.stroke();
-    octx.setLineDash([]);
-
-    // маркеры для каждой серии
+    // маркеры
     for (let si = 0; si < series.length; si++) {
       const v = values[si];
       if (!Number.isFinite(v)) continue;
       const yPos = top + ch - ((v - min) / (max - min)) * ch;
-      octx.fillStyle = series[si].color;
-      octx.beginPath();
-      octx.arc(xPos, yPos, 4, 0, Math.PI * 2);
-      octx.fill();
-      octx.strokeStyle = '#fff';
-      octx.lineWidth = 1;
-      octx.stroke();
+      ctx.fillStyle = series[si].color;
+      ctx.beginPath();
+      ctx.arc(xLocal, yPos, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
 
-    // формируем текст тултипа: время + значения
-    let timeText = useTimes ? formatTimeHHMMSS(times[idx]) : `idx:${idx}`;
+    // тултип рисуем в canvas (в левом верхнем углу видимой области)
+    const timeText = useTimes && times && times[idx] ? formatTimeHHMMSS(times[idx]) : `idx:${idx}`;
     const lines = [];
     lines.push({ text: timeText, bold: true });
-
     for (let si = 0; si < series.length; si++) {
       const nm = series[si].name || `s${si}`;
       const v = values[si];
@@ -602,80 +644,70 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
       lines.push({ text: `${nm}: ${vtxt}`, color: series[si].color, bold: false });
     }
 
-    // рисуем прямоугольник тултипа и текст в overlay-canvas
     const padding = 6;
     const lineHeight = 16;
-    octx.font = 'bold 12px sans-serif';
-    let maxW = octx.measureText(lines[0].text).width;
-    octx.font = '12px sans-serif';
+    ctx.font = 'bold 12px sans-serif';
+    let maxW = ctx.measureText(lines[0].text).width;
+    ctx.font = '12px sans-serif';
     for (let i = 1; i < lines.length; i++) {
-      const wtxt = octx.measureText(lines[i].text).width;
-      // добавим место под цветной кружок и отступ
+      const wtxt = ctx.measureText(lines[i].text).width;
       maxW = Math.max(maxW, wtxt + 12 + 6);
     }
 
     const boxW = Math.round(maxW + padding * 2);
     const boxH = Math.round(lines.length * lineHeight + padding * 2);
 
-    // ограничиваем положение бокса, чтоб�� он не выходил за область графика
-    let boxX = Math.round(xPos - boxW / 2);
-    if (boxX < left) boxX = left + 4;
+    let boxX = Math.round(xLocal - boxW / 2);
+    if (boxX < left - viewLeft) boxX = left - viewLeft + 4;
     if (boxX + boxW > w - right) boxX = w - right - boxW - 4;
-    // ставим чуть ниже верхней границы области рисования
     let boxY = top + 6;
 
     // фон
-    octx.fillStyle = 'rgba(0,0,0,0.8)';
-    // скруглённый прямоугольник (упрощённый)
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
     const r = 6;
-    octx.beginPath();
-    octx.moveTo(boxX + r, boxY);
-    octx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, r);
-    octx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, r);
-    octx.arcTo(boxX, boxY + boxH, boxX, boxY, r);
-    octx.arcTo(boxX, boxY, boxX + boxW, boxY, r);
-    octx.closePath();
-    octx.fill();
+    ctx.beginPath();
+    ctx.moveTo(boxX + r, boxY);
+    ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, r);
+    ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, r);
+    ctx.arcTo(boxX, boxY + boxH, boxX, boxY, r);
+    ctx.arcTo(boxX, boxY, boxX + boxW, boxY, r);
+    ctx.closePath();
+    ctx.fill();
 
     // текст и цветные кружки
     let tx = boxX + padding;
-    let ty = boxY + padding + 12; // базовая линия первого текста
+    let ty = boxY + padding + 12;
 
     for (let i = 0; i < lines.length; i++) {
       const ln = lines[i];
       if (ln.bold) {
-        octx.font = 'bold 12px sans-serif';
-        octx.fillStyle = '#fff';
-        octx.textAlign = 'left';
-        octx.textBaseline = 'alphabetic';
-        octx.fillText(ln.text, tx, ty);
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(ln.text, tx, ty);
         ty += lineHeight;
       } else {
-        // цветной кружок
         const dotX = tx + 4;
         const dotY = ty - 6;
-        octx.fillStyle = ln.color || '#fff';
-        octx.beginPath();
-        octx.arc(dotX, dotY, 4, 0, Math.PI * 2);
-        octx.fill();
+        ctx.fillStyle = ln.color || '#fff';
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+        ctx.fill();
 
-        octx.font = '12px sans-serif';
-        octx.fillStyle = '#fff';
-        octx.textAlign = 'left';
-        octx.textBaseline = 'alphabetic';
-        octx.fillText(ln.text, tx + 12, ty);
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(ln.text, tx + 12, ty);
         ty += lineHeight;
       }
     }
   };
 
-  overlay.onmouseleave = function () {
-    clearOverlay();
-  };
-
-  // При клике — пока ничего специфичного
-  overlay.onclick = function () {
-    // можно добавить фиксацию точки
+  canvas.onmouseleave = function () {
+    // при уходе мыши — перерисовать базовый слой без overlay
+    drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
   };
 }
 
@@ -685,9 +717,5 @@ export function clearChart(id) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const overlay = document.getElementById(id + '_overlay');
-  if (overlay) {
-    const octx = overlay.getContext('2d');
-    octx.clearRect(0, 0, overlay.width, overlay.height);
-  }
+  // нет дополнительного overlay-элемента больше
 }

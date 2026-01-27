@@ -1,4 +1,3 @@
-```css
 body {
     font-family: sans-serif;
     background: #f4f4f4;
@@ -222,6 +221,12 @@ canvas {
     pointer-events: auto;
     background: transparent;
     z-index: 2;
+}
+
+.chart-content-spacer {
+    display: inline-block;
+    height: 220px;
+    background: transparent;
 }
 
 /* ===== Toast ===== */

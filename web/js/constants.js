@@ -141,3 +141,18 @@ export function setConfig(value) {
 export function setCurrentSensor(value) {
   currentSensor = value;
 }
+
+/* ====== Chart UI state (scroll preservation, rendering parameters) ====== */
+
+// Словарь для хранения положения скролла для каждого chart (chartId -> scrollLeft)
+export let chartScroll = {};
+
+// Точки в пикселях между соседними измерениями на оси X (виртуальная плотность)
+export const CHART_POINT_PX = 8;
+
+// Ограничения размера canvas в пикселях (чтобы холст не рос бесконечно)
+export const CHART_MIN_CANVAS_PX = 700;
+export const CHART_MAX_CANVAS_PX = 2400;
+
+// Максимальная ширина виртуальной области (не позволяет безгранично увеличиваться)
+export const CHART_MAX_CONTENT_PX = 12000;
