@@ -24,6 +24,7 @@ const DEFAULT_STEP_MS = 1000;
 
 /* ================== PERMISSIONS ================== */
 
+// Проверяем разрешения пользователя
 export function hasPermission(permission) {
   if (!permission || !currentUser?.role) return false;
   const perms = ROLE_PERMISSIONS[currentUser.role];
@@ -39,6 +40,7 @@ function isValidSensorId(id) { return typeof id === 'string' && id.length > 0 &&
 
 /* ================== BUILD MAP ================== */
 
+// Строит карту sensorId -> Set(vars) из allSensors
 export function buildIpVarMap() {
   const map = {};
   for (const key of Object.keys(allSensors || {})) {
@@ -84,15 +86,15 @@ export function pickHigherAlertClass(currentClass, newClass) {
 /* ================== DATA FETCH ================== */
 
 /*
-  Robust fetchData:
+  Надёжный fetchData:
 
-  The server may return sensor data in two formats:
-  1) An array of rows: [{ ts:..., value:... }, ...] or [value, value, ...]
-  2) An object with separate arrays: { values: [...], times: [...] }
+  Сервер может вернуть данные сенсоров в двух форматах:
+  1) Массив точек: [{ ts:..., value:... }, ...] или [value, value, ...]
+  2) Объект с разделёнными массивами: { values: [...], times: [...] }
 
-  We support both and ensure 'values' and 'times' arrays are aligned and in milliseconds.
-  If times are missing or lengths mismatch we synthesize reasonable timestamps spaced by DEFAULT_STEP_MS
-  so that horizontal axis reflects an approximate timeline. Prefer using provided timestamps.
+  Функция нормализует оба формата, приводит метки времени в миллисекунды,
+  заполняет/интерполирует отсутствующие метки и сохраняет результаты в
+  глобальные структуры allSensors и sensorTimes. Также обновляет UI (панели и графики).
 */
 export async function fetchData() {
   if (!csrfToken) {
@@ -136,16 +138,16 @@ export async function fetchData() {
         const values = [];
         const times = [];
 
-        // Case A: server provided an array of row entries
+        // Случай A: сервер вернул массив записей
         if (Array.isArray(rows)) {
           for (const row of rows) {
-            // row might be a number, or an object { value:..., ts:... } or { v:..., t:... }
+            // row может быть числом, или объектом { value:..., ts:... } или { v:..., t:... }
             let v = Number(row?.value ?? row?.v ?? row);
             if (!Number.isFinite(v)) continue;
 
             let t = row?.ts ?? row?.time ?? row?.t ?? null;
             if (t == null) {
-              // no timestamp in this row; will handle later (synthesize)
+              // метка времени отсутствует — пометим null, заполним позже
               times.push(null);
             } else {
               if (typeof t === 'string') t = Date.parse(t);
@@ -156,7 +158,7 @@ export async function fetchData() {
             values.push(v);
           }
         }
-        // Case B: server provided separated arrays { values: [...], times: [...] }
+        // Случай B: сервер вернул объект { values: [...], times: [...] }
         else if (rows && typeof rows === 'object' && Array.isArray(rows.values)) {
           const valsArr = rows.values;
           const timesArr = Array.isArray(rows.times) ? rows.times : [];
@@ -178,40 +180,38 @@ export async function fetchData() {
             values.push(v);
           }
         } else {
-          // Unknown format for this variable
+          // неизвестный формат
           continue;
         }
 
         if (!values.length) continue;
 
-        // If we have timestamps but some are null, try to fill gaps:
+        // Заполняем/интерполируем метки времени
         const haveAnyTimestamps = times.some(t => t != null);
 
         if (!haveAnyTimestamps) {
-          // No timestamps -> synthesize evenly spaced timestamps ending at now
+          // Нет меток времени -> синтезируем равномерные интервалы, завершаясь сейчас
           const now = Date.now();
           for (let i = 0; i < values.length; i++) {
             times[i] = now - (values.length - 1 - i) * DEFAULT_STEP_MS;
           }
         } else {
-          // Some timestamps exist. For nulls, interpolate or fill with nearest known timestamp.
-          // Also, ensure all timestamps are in ms and monotonic non-decreasing.
-          // First, replace nulls with NaN so we can post-process.
+          // Некоторые метки существуют. Заменим null->NaN для удобства обработки.
           for (let i = 0; i < times.length; i++) {
             if (times[i] == null) times[i] = NaN;
           }
 
-          // Replace leading NaNs with first known timestamp minus steps
+          // Найдём первый известный индекс
           let firstKnownIdx = times.findIndex(t => Number.isFinite(t));
           if (firstKnownIdx === -1) {
             const now = Date.now();
             for (let i = 0; i < values.length; i++) times[i] = now - (values.length - 1 - i) * DEFAULT_STEP_MS;
           } else {
-            // fill leading
+            // Заполняем ведущие NaN шагами назад
             for (let i = firstKnownIdx - 1; i >= 0; i--) {
               times[i] = times[i + 1] - DEFAULT_STEP_MS;
             }
-            // fill middle gaps by linear interpolation between known timestamps
+            // Линейно интерполируем промежутки между известными метками
             let lastKnown = firstKnownIdx;
             for (let i = firstKnownIdx + 1; i < times.length; i++) {
               if (Number.isFinite(times[i])) {
@@ -225,13 +225,13 @@ export async function fetchData() {
                 lastKnown = i;
               }
             }
-            // fill trailing NaNs with last known + steps
+            // Заполняем хвост последовательными шагами
             for (let i = lastKnown + 1; i < times.length; i++) {
               times[i] = times[i - 1] + DEFAULT_STEP_MS;
             }
           }
 
-          // Ensure timestamps are numbers and in ms (already converted earlier)
+          // Убедимся, что все метки числа и в миллисекундах
           for (let i = 0; i < times.length; i++) {
             if (typeof times[i] !== 'number' || !Number.isFinite(times[i])) {
               times[i] = Date.now();
@@ -240,7 +240,7 @@ export async function fetchData() {
           }
         }
 
-        // Trim to MAX_POINTS if necessary (keep most recent points)
+        // Обрезаем по MAX_POINTS (оставляем последние точки)
         if (values.length > MAX_POINTS) {
           const drop = values.length - MAX_POINTS;
           values.splice(0, drop);
@@ -252,10 +252,8 @@ export async function fetchData() {
       }
     }
 
-    // Merge into global structures
-    // Keep previous data but overwrite/add updated keys
+    // Слияние в глобальные структуры
     setAllSensors(Object.assign({}, allSensors, newAll));
-    // Update sensorTimes for keys we received
     for (const [k, tArr] of Object.entries(newTimes)) {
       sensorTimes[k] = tArr;
     }
@@ -272,6 +270,7 @@ export async function fetchData() {
 
 /* ================== FORMAT ================== */
 
+// Форматирует ms -> HH:MM:SS (локальное время или UTC при useUTC=true)
 export function formatTimeHHMMSS(ms, useUTC = false) {
   const d = new Date(ms);
   const h = useUTC ? d.getUTCHours() : d.getHours();

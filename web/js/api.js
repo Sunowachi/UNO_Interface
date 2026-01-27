@@ -20,13 +20,29 @@ import {
 import { drawCurrent } from './charts.js';
 import { fetchData } from './utils.js';
 
-import { syncConfigInitial, loadConfig } from './sensors.js';
+import { syncConfigInitial, loadConfig, syncNewSensors } from './sensors.js';
 
 let fetchInterval = null;
 let timerInterval = null;
 let uiInitialized = false;
 let initRunning = false;
 let appState = 'idle';
+
+async function fetchAndRefresh() {
+  try {
+    const changed = await fetchData();
+    // Всегда синхронизируем конфиг с новыми датчиками — syncNewSensors безопасен если нет изменений
+    await syncNewSensors();
+    // Обновляем UI если есть новые данные или даже в случае no-change делаем лёгкую перерисовку,
+    // это позволяет пользователю видеть новые значения на экране при приходе точек.
+    // Можно оптимизировать, если нужно редкое обновление.
+    updateSensorPanel();
+    drawCurrent();
+    updateDevicePanel();
+  } catch (e) {
+    console.error('[fetchAndRefresh] ошибка:', e);
+  }
+}
 
 export async function init() {
 
@@ -96,8 +112,14 @@ export async function init() {
     updateDevicePanel();
     updateTimer();
 
-    // Запускаем интервалы только если они ещё не активны
-    if (!fetchInterval) fetchInterval = setInterval(fetchData, 2000);
+    // Запускаем интервалы только если они ещё не активны.
+    // Используем fetchAndRefresh, который вызывает fetchData и затем обновляет UI.
+    if (!fetchInterval) {
+      // Вызываем сразу один раз, затем по интервалу
+      fetchInterval = setInterval(fetchAndRefresh, 2000);
+      // Немного отложенный первый вызов, чтобы гарантировать, что DOM уже применён
+      setTimeout(fetchAndRefresh, 300);
+    }
     if (!timerInterval) timerInterval = setInterval(updateTimer, 1000);
 
     appState = 'ready';
