@@ -61,7 +61,6 @@ export function diffSeries(values) {
   return res;
 }
 
-
 export function applyProcessing(values, mode, windowSize = 10) {
   if (!Array.isArray(values) || values.length === 0) return [];
   const result = (() => {

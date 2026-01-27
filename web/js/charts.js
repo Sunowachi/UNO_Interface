@@ -24,26 +24,6 @@ import {
   formatTimeHHMMSS
 } from './utils.js';
 
-/*
-  Комментарии в коде — на русском.
-
-  Повышение удобства прокрутки и обновлений:
-  - добавлено сохранение позиции прокрутки для каждого chart (chartScroll),
-    позиция обновляется при событии scroll.
-  - добавлен chartFollow (флаг «находиться у конца»). Если пользователь находится
-    у конца графика (почти прокручен в самый правый край), то при приходе новых данных
-    мы автоматически прокручиваем к новому концу. Если пользователь просматривает исторический
-    фрагмент — позиция сохраняется.
-  - холст (canvas) теперь остаётся в разумных пределах по ширине
-    (CHART_MIN_CANVAS_PX..CHART_MAX_CANVAS_PX), а "виртуальная" ширина содержимого
-    (контента, определяющего scrollbar) соответствует количеству точек * CHART_POINT_PX,
-    но ограничена CHART_MAX_CONTENT_PX — это предотвращает бесконечный рост DOM.
-  - при отрисовке рисуем только видимую область данных, рассчитывая индекс начальной точки
-    согласно scrollLeft и CHART_POINT_PX. Это экономит работу при больших наборах данных.
-  - добавлен обработчик scroll для плавного обновления и сохранения позиции + follow-флага.
-  - восстановление позиции при обновлениях учитывает follow-флаг.
-*/
-
 export function drawCurrent() {
   const container = document.getElementById('chartsContainer');
   const RAW_COLOR = '#999999';
@@ -59,12 +39,10 @@ export function drawCurrent() {
     return;
   }
 
-  // Нормализация vars: поддерживаем либо строку с запятыми, либо массив
   const vars = Array.isArray(sCfg.vars)
     ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
     : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
-  // Сохраняем предыдущие позиции прокрутки и follow-флаги для существующих графиков
   const prevScrolls = Object.assign({}, chartScroll);
   const prevFollows = Object.assign({}, chartFollow);
 
@@ -83,7 +61,6 @@ export function drawCurrent() {
   const now = Date.now();
 
   vars.forEach((varName, idx) => {
-    // Определяем точный ключ, под которым пришли данные
     let dataKey = null;
 
     const keyColon      = `${sCfg.id}:${varName}`;
@@ -136,8 +113,6 @@ export function drawCurrent() {
 
     const titleText = unit ? `${baseLabel} (${unit})` : baseLabel;
 
-    // === Применяем диапазон времени (если задан) ===
-    // Режем только если times валидны и синхронизированы с values.
     if (rangeMs > 0 && Array.isArray(times) && times.length === rawValues.length) {
       const minAllowedTime = now - rangeMs;
 
@@ -165,14 +140,12 @@ export function drawCurrent() {
 
     const alertClass = getAlertClass(vs, lastVal);
 
-    // ОБЩАЯ ОБЁРТКА
     const wrapper = document.createElement('div');
     wrapper.className = 'chart-wrapper';
     wrapper.style.display = 'flex';
     wrapper.style.gap = '10px';
     wrapper.style.alignItems = 'flex-start';
 
-    // ЛЕВАЯ ПАНЕЛЬКА С ПОСЛЕДНИМ ЗНАЧЕНИЕМ
     const valueCard = document.createElement('div');
     valueCard.className = 'card';
     valueCard.style.width = '160px';
@@ -201,7 +174,6 @@ export function drawCurrent() {
 
     if (alertClass) valueCard.classList.add(alertClass);
 
-    // ПРАВАЯ ЧАСТЬ — ГРАФИК
     const chartContainer = document.createElement('div');
     chartContainer.style.flex = '1 1 auto';
     chartContainer.style.display = 'flex';
@@ -212,14 +184,12 @@ export function drawCurrent() {
     title.textContent = titleText;
     chartContainer.appendChild(title);
 
-    // Обёртка с горизонтальной прокруткой для графика
     const scrollWrapper = document.createElement('div');
     scrollWrapper.style.overflowX = 'auto';
     scrollWrapper.style.overflowY = 'hidden';
     scrollWrapper.style.width = '100%';
     scrollWrapper.style.paddingBottom = '6px';
     scrollWrapper.style.cursor = 'grab';
-    // Для корректного позиционирования overlay используем relative
     scrollWrapper.style.position = 'relative';
 
     const canvas = document.createElement('canvas');
@@ -231,28 +201,22 @@ export function drawCurrent() {
       processedValues?.length || 0
     );
 
-    // виртуальн��я ширина контента, которая определяет scrollbar
     const virtualContentWidth = Math.min(
       CHART_MAX_CONTENT_PX,
       Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX)
     );
 
-    // создаём spacer — невидимый блок, который заставит scrollWrapper иметь нужную ширину
     const spacer = document.createElement('div');
     spacer.className = 'chart-content-spacer';
     spacer.style.width = String(virtualContentWidth) + 'px';
     spacer.style.height = canvas.height + 'px';
 
-    // Размер видимого canvas в CSS-пикселях (по ширине контейнера)
-    // canvas элемент центрируем абсолютом над spacer и будем рендерить в нём видимую часть.
-    const visibleCssWidth = Math.max(CHART_MIN_CANVAS_PX, Math.min(CHART_MAX_CANVAS_PX,  // ограничиваем реальный холст
+    const visibleCssWidth = Math.max(CHART_MIN_CANVAS_PX, Math.min(CHART_MAX_CANVAS_PX,
       Math.round(Math.min(virtualContentWidth, Math.max(700, Math.floor((window.innerWidth || 900) * 0.6))))));
 
-    // Устанавливаем размеры холста (атрибуты width/height в device-pixel)
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(visibleCssWidth * dpr);
     canvas.height = 220 * dpr;
-    // задаём CSS ширину/высоту (inline стили используются для точной подгонки)
     canvas.style.width = visibleCssWidth + 'px';
     canvas.style.height = '220px';
     canvas.style.display = 'block';
@@ -261,7 +225,6 @@ export function drawCurrent() {
     canvas.style.top = '0px';
     canvas.style.zIndex = '1';
 
-    // === Скролл прямо по графику (колесо/тачпад) ===
     canvas.addEventListener('wheel', (e) => {
       const dx = (Math.abs(e.deltaX) > 0) ? e.deltaX : e.deltaY;
       if (dx !== 0) {
@@ -270,7 +233,6 @@ export function drawCurrent() {
       }
     }, { passive: false });
 
-    // === Drag-to-pan прямо по графику ===
     let isDragging = false;
     let dragStartX = 0;
     let startScrollLeft = 0;
@@ -295,12 +257,10 @@ export function drawCurrent() {
       scrollWrapper.style.cursor = 'grab';
     });
 
-    // Добавляем spacer и холст в wrapper
     scrollWrapper.appendChild(spacer);
     scrollWrapper.appendChild(canvas);
     chartContainer.appendChild(scrollWrapper);
 
-    // ЛЕГЕНДА под графиком: RAW и обработанная линия
     const legend = document.createElement('div');
     legend.style.fontSize = '12px';
     legend.style.marginTop = '4px';
@@ -326,35 +286,29 @@ export function drawCurrent() {
     wrapper.appendChild(chartContainer);
     container.appendChild(wrapper);
 
-    // Восстанавливаем позицию скролла, если была
     const saved = prevScrolls[chartId];
     const wasFollow = Boolean(prevFollows[chartId]);
 
-    // Вычисляем maxLeft для текущей виртуальной ширины и текущей видимой ширины
     function computeMaxLeft() {
       const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
       return maxLeft;
     }
 
     if (typeof saved === 'number' || wasFollow) {
-      // Ожидаем следующий event loop, чтобы размеры DOM применились
       requestAnimationFrame(() => {
         const maxLeft = computeMaxLeft();
 
         if (wasFollow) {
-          // если ранее пользователь был у конца — остаёмся у нового конца
           scrollWrapper.scrollLeft = maxLeft;
           chartFollow[chartId] = true;
           chartScroll[chartId] = scrollWrapper.scrollLeft;
         } else {
-          // иначе пытаемся восстановить прежнюю позицию (с учётом нового max)
           const clamped = Math.max(0, Math.min(saved || 0, maxLeft));
           scrollWrapper.scrollLeft = clamped;
-          chartFollow[chartId] = Math.abs(clamped - maxLeft) <= 4; // если почти в конце — помечаем follow
+          chartFollow[chartId] = Math.abs(clamped - maxLeft) <= 4;
           chartScroll[chartId] = scrollWrapper.scrollLeft;
         }
 
-        // после установки скролла — отрисовать видим��ю часть
         drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
           rawColor: RAW_COLOR,
           processedColor: color,
@@ -362,7 +316,6 @@ export function drawCurrent() {
         }, scrollWrapper);
       });
     } else {
-      // по умолчанию — в конец (последние точки)
       requestAnimationFrame(() => {
         const maxLeft = computeMaxLeft();
         scrollWrapper.scrollLeft = maxLeft;
@@ -377,29 +330,21 @@ export function drawCurrent() {
       });
     }
 
-    // Сохраняем скролл при прокрутке пользователем и перерисовываем область при скролле
     scrollWrapper.addEventListener('scroll', () => {
       const maxLeft = computeMaxLeft();
       const cur = scrollWrapper.scrollLeft;
       chartScroll[chartId] = cur;
-      // если пользователь прокрутил почти до конца — помечаем follow=true
       chartFollow[chartId] = Math.abs(cur - maxLeft) <= 4;
-      // пе��ерисовываем видимую часть (эффект плавной подрисовки)
+
       drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
         rawColor: RAW_COLOR,
         processedColor: color,
         ylabel: titleText
       }, scrollWrapper);
     }, { passive: true });
-
-    // Если данные обновляются (fetchData), drawCurrent перезапустит этот цикл и
-    // восстановит позицию из chartScroll/chartFollow — тем самым пользовательский сдвиг сохраняется.
   });
 }
 
-/* ================= ВСПОМОГАТЕЛИ ================= */
-
-// бинарный поиск ближайшего индекса в сортированном массиве times
 function findNearestIndex(arr, target) {
   if (!Array.isArray(arr) || arr.length === 0) return -1;
   let lo = 0, hi = arr.length - 1;
@@ -415,26 +360,17 @@ function findNearestIndex(arr, target) {
   return (Math.abs(arr[lo] - target) < Math.abs(arr[prev] - target)) ? lo : prev;
 }
 
-/* ================== ОТДЕЛЬНАЯ ОТРИСОВКА ВИДИМОЙ ОБЛАСТИ ================== */
-
-/*
-  drawChartViewport рисует только видимую часть данных в предоставленный canvas.
-  canvas размещён абсолютом над spacer'ом; scrollWrapper даёт scrollLeft.
-  Мы рассчитываем, какие индексы данных попадают в текущую видимую область,
-  и рисуем только их, что экономит ресурсы и позволяет держать атрибут width холста в пределах.
-*/
 function drawChartViewport(id, canvas, rawData, processedData, times, options = {}, scrollWrapper) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // приводим device-pixel размеры
   const dpr = window.devicePixelRatio || 1;
   const cssW = Math.round(parseFloat(canvas.style.width) || canvas.clientWidth || 800);
   const cssH = Math.round(parseFloat(canvas.style.height) || canvas.clientHeight || 220);
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // работаем в CSS-пикселях
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const w = cssW;
   const h = cssH;
@@ -482,7 +418,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
   const cw = w - left - right;
   const ch = h - top - bottom;
 
-  // параметры виртуальной области
   const pointsCount = Math.max(
     rawData?.length || 0,
     processedData?.length || 0
@@ -490,17 +425,14 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
 
   const virtualWidth = Math.min(CHART_MAX_CONTENT_PX, Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX));
 
-  // текущий сдвиг в пикселях относительно глобальной виртуальной области
   const scrollLeft = scrollWrapper ? scrollWrapper.scrollLeft : (virtualWidth - cw);
-  // диапазон видимых глобальных координат
+
   const viewLeft = scrollLeft;
   const viewRight = scrollLeft + cw;
 
-  // вычисляем индексы видимых точек
   const firstIdx = Math.max(0, Math.floor((viewLeft - left) / CHART_POINT_PX));
   const lastIdx = Math.min(pointsCount - 1, Math.ceil((viewRight - left) / CHART_POINT_PX));
 
-  // если используем times — определяем видимый временной интервал
   let tStart = 0, tEnd = 1, tSpan = 1;
   if (useTimes) {
     tStart = times[0];
@@ -540,7 +472,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
     ctx.fillText(v.toFixed(1), left - 8 - viewLeft, y);
   }
 
-  // подпись Y вертикально
   if (options.ylabel) {
     ctx.save();
     ctx.translate(18 - viewLeft, h / 2);
@@ -550,7 +481,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
     ctx.restore();
   }
 
-  // временная ось (рисуем подписи для видимой интервала)
   if (useTimes) {
     const span = tSpan;
 
@@ -566,9 +496,7 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    // определяем временной шаг в пикселях для подписи
     const pxPerMs = (virtualWidth - left - right) / Math.max(1, tSpan);
-    // находим первый t в видимой области кратный STEP
     const tViewStart = tStart + ((viewLeft - left) / pxPerMs);
     const tViewEnd = tStart + ((viewRight - left) / pxPerMs);
     for (
@@ -590,7 +518,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
     }
   }
 
-  // рисуем линии — только для видимого диапазона индексов
   series.forEach(s => {
     ctx.strokeStyle = s.color;
     ctx.lineWidth = 2;
@@ -619,27 +546,22 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
   canvas.onmousemove = function (e) {
     const rect = canvas.getBoundingClientRect();
     const clientX = e.clientX;
-    const xInCanvas = clientX - rect.left; // CSS-пиксели внутри canvas
+    const xInCanvas = clientX - rect.left;
     const xGlobal = viewLeft + xInCanvas;
 
-    // ограничиваем
     if (xGlobal < left || xGlobal > left + (pointsCount - 1) * CHART_POINT_PX) {
-      // перерисуем без overlay (просто сброс)
       drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
       return;
     }
 
-    // находим индекс ближайшей точки
     const idx = Math.round((xGlobal - left) / CHART_POINT_PX);
     if (idx < 0 || idx >= pointsCount) {
       drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
       return;
     }
 
-    // перерисовываем базовый слой
     drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
 
-    // рисуем overlay элементы напрямую
     // вертикальная линия
     const xLocal = left + idx * CHART_POINT_PX - viewLeft;
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
@@ -651,7 +573,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // собираем значения всех серий в этой точке
     const values = series.map(s => {
       const v = s.data[idx];
       return Number.isFinite(v) ? v : NaN;
@@ -671,7 +592,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
       ctx.stroke();
     }
 
-    // тултип рисуем в canvas (в левом верхнем углу видимой области)
     const timeText = useTimes && times && times[idx] ? formatTimeHHMMSS(times[idx]) : `idx:${idx}`;
     const lines = [];
     lines.push({ text: timeText, bold: true });
@@ -712,7 +632,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
     ctx.closePath();
     ctx.fill();
 
-    // текст и цветные кружки
     let tx = boxX + padding;
     let ty = boxY + padding + 12;
 
@@ -744,7 +663,6 @@ function drawChartViewport(id, canvas, rawData, processedData, times, options = 
   };
 
   canvas.onmouseleave = function () {
-    // при уходе мыши — перерисовать базовый слой без overlay
     drawChartViewport(id, canvas, rawData, processedData, times, options, scrollWrapper);
   };
 }
@@ -754,6 +672,4 @@ export function clearChart(id) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // нет дополнительного overlay-элемента больше
 }
