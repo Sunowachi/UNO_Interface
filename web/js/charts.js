@@ -24,6 +24,8 @@ import {
   formatTimeHHMMSS
 } from './utils.js';
 
+const chartState = new Map();
+
 export function drawCurrent() {
   const container = document.getElementById('chartsContainer');
   const RAW_COLOR = '#999999';
@@ -39,12 +41,10 @@ export function drawCurrent() {
     return;
   }
 
+  // Нормализация vars: поддерживаем либо строку с запятыми, либо массив
   const vars = Array.isArray(sCfg.vars)
     ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
     : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
-
-  const prevScrolls = Object.assign({}, chartScroll);
-  const prevFollows = Object.assign({}, chartFollow);
 
   container.innerHTML = '';
 
@@ -61,6 +61,7 @@ export function drawCurrent() {
   const now = Date.now();
 
   vars.forEach((varName, idx) => {
+    // Определяем точный ключ, под которым пришли данные
     let dataKey = null;
 
     const keyColon      = `${sCfg.id}:${varName}`;
@@ -113,6 +114,7 @@ export function drawCurrent() {
 
     const titleText = unit ? `${baseLabel} (${unit})` : baseLabel;
 
+    // === Применяем диапазон времени (если задан) ===
     if (rangeMs > 0 && Array.isArray(times) && times.length === rawValues.length) {
       const minAllowedTime = now - rangeMs;
 
@@ -140,12 +142,11 @@ export function drawCurrent() {
 
     const alertClass = getAlertClass(vs, lastVal);
 
+    // ОБЩАЯ ОБЁРТКА
     const wrapper = document.createElement('div');
     wrapper.className = 'chart-wrapper';
-    wrapper.style.display = 'flex';
-    wrapper.style.gap = '10px';
-    wrapper.style.alignItems = 'flex-start';
 
+    // ЛЕВАЯ ПАНЕЛЬКА С ПОСЛЕДНИМ ЗНАЧЕНИЕМ
     const valueCard = document.createElement('div');
     valueCard.className = 'card';
     valueCard.style.width = '160px';
@@ -174,6 +175,7 @@ export function drawCurrent() {
 
     if (alertClass) valueCard.classList.add(alertClass);
 
+    // ПРАВАЯ ЧАСТЬ — ГРАФИК
     const chartContainer = document.createElement('div');
     chartContainer.style.flex = '1 1 auto';
     chartContainer.style.display = 'flex';
@@ -184,164 +186,318 @@ export function drawCurrent() {
     title.textContent = titleText;
     chartContainer.appendChild(title);
 
+    // Обёртка с горизонтальной прокруткой для графика
     const scrollWrapper = document.createElement('div');
     scrollWrapper.style.overflowX = 'auto';
     scrollWrapper.style.overflowY = 'hidden';
     scrollWrapper.style.width = '100%';
     scrollWrapper.style.paddingBottom = '6px';
     scrollWrapper.style.cursor = 'grab';
-    scrollWrapper.style.position = 'relative';
 
-    const canvas = document.createElement('canvas');
-    const chartId = `chart_${sCfg.id}_${varName}`;
-    canvas.id = chartId;
-
+    const canvasId = `chart_${sCfg.id}_${varName}`;
+    let canvas = document.getElementById(canvasId);
     const pointsCount = Math.max(
       rawValues?.length || 0,
       processedValues?.length || 0
     );
 
-    const virtualContentWidth = Math.min(
-      CHART_MAX_CONTENT_PX,
-      Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX)
-    );
+    let newlyCreated = false;
 
-    const spacer = document.createElement('div');
-    spacer.className = 'chart-content-spacer';
-    spacer.style.width = String(virtualContentWidth) + 'px';
-    spacer.style.height = canvas.height + 'px';
+    if (!canvas) {
+      // Создаём canvas только при его отсутствии (один раз)
+      canvas = document.createElement('canvas');
+      canvas.id = canvasId;
+      canvas.height = 220;
+      canvas.style.display = 'block';
+      scrollWrapper.appendChild(canvas);
+      chartContainer.appendChild(scrollWrapper);
+      wrapper.appendChild(valueCard);
+      wrapper.appendChild(chartContainer);
+      container.appendChild(wrapper);
 
-    const visibleCssWidth = Math.max(CHART_MIN_CANVAS_PX, Math.min(CHART_MAX_CANVAS_PX,
-      Math.round(Math.min(virtualContentWidth, Math.max(700, Math.floor((window.innerWidth || 900) * 0.6))))));
+      // Устанавливаем ширину исходя из количества точек (только при создании)
+      const w = Math.max(700, pointsCount * 8);
+      canvas.width = w;
 
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(visibleCssWidth * dpr);
-    canvas.height = 220 * dpr;
-    canvas.style.width = visibleCssWidth + 'px';
-    canvas.style.height = '220px';
-    canvas.style.display = 'block';
-    canvas.style.position = 'absolute';
-    canvas.style.left = '0px';
-    canvas.style.top = '0px';
-    canvas.style.zIndex = '1';
-
-    canvas.addEventListener('wheel', (e) => {
-      const dx = (Math.abs(e.deltaX) > 0) ? e.deltaX : e.deltaY;
-      if (dx !== 0) {
-        e.preventDefault();
-        scrollWrapper.scrollLeft += dx;
-      }
-    }, { passive: false });
-
-    let isDragging = false;
-    let dragStartX = 0;
-    let startScrollLeft = 0;
-
-    canvas.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      scrollWrapper.style.cursor = 'grabbing';
-      dragStartX = e.clientX;
-      startScrollLeft = scrollWrapper.scrollLeft;
-      e.preventDefault();
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStartX;
-      scrollWrapper.scrollLeft = startScrollLeft - dx;
-    });
-
-    window.addEventListener('mouseup', () => {
-      if (!isDragging) return;
-      isDragging = false;
-      scrollWrapper.style.cursor = 'grab';
-    });
-
-    scrollWrapper.appendChild(spacer);
-    scrollWrapper.appendChild(canvas);
-    chartContainer.appendChild(scrollWrapper);
-
-    const legend = document.createElement('div');
-    legend.style.fontSize = '12px';
-    legend.style.marginTop = '4px';
-
-    if (showRaw) {
-      const rawSpan = document.createElement('span');
-      rawSpan.textContent = '■ RAW (сырые данные)';
-      rawSpan.style.color = RAW_COLOR;
-      rawSpan.style.marginRight = '10px';
-      legend.appendChild(rawSpan);
-    }
-
-    if (showProcessed) {
-      const procSpan = document.createElement('span');
-      procSpan.textContent = '■ ' + (PROCESSING_LABELS[processingMode] || processingMode);
-      procSpan.style.color = color;
-      legend.appendChild(procSpan);
-    }
-
-    if (legend.childNodes.length > 0) chartContainer.appendChild(legend);
-
-    wrapper.appendChild(valueCard);
-    wrapper.appendChild(chartContainer);
-    container.appendChild(wrapper);
-
-    const saved = prevScrolls[chartId];
-    const wasFollow = Boolean(prevFollows[chartId]);
-
-    function computeMaxLeft() {
-      const maxLeft = Math.max(0, virtualContentWidth - scrollWrapper.clientWidth);
-      return maxLeft;
-    }
-
-    if (typeof saved === 'number' || wasFollow) {
-      requestAnimationFrame(() => {
-        const maxLeft = computeMaxLeft();
-
-        if (wasFollow) {
-          scrollWrapper.scrollLeft = maxLeft;
-          chartFollow[chartId] = true;
-          chartScroll[chartId] = scrollWrapper.scrollLeft;
-        } else {
-          const clamped = Math.max(0, Math.min(saved || 0, maxLeft));
-          scrollWrapper.scrollLeft = clamped;
-          chartFollow[chartId] = Math.abs(clamped - maxLeft) <= 4;
-          chartScroll[chartId] = scrollWrapper.scrollLeft;
+      // Добавляем слушатели один раз
+      canvas.addEventListener('wheel', (e) => {
+        const dx = (Math.abs(e.deltaX) > 0) ? e.deltaX : e.deltaY;
+        if (dx !== 0) {
+          e.preventDefault();
+          scrollWrapper.scrollLeft += dx;
         }
+      }, { passive: false });
 
-        drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
-          rawColor: RAW_COLOR,
-          processedColor: color,
-          ylabel: titleText
-        }, scrollWrapper);
+      // drag-to-pan
+      let isDragging = false;
+      let dragStartX = 0;
+      let startScrollLeft = 0;
+
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        scrollWrapper.style.cursor = 'grabbing';
+        dragStartX = e.clientX;
+        startScrollLeft = scrollWrapper.scrollLeft;
+        e.preventDefault();
       });
-    } else {
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        scrollWrapper.scrollLeft = startScrollLeft - dx;
+      });
+
+      const stopDrag = () => {
+        isDragging = false;
+        scrollWrapper.style.cursor = 'grab';
+      };
+
+      canvas.addEventListener('mouseup', stopDrag);
+      canvas.addEventListener('mouseleave', stopDrag);
+
+      // флаги и состояния на элементе
+      canvas.dataset.prevPoints = String(pointsCount);
+      canvas.dataset.initialized = "true";
+      newlyCreated = true;
+
+      // при создании — пролистать в конец
       requestAnimationFrame(() => {
-        const maxLeft = computeMaxLeft();
-        scrollWrapper.scrollLeft = maxLeft;
-        chartFollow[chartId] = true;
-        chartScroll[chartId] = scrollWrapper.scrollLeft;
-
-        drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
-          rawColor: RAW_COLOR,
-          processedColor: color,
-          ylabel: titleText
-        }, scrollWrapper);
+        scrollWrapper.scrollLeft = Math.max(0, scrollWrapper.scrollWidth - scrollWrapper.clientWidth);
       });
-    }
 
-    scrollWrapper.addEventListener('scroll', () => {
-      const maxLeft = computeMaxLeft();
-      const cur = scrollWrapper.scrollLeft;
-      chartScroll[chartId] = cur;
-      chartFollow[chartId] = Math.abs(cur - maxLeft) <= 4;
-
-      drawChartViewport(chartId, canvas, rawValues, processedValues, times, {
+      // Рисуем
+      drawChart(canvas.id, showRaw ? rawValues : null, showProcessed ? processedValues : null, times, {
         rawColor: RAW_COLOR,
         processedColor: color,
         ylabel: titleText
-      }, scrollWrapper);
-    }, { passive: true });
+      });
+
+    } else {
+      // Canvas уже существ��ет — не пересоздаём DOM-элементы, просто обновляем масштаб и рисуем
+      // Сохраним текущее положение скролла и флаг, находится ли пользователь в конце
+      const atEnd = scrollWrapper ? (Math.abs(scrollWrapper.scrollLeft - (scrollWrapper.scrollWidth - scrollWrapper.clientWidth)) <= 2) : true;
+      // Найдём существующий scrollWrapper (предполагаем, что canvas уже внутри соответствующей обёртки)
+      let existingScroll = canvas.parentElement;
+      while (existingScroll && existingScroll !== document.body && !existingScroll.style) {
+        existingScroll = existingScroll.parentElement;
+      }
+      // Если parent есть и это контейнер с overflow, используем его
+      if (canvas.parentElement && canvas.parentElement.style && canvas.parentElement.style.overflowX) {
+        existingScroll = canvas.parentElement;
+      } else {
+        // fallback: ис��ользуем созданный scrollWrapper (там, где canvas находится)
+        existingScroll = canvas.parentElement;
+      }
+
+      // Если нужно — пересчитать ширину canvas
+      const desiredWidth = Math.max(700, pointsCount * 8);
+      if (canvas.width !== desiredWidth) {
+        // не трогаем scrollLeft, запомним соотношение и восстановим если пользователь был в конце
+        const prevScrollLeft = existingScroll ? existingScroll.scrollLeft : 0;
+        const prevScrollWidth = existingScroll ? existingScroll.scrollWidth : 0;
+
+        canvas.width = desiredWidth;
+
+        // Если пользователь был в конце — пролистать в конец; иначе сохранить позицию (по абсолютным пикселям)
+        if (existingScroll) {
+          if (atEnd) {
+            requestAnimationFrame(() => {
+              existingScroll.scrollLeft = Math.max(0, existingScroll.scrollWidth - existingScroll.clientWidth);
+            });
+          } else {
+            // Попытка сохранить ту же абсолютную позицию в пикселях
+            const deltaW = existingScroll.scrollWidth - prevScrollWidth;
+            existingScroll.scrollLeft = Math.max(0, prevScrollLeft + deltaW);
+          }
+        }
+      }
+
+      // Обновим prevPoints
+      canvas.dataset.prevPoints = String(pointsCount);
+
+      // Рисуем на существующем canvas
+      drawChart(canvas.id, showRaw ? rawValues : null, showProcessed ? processedValues : null, times, {
+        rawColor: RAW_COLOR,
+        processedColor: color,
+        ylabel: titleText
+      });
+      // Вставим wrapper/контейнер, если ещё не вставлен (маловероятно)
+      if (!canvas.parentElement || canvas.parentElement !== scrollWrapper) {
+        scrollWrapper.appendChild(canvas);
+        chartContainer.appendChild(scrollWrapper);
+        wrapper.appendChild(valueCard);
+        wrapper.appendChild(chartContainer);
+        container.appendChild(wrapper);
+      }
+    }
+
+    // Если мы только что создали график, уже сделали scroll to end; иначе — ничего не делаем (чтобы не мешать пользователю)
+  });
+
+}
+
+export function drawChart(id, rawData, processedData, times, options = {}) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Размеры canvas берутся из атрибутов width/height (устанавливаются при создании/когда реально меняется)
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Настройки от вызывающего
+  const left = 80;
+  const right = 40;
+  const top = 25;
+  const bottom = 55;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const useTimes =
+    Array.isArray(times) &&
+    times.length > 1 &&
+    (!rawData || times.length === rawData.length) &&
+    (!processedData || times.length === processedData.length);
+
+  const series = [];
+  if (Array.isArray(rawData) && rawData.length) {
+    series.push({ data: rawData, color: options.rawColor || '#777' });
+  }
+  if (Array.isArray(processedData) && processedData.length) {
+    series.push({ data: processedData, color: options.processedColor || '#d00' });
+  }
+  if (!series.length) return;
+
+  let min = Infinity;
+  let max = -Infinity;
+
+  series.forEach(s =>
+    s.data.forEach(v => {
+      if (Number.isFinite(v)) {
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    })
+  );
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+  if (min === max) {
+    min -= 0.5;
+    max += 0.5;
+  }
+
+  const cw = w - left - right;
+  const ch = h - top - bottom;
+
+  let tStart = 0;
+  let tEnd = 1;
+  let tSpan = 1;
+
+  if (useTimes) {
+    tStart = times[0];
+    tEnd = times[times.length - 1];
+    tSpan = Math.max(1, tEnd - tStart);
+  }
+
+  ctx.strokeStyle = '#ddd';
+  ctx.setLineDash([4, 4]);
+  for (let i = 0; i <= 5; i++) {
+    const y = top + (ch / 5) * i;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(w - right, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = '#000';
+  ctx.beginPath();
+  ctx.moveTo(left, top);
+  ctx.lineTo(left, h - bottom);
+  ctx.lineTo(w - right, h - bottom);
+  ctx.stroke();
+
+  ctx.fillStyle = '#333';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+
+  for (let i = 0; i <= 5; i++) {
+    const v = max - (max - min) * i / 5;
+    const y = top + (ch / 5) * i;
+    ctx.fillText(v.toFixed(1), left - 8, y);
+  }
+
+  if (options.ylabel) {
+    ctx.save();
+    ctx.translate(18, h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText(options.ylabel, 0, 0);
+    ctx.restore();
+  }
+
+  if (useTimes) {
+    const span = tSpan;
+
+    const STEP =
+      span < 2 * 60e3  ? 10e3 :
+      span < 15 * 60e3 ? 60e3 :
+      span < 2 * 3600e3 ? 5 * 60e3 :
+      span < 12 * 3600e3 ? 30 * 60e3 :
+      2 * 3600e3;
+
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    for (
+      let t = Math.ceil(tStart / STEP) * STEP;
+      t <= tEnd;
+      t += STEP
+    ) {
+      const x = left + ((t - tStart) / tSpan) * cw;
+
+      ctx.strokeStyle = '#ddd';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, h - bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillText(formatTimeHHMMSS(t), x, h - bottom + 5);
+    }
+  }
+
+  series.forEach(s => {
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+
+    let started = false;
+
+    s.data.forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+
+      const x = useTimes
+        ? left + ((times[i] - tStart) / tSpan) * cw
+        : left + (i / (s.data.length - 1)) * cw;
+
+      const y =
+        top + ch - ((v - min) / (max - min)) * ch;
+
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+
+    ctx.stroke();
   });
 }
 
