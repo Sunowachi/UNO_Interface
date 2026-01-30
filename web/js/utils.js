@@ -93,127 +93,72 @@ export async function fetchData() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
 
     const text = await res.text();
-    const data = JSON.parse(text);
+    let data;
 
-    if (!data?.sensors) { console.error('Некорректный формат /init:', data); return; }
+    try { data = JSON.parse(text); }
+    catch (e) {
+      console.error('[fetchData] Ошибка парсинга JSON /init:', e);
+      return;
+    }
+
+    if (!data?.sensors || typeof data.sensors !== 'object') {
+      console.error('[fetchData] Некорректный формат sensors:', data?.sensors);
+      return;
+    }
 
     const newAll = {};
     const newTimes = {};
 
-    for (const [sensorId, vars] of Object.entries(data.sensors)) {
-      if (!vars || typeof vars !== 'object') continue;
+    const sensors = data.sensors;
 
-      for (const [varName, rows] of Object.entries(vars)) {
-        if (!varName) continue;
+    let flatDetected = false;
+    for (const k of Object.keys(sensors)) {
+      if (k.includes(':')) { flatDetected = true; break; }
+    }
 
-        const key = `${sensorId}:${varName}`;
-
-        const values = [];
-        const times = [];
-
-        if (Array.isArray(rows)) {
-          for (const row of rows) {
-            let v = Number(row?.value ?? row?.v ?? row);
-            if (!Number.isFinite(v)) continue;
-
-            let t = row?.ts ?? row?.time ?? row?.t ?? null;
-            if (t == null) {
-              times.push(null);
-            } else {
-              if (typeof t === 'string') t = Date.parse(t);
-              if (!Number.isFinite(t)) t = Date.now();
-              if (t < 1e12) t = t * 1000;
-              times.push(t);
-            }
-            values.push(v);
-          }
-        }
-        else if (rows && typeof rows === 'object' && Array.isArray(rows.values)) {
-          const valsArr = rows.values;
-          const timesArr = Array.isArray(rows.times) ? rows.times : [];
-
-          for (let i = 0; i < valsArr.length; i++) {
-            const rawV = valsArr[i];
-            let v = Number(rawV);
-            if (!Number.isFinite(v)) continue;
-
-            let t = timesArr[i] ?? null;
-            if (t != null) {
-              if (typeof t === 'string') t = Date.parse(t);
-              if (!Number.isFinite(t)) t = Date.now();
-              if (t < 1e12) t = t * 1000;
-              times.push(t);
-            } else {
-              times.push(null);
-            }
-            values.push(v);
-          }
+    if (flatDetected) {
+      // sensors is flat map: "sensor:var" -> { values: [...], times: [...] } OR -> array
+      for (const [flatKey, payload] of Object.entries(sensors)) {
+        // payload expected either { values: [...], times: [...] } or array of numbers
+        if (payload == null) continue;
+        if (Array.isArray(payload)) {
+          // Unexpected array — store as values
+          newAll[flatKey] = { values: payload.slice() };
+        } else if (typeof payload === 'object') {
+          const vals = Array.isArray(payload.values) ? payload.values.slice() : [];
+          const times = Array.isArray(payload.times) ? payload.times.slice() : null;
+          newAll[flatKey] = { values: vals };
+          if (times) newTimes[flatKey] = times;
         } else {
+          // unsupported
           continue;
         }
-
-        if (!values.length) continue;
-
-        const haveAnyTimestamps = times.some(t => t != null);
-
-        if (!haveAnyTimestamps) {
-          const now = Date.now();
-          for (let i = 0; i < values.length; i++) {
-            times[i] = now - (values.length - 1 - i) * DEFAULT_STEP_MS;
-          }
-        } else {
-          for (let i = 0; i < times.length; i++) {
-            if (times[i] == null) times[i] = NaN;
-          }
-
-          let firstKnownIdx = times.findIndex(t => Number.isFinite(t));
-          if (firstKnownIdx === -1) {
-            const now = Date.now();
-            for (let i = 0; i < values.length; i++) times[i] = now - (values.length - 1 - i) * DEFAULT_STEP_MS;
-          } else {
-            for (let i = firstKnownIdx - 1; i >= 0; i--) {
-              times[i] = times[i + 1] - DEFAULT_STEP_MS;
-            }
-            let lastKnown = firstKnownIdx;
-            for (let i = firstKnownIdx + 1; i < times.length; i++) {
-              if (Number.isFinite(times[i])) {
-                const gap = i - lastKnown;
-                const startT = times[lastKnown];
-                const endT = times[i];
-                const step = (endT - startT) / gap;
-                for (let j = 1; j < gap; j++) {
-                  times[lastKnown + j] = Math.round(startT + step * j);
-                }
-                lastKnown = i;
-              }
-            }
-            for (let i = lastKnown + 1; i < times.length; i++) {
-              times[i] = times[i - 1] + DEFAULT_STEP_MS;
-            }
-          }
-
-          for (let i = 0; i < times.length; i++) {
-            if (typeof times[i] !== 'number' || !Number.isFinite(times[i])) {
-              times[i] = Date.now();
-            }
-            if (times[i] < 1e12) times[i] = times[i] * 1000;
+      }
+    } else {
+      // sensors is nested: sensorId -> { varName: rows | {values,times} }
+      for (const [sensorId, vars] of Object.entries(sensors)) {
+        if (!vars || typeof vars !== 'object') continue;
+        for (const [varName, rows] of Object.entries(vars)) {
+          const key = `${sensorId}:${varName}`;
+          if (rows == null) continue;
+          if (Array.isArray(rows)) {
+            // rows may be array of numbers (values)
+            newAll[key] = { values: rows.slice() };
+          } else if (typeof rows === 'object') {
+            const vals = Array.isArray(rows.values) ? rows.values.slice() : [];
+            const times = Array.isArray(rows.times) ? rows.times.slice() : null;
+            newAll[key] = { values: vals };
+            if (times) newTimes[key] = times;
           }
         }
-
-        if (values.length > MAX_POINTS) {
-          const drop = values.length - MAX_POINTS;
-          values.splice(0, drop);
-          times.splice(0, drop);
-        }
-
-        newAll[key] = { values };
-        newTimes[key] = times;
       }
     }
 
-    setAllSensors(Object.assign({}, allSensors, newAll));
-    for (const [k, tArr] of Object.entries(newTimes)) {
-      sensorTimes[k] = tArr;
+    const merged = Object.assign({}, allSensors || {}, newAll);
+    setAllSensors(merged);
+
+    for (const [k, tarr] of Object.entries(newTimes)) {
+      sensorTimes[k] = tarr.slice();
     }
 
     await syncNewSensors();
