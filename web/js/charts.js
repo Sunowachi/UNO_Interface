@@ -30,6 +30,7 @@ export function drawCurrent() {
   const container = document.getElementById('chartsContainer');
   const RAW_COLOR = '#999999';
 
+  // если нет датчика — очищаем контейнер и выходим
   if (!currentSensor || !container) {
     if (container) container.innerHTML = "";
     return;
@@ -46,63 +47,47 @@ export function drawCurrent() {
     ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
     : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
-  container.innerHTML = '';
-
-  if (vars.length === 0) {
-    const msg = document.createElement('p');
-    msg.textContent = 'Для этого датчика не заданы переменные.';
-    msg.style.color = '#777';
-    container.appendChild(msg);
-    return;
-  }
+  // Подготовим набор желаемых wrapper id, чтобы удалить лишние
+  const desiredWrapperIds = new Set();
 
   const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
   const rangeMs = getSelectedTimeRangeMs();
   const now = Date.now();
 
-  vars.forEach((varName, idx) => {
-    // Определяем точный ключ, под которым пришли данные
-    let dataKey = null;
+  // Итерируем переменные; повторно используем DOM если возможно
+  for (let idx = 0; idx < vars.length; idx++) {
+    const varName = vars[idx];
 
+    // Определяем ключи данных
     const keyColon      = `${sCfg.id}:${varName}`;
     const keyLowerColon = `${sCfg.id}:${varName.toLowerCase()}`;
-
-    if (allSensors[keyColon]) {
-      dataKey = keyColon;
-    } else if (allSensors[keyLowerColon]) {
-      dataKey = keyLowerColon;
-    }
-
+    let dataKey = null;
+    if (allSensors[keyColon]) dataKey = keyColon;
+    else if (allSensors[keyLowerColon]) dataKey = keyLowerColon;
     if (!dataKey) {
       console.warn(`Нет данных для переменной ${varName}`);
-      return;
+      continue;
     }
 
     const sData = allSensors[dataKey];
     if (!sData || !Array.isArray(sData.values) || sData.values.length === 0) {
       console.warn(`Нет данных для переменной ${varName}`);
-      return;
+      continue;
     }
 
     let times = sensorTimes[dataKey] || null;
     const vs = varSettings.find(v => v.var === varName) || {};
     const baseLabel = vs.label || varName;
     const unit = vs.unit || '';
-
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
     const color = vs.color || defaultColor;
 
     let rawValues = sData.values.slice();
-
     const processingMode = vs.processing || 'none';
     let processedValues = (processingMode && processingMode !== 'none')
       ? applyProcessing(rawValues, processingMode)
       : null;
-
-    if (
-      processedValues &&
-      processedValues.length !== rawValues.length
-    ) {
+    if (processedValues && processedValues.length !== rawValues.length) {
       console.warn(`DSP изменил длину данных для ${varName}`);
       processedValues = null;
     }
@@ -114,18 +99,13 @@ export function drawCurrent() {
 
     const titleText = unit ? `${baseLabel} (${unit})` : baseLabel;
 
-    // === Применяем диапазон времени (если задан) ===
+    // применяем range если нужно
     if (rangeMs > 0 && Array.isArray(times) && times.length === rawValues.length) {
       const minAllowedTime = now - rangeMs;
-
       let startIdx = 0;
       for (let i = 0; i < times.length; i++) {
-        if (times[i] >= minAllowedTime) {
-          startIdx = i;
-          break;
-        }
+        if (times[i] >= minAllowedTime) { startIdx = i; break; }
       }
-
       times = times.slice(startIdx);
       rawValues = rawValues.slice(startIdx);
       if (processedValues) processedValues = processedValues.slice(startIdx);
@@ -133,93 +113,80 @@ export function drawCurrent() {
 
     if (!rawValues.length && (!processedValues || !processedValues.length)) {
       console.warn(`Нет точек в выбранном диапазоне времени для ${varName}`);
-      return;
+      continue;
     }
 
-    const lastVal = rawValues.length
-      ? rawValues[rawValues.length - 1]
-      : NaN;
-
+    const lastVal = rawValues.length ? rawValues[rawValues.length - 1] : NaN;
     const alertClass = getAlertClass(vs, lastVal);
 
-    // ОБЩАЯ ОБЁРТКА
-    const wrapper = document.createElement('div');
-    wrapper.className = 'chart-wrapper';
-
-    // ЛЕВАЯ ПАНЕЛЬКА С ПОСЛЕДНИМ ЗНАЧЕНИЕМ
-    const valueCard = document.createElement('div');
-    valueCard.className = 'card';
-    valueCard.style.width = '160px';
-    valueCard.style.padding = '10px';
-    valueCard.style.textAlign = 'center';
-    valueCard.style.display = 'flex';
-    valueCard.style.flexDirection = 'column';
-    valueCard.style.justifyContent = 'center';
-    valueCard.style.alignItems = 'center';
-
-    const valueTitle = document.createElement('div');
-    valueTitle.textContent = baseLabel;
-    valueTitle.style.fontWeight = 'bold';
-    valueTitle.style.marginBottom = '6px';
-
-    const valueText = document.createElement('div');
-    if (Number.isFinite(lastVal)) {
-      valueText.textContent = lastVal.toFixed(2) + (unit ? ' ' + unit : '');
-    } else {
-      valueText.textContent = 'нет данных';
-    }
-    valueText.style.fontSize = '18px';
-
-    valueCard.appendChild(valueTitle);
-    valueCard.appendChild(valueText);
-
-    if (alertClass) valueCard.classList.add(alertClass);
-
-    // ПРАВАЯ ЧАСТЬ — ГРАФИК
-    const chartContainer = document.createElement('div');
-    chartContainer.style.flex = '1 1 auto';
-    chartContainer.style.display = 'flex';
-    chartContainer.style.flexDirection = 'column';
-    chartContainer.style.gap = '5px';
-
-    const title = document.createElement('h3');
-    title.textContent = titleText;
-    chartContainer.appendChild(title);
-
-    // Обёртка с горизонтальной прокруткой для графика
-    const scrollWrapper = document.createElement('div');
-    scrollWrapper.style.overflowX = 'auto';
-    scrollWrapper.style.overflowY = 'hidden';
-    scrollWrapper.style.width = '100%';
-    scrollWrapper.style.paddingBottom = '6px';
-    scrollWrapper.style.cursor = 'grab';
-
+    // Имена элементов
     const canvasId = `chart_${sCfg.id}_${varName}`;
-    let canvas = document.getElementById(canvasId);
-    const pointsCount = Math.max(
-      rawValues?.length || 0,
-      processedValues?.length || 0
-    );
+    const wrapperId = `wrapper_${canvasId}`;
+    desiredWrapperIds.add(wrapperId);
 
-    let newlyCreated = false;
+    // Найдём существующий wrapper
+    let wrapper = document.getElementById(wrapperId);
+    let scrollWrapper, canvas, valueCard;
 
-    if (!canvas) {
-      // Создаём canvas только при его отсутствии (один раз)
+    if (!wrapper) {
+      // Создаём новый wrapper (только если его нет)
+      wrapper = document.createElement('div');
+      wrapper.className = 'chart-wrapper';
+      wrapper.id = wrapperId;
+
+      // valueCard
+      valueCard = document.createElement('div');
+      valueCard.className = 'card';
+      valueCard.style.width = '160px';
+      valueCard.style.padding = '10px';
+      valueCard.style.textAlign = 'center';
+      valueCard.style.display = 'flex';
+      valueCard.style.flexDirection = 'column';
+      valueCard.style.justifyContent = 'center';
+      valueCard.style.alignItems = 'center';
+
+      const valueTitle = document.createElement('div');
+      valueTitle.textContent = baseLabel;
+      valueTitle.style.fontWeight = 'bold';
+      valueTitle.style.marginBottom = '6px';
+
+      const valueText = document.createElement('div');
+      valueText.style.fontSize = '18px';
+      valueText.textContent = Number.isFinite(lastVal) ? (lastVal.toFixed(2) + (unit ? ' ' + unit : '')) : 'нет данных';
+
+      valueCard.appendChild(valueTitle);
+      valueCard.appendChild(valueText);
+      if (alertClass) valueCard.classList.add(alertClass);
+
+      // chartContainer + title + scrollWrapper + canvas
+      const chartContainer = document.createElement('div');
+      chartContainer.style.flex = '1 1 auto';
+      chartContainer.style.display = 'flex';
+      chartContainer.style.flexDirection = 'column';
+      chartContainer.style.gap = '5px';
+
+      const title = document.createElement('h3');
+      title.textContent = titleText;
+      chartContainer.appendChild(title);
+
+      scrollWrapper = document.createElement('div');
+      scrollWrapper.style.overflowX = 'auto';
+      scrollWrapper.style.overflowY = 'hidden';
+      scrollWrapper.style.width = '100%';
+      scrollWrapper.style.paddingBottom = '6px';
+      scrollWrapper.style.cursor = 'grab';
+
       canvas = document.createElement('canvas');
       canvas.id = canvasId;
       canvas.height = 220;
       canvas.style.display = 'block';
-      scrollWrapper.appendChild(canvas);
-      chartContainer.appendChild(scrollWrapper);
-      wrapper.appendChild(valueCard);
-      wrapper.appendChild(chartContainer);
-      container.appendChild(wrapper);
 
-      // Устанавливаем ширину исходя из количества точек (только при создании)
-      const w = Math.max(700, pointsCount * 8);
-      canvas.width = w;
+      // ширина по количеству точек (css/логическое значение)
+      const pointsCount = Math.max(rawValues?.length || 0, processedValues?.length || 0);
+      const desiredWidth = Math.min(CHART_MAX_CONTENT_PX, Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX));
+      canvas.width = desiredWidth;
 
-      // Добавляем слушатели один раз
+      // добавляем слушатели один раз
       canvas.addEventListener('wheel', (e) => {
         const dx = (Math.abs(e.deltaX) > 0) ? e.deltaX : e.deltaY;
         if (dx !== 0) {
@@ -228,112 +195,105 @@ export function drawCurrent() {
         }
       }, { passive: false });
 
-      // drag-to-pan
-      let isDragging = false;
-      let dragStartX = 0;
-      let startScrollLeft = 0;
+      // drag handlers
+      (function attachDrag(canvasEl, scrollEl) {
+        let isDragging = false;
+        let dragStartX = 0;
+        let startScrollLeft = 0;
 
-      canvas.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        scrollWrapper.style.cursor = 'grabbing';
-        dragStartX = e.clientX;
-        startScrollLeft = scrollWrapper.scrollLeft;
-        e.preventDefault();
-      });
+        canvasEl.addEventListener('mousedown', (e) => {
+          isDragging = true;
+          scrollEl.style.cursor = 'grabbing';
+          dragStartX = e.clientX;
+          startScrollLeft = scrollEl.scrollLeft;
+          e.preventDefault();
+        });
 
-      canvas.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        const dx = e.clientX - dragStartX;
-        scrollWrapper.scrollLeft = startScrollLeft - dx;
-      });
+        function onMove(e) {
+          if (!isDragging) return;
+          const dx = e.clientX - dragStartX;
+          scrollEl.scrollLeft = startScrollLeft - dx;
+        }
+        function stop() { isDragging = false; scrollEl.style.cursor = 'grab'; }
 
-      const stopDrag = () => {
-        isDragging = false;
-        scrollWrapper.style.cursor = 'grab';
-      };
+        canvasEl.addEventListener('mousemove', onMove);
+        canvasEl.addEventListener('mouseup', stop);
+        canvasEl.addEventListener('mouseleave', stop);
+      })(canvas, scrollWrapper);
 
-      canvas.addEventListener('mouseup', stopDrag);
-      canvas.addEventListener('mouseleave', stopDrag);
+      // собираем DOM
+      scrollWrapper.appendChild(canvas);
+      chartContainer.appendChild(scrollWrapper);
 
-      // флаги и состояния на элементе
-      canvas.dataset.prevPoints = String(pointsCount);
-      canvas.dataset.initialized = "true";
-      newlyCreated = true;
+      wrapper.appendChild(valueCard);
+      wrapper.appendChild(chartContainer);
+      container.appendChild(wrapper);
 
-      // при создании — пролистать в конец
+      // при создании пролистываем в конец
       requestAnimationFrame(() => {
         scrollWrapper.scrollLeft = Math.max(0, scrollWrapper.scrollWidth - scrollWrapper.clientWidth);
       });
 
-      // Рисуем
-      drawChart(canvas.id, showRaw ? rawValues : null, showProcessed ? processedValues : null, times, {
-        rawColor: RAW_COLOR,
-        processedColor: color,
-        ylabel: titleText
-      });
-
     } else {
-      // Canvas уже существ��ет — не пересоздаём DOM-элементы, просто обновляем масштаб и рисуем
-      // Сохраним текущее положение скролла и флаг, находится ли пользователь в конце
+      // Повторное использование wrapper: найдем элементы внутри
+      valueCard = wrapper.querySelector('.card');
+      scrollWrapper = wrapper.querySelector('div[style*="overflowX"]') || wrapper.querySelector('div');
+      canvas = document.getElementById(canvasId) || wrapper.querySelector('canvas');
+      // обновим текст последнего значения и alert класс
+      const valueText = valueCard ? valueCard.querySelector('div:nth-child(2)') : null;
+      if (valueText) {
+        valueText.textContent = Number.isFinite(lastVal) ? (lastVal.toFixed(2) + (unit ? ' ' + unit : '')) : 'нет данных';
+      }
+      if (valueCard) {
+        valueCard.classList.remove('blink-blue','blink-yellow','blink-red');
+        if (alertClass) valueCard.classList.add(alertClass);
+      }
+    }
+
+    // Перерисовка: изменяем только ширину canvas при необходимости, аккуратно работая с прокруткой
+    if (canvas) {
+      const pointsCountNow = Math.max(rawValues?.length || 0, processedValues?.length || 0);
+      const desiredWidth = Math.min(CHART_MAX_CONTENT_PX, Math.max(CHART_MIN_CANVAS_PX, pointsCountNow * CHART_POINT_PX));
+
+      // определяем, находится ли пользователь в конце
       const atEnd = scrollWrapper ? (Math.abs(scrollWrapper.scrollLeft - (scrollWrapper.scrollWidth - scrollWrapper.clientWidth)) <= 2) : true;
-      // Найдём существующий scrollWrapper (предполагаем, что canvas уже внутри соответствующей обёртки)
-      let existingScroll = canvas.parentElement;
-      while (existingScroll && existingScroll !== document.body && !existingScroll.style) {
-        existingScroll = existingScroll.parentElement;
-      }
-      // Если parent есть и это контейнер с overflow, используем его
-      if (canvas.parentElement && canvas.parentElement.style && canvas.parentElement.style.overflowX) {
-        existingScroll = canvas.parentElement;
-      } else {
-        // fallback: ис��ользуем созданный scrollWrapper (там, где canvas находится)
-        existingScroll = canvas.parentElement;
-      }
+      const prevScrollWidth = scrollWrapper ? scrollWrapper.scrollWidth : 0;
+      const prevScrollLeft = scrollWrapper ? scrollWrapper.scrollLeft : 0;
 
-      // Если нужно — пересчитать ширину canvas
-      const desiredWidth = Math.max(700, pointsCount * 8);
       if (canvas.width !== desiredWidth) {
-        // не трогаем scrollLeft, запомним соотношение и восстановим если пользователь был в конце
-        const prevScrollLeft = existingScroll ? existingScroll.scrollLeft : 0;
-        const prevScrollWidth = existingScroll ? existingScroll.scrollWidth : 0;
-
         canvas.width = desiredWidth;
-
-        // Если пользователь был в конце — пролистать в конец; иначе сохранить позицию (по абсолютным пикселям)
-        if (existingScroll) {
+        // корретно восстанавливаем позицию
+        if (scrollWrapper) {
           if (atEnd) {
             requestAnimationFrame(() => {
-              existingScroll.scrollLeft = Math.max(0, existingScroll.scrollWidth - existingScroll.clientWidth);
+              scrollWrapper.scrollLeft = Math.max(0, scrollWrapper.scrollWidth - scrollWrapper.clientWidth);
             });
           } else {
-            // Попытка сохранить ту же абсолютную позицию в пикселях
-            const deltaW = existingScroll.scrollWidth - prevScrollWidth;
-            existingScroll.scrollLeft = Math.max(0, prevScrollLeft + deltaW);
+            const delta = (scrollWrapper.scrollWidth - prevScrollWidth);
+            scrollWrapper.scrollLeft = Math.max(0, prevScrollLeft + delta);
           }
         }
       }
 
-      // Обновим prevPoints
-      canvas.dataset.prevPoints = String(pointsCount);
-
-      // Рисуем на существующем canvas
+      // Наконец, рисуем данные на canvas (drawChart умеет работать с id)
       drawChart(canvas.id, showRaw ? rawValues : null, showProcessed ? processedValues : null, times, {
         rawColor: RAW_COLOR,
         processedColor: color,
         ylabel: titleText
       });
-      // Вставим wrapper/контейнер, если ещё не вставлен (маловероятно)
-      if (!canvas.parentElement || canvas.parentElement !== scrollWrapper) {
-        scrollWrapper.appendChild(canvas);
-        chartContainer.appendChild(scrollWrapper);
-        wrapper.appendChild(valueCard);
-        wrapper.appendChild(chartContainer);
-        container.appendChild(wrapper);
-      }
     }
+  } // конец цикла vars
 
-    // Если мы только что создали график, уже сделали scroll to end; иначе — ничего не делаем (чтобы не мешать пользователю)
-  });
-
+  // Удаляем лишние wrapper'ы, которых больше нет в vars (чтобы не накапливались)
+  const toRemove = [];
+  for (const child of Array.from(container.children)) {
+    if (child.id && child.id.startsWith('wrapper_chart_') && !desiredWrapperIds.has(child.id)) {
+      toRemove.push(child);
+    }
+  }
+  for (const r of toRemove) {
+    r.remove();
+  }
 }
 
 export function drawChart(id, rawData, processedData, times, options = {}) {
