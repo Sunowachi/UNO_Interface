@@ -1,5 +1,3 @@
-import com.sun.net.httpserver.HttpExchange;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -115,11 +113,6 @@ public class DataStore {
 
     /* ========== УПРАВЛЕНИЕ ЖИЗНЕННЫМ ЦИКЛОМ ========== */
 
-    // Остановка асинхронной записи в БД
-    static void shutdown() {
-        dbRunning = false;
-    }
-
     // Запуск фонового потока для записи в БД
     static void startDbWriter() {
         Thread t = new Thread(() -> {
@@ -170,52 +163,7 @@ public class DataStore {
         lastPostTs.entrySet().removeIf(e -> now - e.getValue() > SENSOR_TTL_MS * 3);
     }
 
-    // Очистка старых записей из базы данных
-    static void cleanupHistoryDb() {
-        long now = System.currentTimeMillis();
-        Connection c = null;
-        try {
-            c = Database.borrow();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM history WHERE ts < ?")) {
-                ps.setLong(1, now - 7L * 24 * 60 * 60 * 1000);
-                ps.executeUpdate();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            Database.release(c);
-        }
-    }
-
     /* ========== ОБРАБОТКА HTTP-ЗАПРОСОВ ========== */
-
-    // Получение списка всех сенсоров
-    static void handleSensors(HttpExchange ex) throws IOException {
-        Security.Session s = Security.getSession(ex);
-        if (s == null) {
-            HttpUtil.sendError(ex, 401, "unauthorized");
-            return;
-        }
-        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
-
-        List<SensorInfo> list = listSensors();
-        StringBuilder sb = new StringBuilder("[");
-        boolean first = true;
-
-        for (SensorInfo si : list) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("{")
-                    .append("\"id\":\"").append(si.id).append("\",")
-                    .append("\"status\":\"").append(si.status).append("\",")
-                    .append("\"lastSeen\":").append(si.lastSeen).append(",")
-                    .append("\"vars\":").append(varsToJson(si.vars))
-                    .append("}");
-        }
-        sb.append("]");
-        HttpUtil.sendJson(ex, sb.toString());
-    }
 
     // Обработка данных от сенсора
     static void handleSensorPost(byte[] bodyBytes, String sensorId) {
@@ -410,18 +358,6 @@ public class DataStore {
     }
 
     /* ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ========== */
-
-    private static String varsToJson(Set<String> vars) {
-        StringBuilder sb = new StringBuilder("[");
-        boolean first = true;
-        for (String v : vars) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("\"").append(v).append("\"");
-        }
-        sb.append("]");
-        return sb.toString();
-    }
 
     private static String pointsToJsonMap(Map<String, List<Point>> data) {
         StringBuilder sb = new StringBuilder("{");
