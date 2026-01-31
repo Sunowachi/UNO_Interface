@@ -7,16 +7,14 @@
 </head>
 
 <body>
-
-<!-- APP -->
+<!-- Основное приложение (скрыто до авторизации) -->
 <div id="appRoot" hidden>
     <div id="mainLayout">
-
         <h1>Показания датчиков</h1>
         <p id="timer"><b>Время работы:</b> 0 сек</p>
 
         <div class="row">
-
+            <!-- Область графиков -->
             <div class="charts-area">
                 <h2>Графики датчика</h2>
 
@@ -25,23 +23,21 @@
                         Дни<br>
                         <input id="timeDays" type="number" min="0" class="time-input">
                     </label>
-
                     <label>
                         Часы<br>
                         <input id="timeHours" type="number" min="0" class="time-input">
                     </label>
-
                     <label>
                         Минуты<br>
                         <input id="timeMinutes" type="number" min="0" class="time-input">
                     </label>
-
                     <button id="applyTimeRangeBtn" class="btn">Применить</button>
                 </div>
 
                 <div id="chartsContainer" class="charts-container"></div>
             </div>
 
+            <!-- Панель управления датчиками -->
             <div class="card" id="sensorPanel">
                 <h3>Датчики</h3>
                 <ul id="sensorList" class="list-reset"></ul>
@@ -49,69 +45,72 @@
                     ➕ Добавить датчик
                 </button>
             </div>
-
-            <div id="editModalBackdrop" class="modal-backdrop">
-                <div class="modal">
-                    <h3>Редактирование датчика</h3>
-
-                    <label>
-                        ID датчика:<br>
-                        <input id="sensorId" class="input-full">
-                    </label>
-
-                    <br><br>
-
-                    <label>
-                        Название датчика:<br>
-                        <input id="sensorName" class="input-full">
-                    </label>
-
-                    <br><br>
-
-                    <label>
-                        Переменные (через запятую):<br>
-                        <input id="sensorVars" class="input-full">
-                    </label>
-
-                    <div id="varSettingsBlock" class="margin-top">
-                        <h4>Настройки переменных</h4>
-                        <div id="varSettingsContainer" class="var-settings-container"></div>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button id="deleteSensorBtn" class="btn btn-danger margin-right-auto">
-                            Удалить
-                        </button>
-                        <button id="cancelSensorBtn" class="btn">Отмена</button>
-                        <button id="saveSensorBtn" class="btn btn-primary">Сохранить</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="cancelConfirmBackdrop" class="modal-backdrop">
-                <div class="modal">
-                    <h3>Отменить изменения?</h3>
-                    <p>Изменения не будут сохранены.</p>
-                    <div class="modal-footer">
-                        <button id="cancelConfirmBackBtn" class="btn">Вернуться</button>
-                        <button id="cancelConfirmOkBtn" class="btn btn-danger">
-                            Подтвердить
-                        </button>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
+        <!-- Панель списка устройств -->
         <div id="devicePanel" class="device-panel">
             <h3>Список устройств</h3>
             <ul id="deviceList" class="list-reset"></ul>
         </div>
-
     </div>
 </div>
 
-<!-- LOGIN -->
+<!-- Модальные окна -->
+
+<!-- Модальное окно редактирования датчика -->
+<div id="editModalBackdrop" class="modal-backdrop">
+    <div class="modal">
+        <h3>Редактирование датчика</h3>
+
+        <label>
+            ID датчика:<br>
+            <input id="sensorId" class="input-full">
+        </label>
+
+        <br><br>
+
+        <label>
+            Название датчика:<br>
+            <input id="sensorName" class="input-full">
+        </label>
+
+        <br><br>
+
+        <label>
+            Переменные (через запятую):<br>
+            <input id="sensorVars" class="input-full">
+        </label>
+
+        <div id="varSettingsBlock" class="margin-top">
+            <h4>Настройки переменных</h4>
+            <div id="varSettingsContainer" class="var-settings-container"></div>
+        </div>
+
+        <div class="modal-footer">
+            <button id="deleteSensorBtn" class="btn btn-danger margin-right-auto">
+                Удалить
+            </button>
+            <button id="cancelSensorBtn" class="btn">Отмена</button>
+            <button id="saveSensorBtn" class="btn btn-primary">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения отмены -->
+<div id="cancelConfirmBackdrop" class="modal-backdrop">
+    <div class="modal">
+        <h3>Отменить изменения?</h3>
+        <p>Изменения не будут сохранены.</p>
+        <div class="modal-footer">
+            <button id="cancelConfirmBackBtn" class="btn">Вернуться</button>
+            <button id="cancelConfirmOkBtn" class="btn btn-danger">
+                Подтвердить
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Окно авторизации -->
 <div id="loginModal" class="login-backdrop">
     <div class="login-box">
         <h2>Вход</h2>

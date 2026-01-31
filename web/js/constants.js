@@ -1,19 +1,6 @@
-console.log('constant.js загружен');
+/* ========== КОНСТАНТЫ НАСТРОЕК ========== */
 
-export let allSensors = {};
-export let currentSensor = null;
-export let serverStart = 0;
-export let config = { sensors: [] };
-export let editingId = null;
-export let sensorTimes = {};
-export let csrfToken = null;
-
-export let timeRange = {
-  days: 0,
-  hours: 0,
-  minutes: 1
-};
-
+// Цвета для графиков
 export let COLOR_CHOICES = [
   { name: 'Красный',   value: '#ff0000' },
   { name: 'Синий',     value: '#0000ff' },
@@ -21,6 +8,7 @@ export let COLOR_CHOICES = [
   { name: 'Зелёный',   value: '#008000' }
 ];
 
+// Единицы измерения
 export let UNIT_CATEGORIES = {
   "Температура": [
     { name: "°C", value: "°C" },
@@ -54,6 +42,7 @@ export let UNIT_CATEGORIES = {
   ]
 };
 
+// Режимы обработки данных
 export let PROCESSING_MODES = [
   { value: 'none',        label: 'Без обработки (RAW)' },
   { value: 'moving_avg',  label: 'Скользящее среднее' },
@@ -61,6 +50,7 @@ export let PROCESSING_MODES = [
   { value: 'diff',        label: 'Производная (Δ)' }
 ];
 
+// Метки режимов обработки
 export let PROCESSING_LABELS = {
   'none':       'Без обработки (RAW)',
   'moving_avg': 'Скользящее среднее',
@@ -68,6 +58,7 @@ export let PROCESSING_LABELS = {
   'diff':       'Производная (Δ)'
 };
 
+// Приоритеты предупреждений
 export let ALERT_PRIORITY = {
   null: 0,
   'blink-blue': 1,
@@ -75,6 +66,22 @@ export let ALERT_PRIORITY = {
   'blink-red': 3
 };
 
+// Настройки временного диапазона
+export let timeRange = {
+  days: 0,
+  hours: 0,
+  minutes: 1
+};
+
+// Настройки графиков
+export const CHART_POINT_PX = 2;
+export const CHART_MIN_CANVAS_PX = 1275;
+export const CHART_MAX_CANVAS_PX = 2400;
+export const CHART_MAX_CONTENT_PX = 12000;
+
+/* ========== СИСТЕМА РОЛЕЙ И ПРАВ ========== */
+
+// Разрешения
 export const PERMISSIONS = Object.freeze({
   VIEW_DATA:       'view_data',
   VIEW_CHARTS:     'view_charts',
@@ -85,6 +92,7 @@ export const PERMISSIONS = Object.freeze({
   DEV_ALL:         'dev_all'
 });
 
+// Роли пользователей
 export const ROLES = Object.freeze({
   DEVELOPER: 'developer',
   ADMIN:     'admin',
@@ -92,11 +100,9 @@ export const ROLES = Object.freeze({
   OBSERVER:  'observer'
 });
 
+// Сопоставление ролей с разрешениями
 export const ROLE_PERMISSIONS = Object.freeze({
-  [ROLES.DEVELOPER]: new Set([
-    PERMISSIONS.DEV_ALL
-  ]),
-
+  [ROLES.DEVELOPER]: new Set([PERMISSIONS.DEV_ALL]),
   [ROLES.ADMIN]: new Set([
     PERMISSIONS.VIEW_DATA,
     PERMISSIONS.VIEW_CHARTS,
@@ -105,50 +111,60 @@ export const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.EXPORT_DATA,
     PERMISSIONS.ADMIN_DB
   ]),
-
-  [ROLES.WORKER]: new Set([
-    PERMISSIONS.VIEW_DATA,
-    PERMISSIONS.VIEW_CHARTS
-  ]),
-
-  [ROLES.OBSERVER]: new Set([
-    PERMISSIONS.VIEW_DATA
-  ])
+  [ROLES.WORKER]: new Set([PERMISSIONS.VIEW_DATA, PERMISSIONS.VIEW_CHARTS]),
+  [ROLES.OBSERVER]: new Set([PERMISSIONS.VIEW_DATA])
 });
 
-export let currentUser = null;
+/* ========== СОСТОЯНИЕ ПРИЛОЖЕНИЯ ========== */
 
+// Пользователь и аутентификация
+export let currentUser = null;
+export let csrfToken = null;
+
+// Данные сенсоров
+export let allSensors = {};
+export let sensorTimes = {};
+export let currentSensor = null;
+export let editingId = null;
+
+// Конфигурация
+export let config = { sensors: [] };
+
+// Время работы сервера
+export let serverStart = 0;
+
+// Состояние графиков
+export let chartScroll = {};
+export let chartFollow = {};
+
+/* ========== ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ СОСТОЯНИЕМ ========== */
+
+// Установка текущего пользователя
 export function setCurrentUser(user) {
   currentUser = user;
 }
 
+// Установка CSRF-токена
 export function setCsrfToken(token) {
   csrfToken = token;
 }
 
+// Установка времени старта сервера
 export function setServerStart(value) {
   serverStart = value;
 }
 
+// Установка данных всех сенсоров
 export function setAllSensors(value) {
   allSensors = value;
 }
 
+// Установка конфигурации приложения
 export function setConfig(value) {
   config = value;
 }
 
+// Установка текущего выбранного сенсора
 export function setCurrentSensor(value) {
   currentSensor = value;
 }
-
-export let chartScroll = {};
-
-export let chartFollow = {};
-
-export const CHART_POINT_PX = 2;
-
-export const CHART_MIN_CANVAS_PX = 1275;
-export const CHART_MAX_CANVAS_PX = 2400;
-
-export const CHART_MAX_CONTENT_PX = 12000;

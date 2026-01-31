@@ -1,5 +1,3 @@
-console.log('main.js загружен');
-
 import { initSession } from './session.js';
 import { init } from './api.js';
 import {
@@ -9,6 +7,7 @@ import {
   openLoginModal
 } from './ui.js';
 
+// Инициализация приложения после загрузки DOM
 document.addEventListener('DOMContentLoaded', async () => {
   hideApp();
   setupButtonHandlers();

@@ -1,5 +1,4 @@
 import com.sun.net.httpserver.HttpExchange;
-
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.io.IOException;
@@ -12,41 +11,27 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Security {
-
-    /* ================= CONFIG ================= */
+    // ================= КОНФИГУРАЦИЯ =================
 
     static final long SESSION_TIMEOUT_MS = 10 * 60 * 1000;
     static final long MAX_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
     static final int MAX_SESSIONS = 1000;
-
     static final int ITERATIONS = 120_000;
     static final int KEY_LENGTH = 256;
     static final int MAX_PASSWORD_LENGTH = 256;
 
-    static final String SENSOR_REGISTER_KEY =
-            System.getenv("SENSOR_REGISTER_KEY") != null
-                    ? System.getenv("SENSOR_REGISTER_KEY").trim()
-                    : null;
+    static final String SENSOR_REGISTER_KEY = System.getenv("SENSOR_REGISTER_KEY");
 
     static {
         if (SENSOR_REGISTER_KEY == null || SENSOR_REGISTER_KEY.isEmpty()) {
-            throw new IllegalStateException(
-                    "SENSOR_REGISTER_KEY must be set via environment variable"
-            );
+            throw new IllegalStateException("SENSOR_REGISTER_KEY must be set via environment variable");
         }
     }
-
-    /* ===== SENSOR LIMITS ===== */
 
     static final int MAX_SENSORS_TOTAL = 10_000;
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
 
-    /* ================= PERMISSIONS ================= */
-
-    enum Permission {
-        VIEW_DATA,
-        EDIT_CONFIG
-    }
+    enum Permission { VIEW_DATA, EDIT_CONFIG }
 
     static final Map<String, Set<Permission>> ROLE_PERMS = Map.of(
             "developer", EnumSet.allOf(Permission.class),
@@ -55,47 +40,40 @@ public class Security {
             "worker", EnumSet.of(Permission.VIEW_DATA)
     );
 
-    /* ================= SENSOR SECURITY ================= */
+    // ================= ОБРАБОТКА ДАТЧИКОВ =================
 
+    // Хэширование токена датчика
     static String hashToken(String token) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return Base64.getEncoder().encodeToString(
-                    md.digest(token.getBytes(StandardCharsets.UTF_8))
-            );
+            return Base64.getEncoder().encodeToString(md.digest(token.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
+    // Валидация токена датчика
     static boolean validateSensorToken(String id, String token, InetSocketAddress remote) {
-
         if (id == null || token == null) return false;
 
         Connection c = null;
         try {
             c = Database.borrow();
-
             String storedHash;
             long lastSeen;
             String regIp;
 
-            try (PreparedStatement ps = c.prepareStatement("""
-                    SELECT token_hash, last_seen, register_ip
-                    FROM sensors WHERE sensor_id=?
-                    """)) {
-
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT token_hash, last_seen, register_ip FROM sensors WHERE sensor_id=?")) {
                 ps.setString(1, id);
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) return false;
-
                 storedHash = rs.getString(1);
                 lastSeen = rs.getLong(2);
                 regIp = rs.getString(3);
             }
 
             String incomingHash = hashToken(token);
-
             if (!MessageDigest.isEqual(
                     Base64.getDecoder().decode(storedHash),
                     Base64.getDecoder().decode(incomingHash))) {
@@ -109,14 +87,10 @@ public class Security {
             }
 
             long now = System.currentTimeMillis();
-
-            if (now <= lastSeen || now - lastSeen < 100) {
-                return false;
-            }
+            if (now <= lastSeen || now - lastSeen < 100) return false;
 
             try (PreparedStatement ps = c.prepareStatement(
                     "UPDATE sensors SET last_seen=? WHERE sensor_id=? AND last_seen=?")) {
-
                 ps.setLong(1, now);
                 ps.setString(2, id);
                 ps.setLong(3, lastSeen);
@@ -124,7 +98,6 @@ public class Security {
             }
 
             return true;
-
         } catch (Exception e) {
             Audit.log(id, "SENSOR_AUTH_FAIL", remote.toString());
             return false;
@@ -133,6 +106,7 @@ public class Security {
         }
     }
 
+    // Проверка ключа регистрации датчика
     static boolean checkSensorRegisterKey(String key) {
         if (key == null) return false;
         return MessageDigest.isEqual(
@@ -141,44 +115,33 @@ public class Security {
         );
     }
 
+    // Регистрация нового датчика
     static String registerSensor(String sensorId, String ip) {
-
-        if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty())
-            return null;
+        if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty()) return null;
 
         Connection c = null;
         try {
             c = Database.borrow();
 
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT COUNT(*) FROM sensors")) {
+            try (PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM sensors")) {
                 ResultSet rs = ps.executeQuery();
-                if (rs.next() && rs.getInt(1) >= MAX_SENSORS_TOTAL)
-                    return null;
+                if (rs.next() && rs.getInt(1) >= MAX_SENSORS_TOTAL) return null;
             }
 
-            try (PreparedStatement ps = c.prepareStatement("""
-                    SELECT COUNT(*) FROM sensors
-                    WHERE created_at > ? AND register_ip = ?
-                    """)) {
-
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT COUNT(*) FROM sensors WHERE created_at > ? AND register_ip = ?")) {
                 ps.setLong(1, System.currentTimeMillis() - 3_600_000);
                 ps.setString(2, ip);
                 ResultSet rs = ps.executeQuery();
-                if (rs.next() && rs.getInt(1) >= MAX_SENSOR_REG_PER_IP_PER_HOUR)
-                    return null;
+                if (rs.next() && rs.getInt(1) >= MAX_SENSOR_REG_PER_IP_PER_HOUR) return null;
             }
 
             String token = UUID.randomUUID().toString().replace("-", "");
             String hash = hashToken(token);
             long now = System.currentTimeMillis();
 
-            try (PreparedStatement ps = c.prepareStatement("""
-                    INSERT INTO sensors
-                    (sensor_id, token_hash, created_at, last_seen, register_ip)
-                    VALUES (?,?,?,?,?)
-                    """)) {
-
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO sensors (sensor_id, token_hash, created_at, last_seen, register_ip) VALUES (?,?,?,?,?)")) {
                 ps.setString(1, sensorId);
                 ps.setString(2, hash);
                 ps.setLong(3, now);
@@ -188,11 +151,8 @@ public class Security {
             }
 
             return token;
-
         } catch (SQLException e) {
-            if ("23505".equals(e.getSQLState())) {
-                return null;
-            }
+            if ("23505".equals(e.getSQLState())) return null;
             Audit.log(sensorId, "SENSOR_REGISTER_FAIL", ip);
             return null;
         } finally {
@@ -200,13 +160,12 @@ public class Security {
         }
     }
 
-    /* ================= SESSION ================= */
+    // ================= УПРАВЛЕНИЕ СЕССИЯМИ =================
 
     static class Session {
         final String username;
         final String role;
         final long createdAt;
-
         volatile long lastActive;
         volatile long lastPing;
         final String csrf;
@@ -225,17 +184,18 @@ public class Security {
 
         boolean expired() {
             long now = System.currentTimeMillis();
-            return now - lastActive > SESSION_TIMEOUT_MS ||
-                    now - createdAt > MAX_SESSION_LIFETIME_MS;
+            return now - lastActive > SESSION_TIMEOUT_MS || now - createdAt > MAX_SESSION_LIFETIME_MS;
         }
     }
 
     static final Map<String, Session> sessions = new ConcurrentHashMap<>();
 
+    // Очистка просроченных сессий
     static void cleanupSessions() {
         sessions.entrySet().removeIf(e -> e.getValue().expired());
     }
 
+    // Получение сессии по HTTP-запросу
     static Session getSession(HttpExchange ex) {
         cleanupSessions();
         String sid = HttpUtil.getCookie(ex, "SESSION");
@@ -247,15 +207,18 @@ public class Security {
             Audit.log("-", "SESSION_MISS", ex.getRemoteAddress().toString() + " sid=" + sidPreview);
             return null;
         }
+
         if (s.expired()) {
             sessions.remove(sid);
             Audit.log(s.username, "SESSION_EXPIRED", ex.getRemoteAddress().toString());
             return null;
         }
+
         s.touch();
         return s;
     }
 
+    // Проверка CSRF-токена
     static boolean checkCsrf(HttpExchange ex, Session s) throws IOException {
         String method = ex.getRequestMethod();
         if ("GET".equalsIgnoreCase(method)) return true;
@@ -268,21 +231,19 @@ public class Security {
         return true;
     }
 
+    // Проверка прав доступа
     static boolean require(Session s, HttpExchange ex, Permission p) throws IOException {
         if (!ROLE_PERMS.getOrDefault(s.role, Set.of()).contains(p)) {
             HttpUtil.sendError(ex, 403, "forbidden");
-            Audit.log(
-                    s.username,
-                    "ACCESS_DENIED",
-                    ex.getRemoteAddress().getAddress().getHostAddress()
-            );
+            Audit.log(s.username, "ACCESS_DENIED", ex.getRemoteAddress().getAddress().getHostAddress());
             return false;
         }
         return true;
     }
 
-    /* ================= PASSWORDS ================= */
+    // ================= УПРАВЛЕНИЕ ПАРОЛЯМИ =================
 
+    // Хэширование пароля
     static String hashPassword(String password) {
         if (password == null || password.length() > MAX_PASSWORD_LENGTH)
             throw new IllegalArgumentException("bad password");
@@ -305,12 +266,12 @@ public class Security {
 
             return Base64.getEncoder().encodeToString(salt) + ":" +
                     Base64.getEncoder().encodeToString(hash);
-
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
+    // Проверка пароля
     static boolean checkPassword(String password, String stored) {
         try {
             if (password == null || stored == null) return false;
@@ -335,7 +296,6 @@ public class Security {
                     .getEncoded();
 
             return MessageDigest.isEqual(hash, test);
-
         } catch (Exception e) {
             return false;
         }
@@ -345,15 +305,15 @@ public class Security {
         Database.ensureDefaultDeveloper();
     }
 
-    /* ================= FAILED LOGIN ================= */
+    // ================= УЧЕТ НЕУДАЧНЫХ ПОПЫТОК ВХОДА =================
 
+    // Проверка блокировки пользователя по IP
     static boolean isBlocked(String user, String ip) {
         Connection c = null;
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT blocked_until FROM failed_logins WHERE username=? AND ip=?")) {
-
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ResultSet rs = ps.executeQuery();
@@ -366,32 +326,20 @@ public class Security {
         }
     }
 
+    // Запись неудачной попытки входа
     static void recordFailedLogin(String user, String ip) {
-
         long now = System.currentTimeMillis();
-
         Connection c = null;
+
         try {
             c = Database.borrow();
-
-            try (PreparedStatement ps = c.prepareStatement("""
-                INSERT INTO failed_logins(username,ip,count,last_fail,blocked_until)
-                VALUES (?,?,?,?,0)
-                ON CONFLICT (username,ip)
-                DO UPDATE SET
-                    count = CASE
-                        WHEN failed_logins.blocked_until < ?
-                        THEN 1
-                        ELSE failed_logins.count + 1
-                    END,
-                    last_fail = EXCLUDED.last_fail,
-                    blocked_until = CASE
-                        WHEN failed_logins.count + 1 >= 5
-                        THEN ?
-                        ELSE failed_logins.blocked_until
-                    END
-            """)) {
-
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO failed_logins(username,ip,count,last_fail,blocked_until) " +
+                            "VALUES (?,?,?,?,0) " +
+                            "ON CONFLICT (username,ip) DO UPDATE SET " +
+                            "count = CASE WHEN failed_logins.blocked_until < ? THEN 1 ELSE failed_logins.count + 1 END, " +
+                            "last_fail = EXCLUDED.last_fail, " +
+                            "blocked_until = CASE WHEN failed_logins.count + 1 >= 5 THEN ? ELSE failed_logins.blocked_until END")) {
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ps.setInt(3, 1);
@@ -400,7 +348,6 @@ public class Security {
                 ps.setLong(6, now + 60_000);
                 ps.executeUpdate();
             }
-
         } catch (Exception e) {
             Audit.log(user, "FAILED_LOGIN_RECORD_FAIL", ip);
         } finally {
@@ -408,13 +355,13 @@ public class Security {
         }
     }
 
+    // Очистка записей о неудачных попытках входа
     static void clearFailedLogins(String user, String ip) {
         Connection c = null;
         try {
             c = Database.borrow();
             try (PreparedStatement ps = c.prepareStatement(
                     "DELETE FROM failed_logins WHERE username=? AND ip=?")) {
-
                 ps.setString(1, user);
                 ps.setString(2, ip);
                 ps.executeUpdate();
@@ -426,10 +373,10 @@ public class Security {
         }
     }
 
-    /* ================= LOGIN / AUTH ================= */
+    // ================= ОБРАБОТЧИКИ HTTP-ЗАПРОСОВ =================
 
+    // Обработка входа пользователя
     static void handleLogin(HttpExchange ex) throws IOException {
-
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -451,7 +398,6 @@ public class Security {
         }
 
         String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-
         if (isBlocked(user, ip)) {
             HttpUtil.sendError(ex, 403, "blocked");
             return;
@@ -459,7 +405,6 @@ public class Security {
 
         var dbUser = Database.findUser(user);
         if (dbUser == null || !checkPassword(pass, dbUser.passwordHash)) {
-
             recordFailedLogin(user, ip);
             Audit.log(user, "LOGIN_FAIL", ip);
             HttpUtil.sendError(ex, 401, "invalid_login");
@@ -467,18 +412,16 @@ public class Security {
         }
 
         clearFailedLogins(user, ip);
-
         String sid = UUID.randomUUID().toString();
         sessions.put(sid, new Session(user, dbUser.role));
         HttpUtil.setCookie(ex, "SESSION", sid);
 
-        HttpUtil.sendJson(ex,
-                "{\"status\":\"ok\",\"username\":\"" + user +
-                        "\",\"role\":\"" + dbUser.role + "\"}");
-
+        HttpUtil.sendJson(ex, "{\"status\":\"ok\",\"username\":\"" + user +
+                "\",\"role\":\"" + dbUser.role + "\"}");
         Audit.log(user, "LOGIN_SUCCESS", ip);
     }
 
+    // Обработка выхода пользователя
     static void handleLogout(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
@@ -490,6 +433,7 @@ public class Security {
         HttpUtil.sendJson(ex, "{\"status\":\"logged_out\"}");
     }
 
+    // Получение информации о текущей сессии
     static void handleAuthMe(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
         if (s == null) {
@@ -497,12 +441,12 @@ public class Security {
             return;
         }
 
-        HttpUtil.sendJson(ex,
-                "{\"username\":\"" + s.username +
-                        "\",\"role\":\"" + s.role +
-                        "\",\"csrf\":\"" + s.csrf + "\"}");
+        HttpUtil.sendJson(ex, "{\"username\":\"" + s.username +
+                "\",\"role\":\"" + s.role +
+                "\",\"csrf\":\"" + s.csrf + "\"}");
     }
 
+    // Пинг для поддержания сессии
     static void handleAuthPing(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
@@ -517,8 +461,7 @@ public class Security {
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
-    /* ================= CONFIG ================= */
-
+    // Загрузка конфигурации
     static void handleConfigLoad(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;
@@ -526,6 +469,7 @@ public class Security {
         HttpUtil.sendConfig(ex);
     }
 
+    // Сохранение конфигурации
     static void handleConfigSave(HttpExchange ex) throws IOException {
         Session s = getSession(ex);
         if (s == null || !checkCsrf(ex, s)) return;

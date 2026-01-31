@@ -1,57 +1,44 @@
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.*;
 
 public class Web {
-
     private static final int PORT = 8181;
-    private static final int MAX_BODY_SIZE = 64 * 1024; // 64 KB
+    private static final int MAX_BODY_SIZE = 64 * 1024;
     private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(50);
-
     public static final long SERVER_START = System.currentTimeMillis();
 
+    // ================= МЕТОДЫ ИНИЦИАЛИЗАЦИИ =================
+
     public static void main(String[] args) throws IOException {
-
-        /* ===== INIT CORE ===== */
-
         Database.init();
         Security.ensureDefaultDeveloper();
-
         DataStore.warmupCacheFromDb();
         DataStore.startDbWriter();
 
-        /* ===== HTTP SERVER ===== */
-
         HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 50);
 
+        // Регистрация обработчиков
         server.createContext("/data", Web::handleData);
         server.createContext("/init", Web::handleInit);
         server.createContext("/sensors", Web::handleSensors);
         server.createContext("/sensor/register", Web::handleSensorRegister);
-
         server.createContext("/config/load", Web::handleConfigLoad);
         server.createContext("/config/save", Web::handleConfigSave);
-
         server.createContext("/auth/login", Web::handleLogin);
         server.createContext("/auth/logout", Web::handleLogout);
         server.createContext("/auth/me", Web::handleAuthMe);
         server.createContext("/auth/ping", Web::handleAuthPing);
-
         server.createContext("/", Web::handleStatic);
 
-        server.setExecutor(Executors.newFixedThreadPool(100)); // основной HTTP-пул
+        server.setExecutor(Executors.newFixedThreadPool(100));
         server.start();
         System.out.println("✅ Server started: http://localhost:" + PORT);
 
-        /* ===== CACHE CLEANUP ===== */
-
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(DataStore::cleanupCache, 1, 1, TimeUnit.MINUTES);
-
-        /* ===== SHUTDOWN HOOK ===== */
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("⏹ Shutting down server...");
@@ -61,16 +48,16 @@ public class Web {
                 sensorExecutor.shutdownNow();
             } catch (Exception ignored) {}
             try {
-                Thread.sleep(1500); // дать дописать batch
+                Thread.sleep(1500);
             } catch (InterruptedException ignored) {}
             System.out.println("✔ Server stopped");
         }));
     }
 
-    /* ================= HANDLERS ================= */
+    // ================= ОБРАБОТЧИКИ ЗАПРОСОВ =================
 
+    // Обработчик инициализации приложения
     static void handleInit(HttpExchange ex) throws IOException {
-
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -85,19 +72,12 @@ public class Web {
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
         long rangeMs = HttpUtil.parseRange(ex);
-
-        HttpUtil.sendJson(
-                ex,
-                "{\"startTime\":" + SERVER_START +
-                        ",\"sensors\":" +
-                        DataStore.buildSensorsJson(rangeMs) + "}"
-        );
+        HttpUtil.sendJson(ex, "{\"startTime\":" + SERVER_START +
+                ",\"sensors\":" + DataStore.buildSensorsJson(rangeMs) + "}");
     }
 
-    /* ===== SENSOR DATA ===== */
-
+    // Обработчик данных от датчиков
     static void handleData(HttpExchange ex) throws IOException {
-
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -114,20 +94,15 @@ public class Web {
             return;
         }
 
-        String sensorId =
-                ex.getRequestHeaders().getFirst("X-Sensor-Id");
-        String token =
-                ex.getRequestHeaders().getFirst("X-Sensor-Token");
+        String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
+        String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
-        if (!Security.validateSensorToken(
-                sensorId, token, ex.getRemoteAddress()
-        )) {
+        if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
             HttpUtil.sendError(ex, 401, "invalid_sensor");
             return;
         }
 
         final byte[] body;
-
         try {
             body = ex.getRequestBody().readAllBytes();
         } catch (Exception e) {
@@ -136,7 +111,6 @@ public class Web {
         }
 
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
-
         sensorExecutor.submit(() -> {
             try {
                 DataStore.handleSensorPost(body, sensorId);
@@ -146,10 +120,8 @@ public class Web {
         });
     }
 
-    /* ==== SENSOR REGISTRATION ==== */
-
+    // Обработчик списка датчиков
     static void handleSensors(HttpExchange ex) throws IOException {
-
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
@@ -162,15 +134,11 @@ public class Web {
         }
 
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
-
-        HttpUtil.sendJson(
-                ex,
-                HttpUtil.toJson(DataStore.listSensors())
-        );
+        HttpUtil.sendJson(ex, HttpUtil.toJson(DataStore.listSensors()));
     }
 
+    // Обработчик регистрации датчиков
     static void handleSensorRegister(HttpExchange ex) throws IOException {
-
         try {
             if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
                 ex.sendResponseHeaders(405, -1);
@@ -184,7 +152,6 @@ public class Web {
             }
 
             var json = HttpUtil.parseJson(ex);
-
             String sensorId = json.get("sensorId");
             String key = json.get("key");
 
@@ -207,7 +174,6 @@ public class Web {
             }
 
             String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-
             String token = Security.registerSensor(sensorId, ip);
 
             if (token == null) {
@@ -216,18 +182,13 @@ public class Web {
             }
 
             Audit.log(sensorId, "SENSOR_REGISTER", ip);
-
-            HttpUtil.sendJson(
-                    ex,
-                    "{\"token\":\"" + token + "\"}"
-            );
-
+            HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
         } catch (Exception e) {
             HttpUtil.sendError(ex, 500, "internal_error");
         }
     }
 
-    /* ==== AUTH / CONFIG ==== */
+    // ================= ПРОКСИ-ОБРАБОТЧИКИ =================
 
     static void handleLogin(HttpExchange ex) throws IOException {
         Security.handleLogin(ex);

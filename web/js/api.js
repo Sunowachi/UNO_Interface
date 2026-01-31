@@ -1,5 +1,3 @@
-console.log('api.js загружен');
-
 import {
   config,
   currentSensor,
@@ -19,8 +17,9 @@ import {
 
 import { drawCurrent } from './charts.js';
 import { fetchData } from './utils.js';
-
 import { syncConfigInitial, loadConfig, syncNewSensors } from './sensors.js';
+
+/* ========== СОСТОЯНИЕ ПРИЛОЖЕНИЯ ========== */
 
 let fetchInterval = null;
 let timerInterval = null;
@@ -28,9 +27,12 @@ let uiInitialized = false;
 let initRunning = false;
 let appState = 'idle';
 
+/* ========== ФУНКЦИИ ОБНОВЛЕНИЯ ДАННЫХ ========== */
+
+// Основная функция обновления данных
 async function fetchAndRefresh() {
   try {
-    const changed = await fetchData();
+    await fetchData();
     await syncNewSensors();
     updateSensorPanel();
     drawCurrent();
@@ -40,8 +42,10 @@ async function fetchAndRefresh() {
   }
 }
 
-export async function init() {
+/* ========== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ========== */
 
+// Главная функция инициализации приложения
+export async function init() {
   if (appState !== 'idle') {
     console.warn('[init] пропущен, текущее состояние:', appState);
     return;
@@ -53,8 +57,8 @@ export async function init() {
 
   try {
     clearIntervals();
-
     console.log('init: запрос /init');
+
     const res = await fetch('/init', { credentials: 'include' });
 
     if (res.status === 401 || res.status === 403) {
@@ -69,8 +73,9 @@ export async function init() {
 
     const text = await res.text();
     let data;
-    try { data = JSON.parse(text); }
-    catch (e) {
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
       console.error('Ошибка парсинга JSON /init:', e);
       return;
     }
@@ -116,16 +121,25 @@ export async function init() {
     appState = 'ready';
 
   } catch (e) {
-      console.error('Ошибка в init:', e);
-      appState = 'idle';
-      throw e;
-    } finally {
-      initRunning = false;
-    }
+    console.error('Ошибка в init:', e);
+    appState = 'idle';
+    throw e;
+  } finally {
+    initRunning = false;
+  }
 }
 
+/* ========== ОЧИСТКА РЕСУРСОВ ========== */
+
+// Очистка всех интервалов и сброс состояния
 export function clearIntervals() {
   appState = 'idle';
-  if (fetchInterval) { clearInterval(fetchInterval); fetchInterval = null; }
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (fetchInterval) {
+    clearInterval(fetchInterval);
+    fetchInterval = null;
+  }
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
 }

@@ -1,5 +1,3 @@
-console.log('utils.js загружен');
-
 import {
   timeRange,
   ALERT_PRIORITY,
@@ -11,15 +9,18 @@ import {
   PERMISSIONS,
   csrfToken
 } from './constants.js';
-
 import { lockSession } from './session.js';
 import { syncNewSensors } from './sensors.js';
 import { updateSensorPanel, updateDevicePanel } from './ui.js';
 import { drawCurrent } from './charts.js';
 
+/* ========== КОНСТАНТЫ ========== */
 const MAX_POINTS = 5000;
 const DEFAULT_STEP_MS = 1000;
 
+/* ========== ПРОВЕРКИ ПРАВ ДОСТУПА И ВАЛИДАЦИИ ========== */
+
+// Проверка наличия разрешения у текущего пользователя
 export function hasPermission(permission) {
   if (!permission || !currentUser?.role) return false;
   const perms = ROLE_PERMISSIONS[currentUser.role];
@@ -28,9 +29,19 @@ export function hasPermission(permission) {
   return perms.has(permission);
 }
 
-function isValidVarName(v) { return typeof v === 'string' && /^[a-zA-Z0-9_]{1,32}$/.test(v); }
-function isValidSensorId(id) { return typeof id === 'string' && id.length > 0 && id.length <= 64; }
+// Валидация имени переменной
+function isValidVarName(v) {
+  return typeof v === 'string' && /^[a-zA-Z0-9_]{1,32}$/.test(v);
+}
 
+// Валидация ID датчика
+function isValidSensorId(id) {
+  return typeof id === 'string' && id.length > 0 && id.length <= 64;
+}
+
+/* ========== РАБОТА С ДАННЫМИ ========== */
+
+// Создание карты переменных по ID датчика
 export function buildIpVarMap() {
   const map = {};
   for (const key of Object.keys(allSensors || {})) {
@@ -46,6 +57,7 @@ export function buildIpVarMap() {
   return map;
 }
 
+// Вычисление временного диапазона в миллисекундах
 export function getSelectedTimeRangeMs() {
   const d = Number(timeRange.days) || 0;
   const h = Number(timeRange.hours) || 0;
@@ -54,6 +66,9 @@ export function getSelectedTimeRangeMs() {
   return totalMinutes * 60_000;
 }
 
+/* ========== ОБРАБОТКА ПРЕДУПРЕЖДЕНИЙ ========== */
+
+// Определение класса предупреждения на основе значения
 export function getAlertClass(vs, value) {
   if (!Number.isFinite(value) || !vs) return null;
   const low = Number(vs.lowLimit), warn = Number(vs.warnLimit), alarm = Number(vs.alarmLimit);
@@ -63,12 +78,16 @@ export function getAlertClass(vs, value) {
   return null;
 }
 
+// Выбор более приоритетного класса предупреждения
 export function pickHigherAlertClass(currentClass, newClass) {
   if (!newClass) return currentClass;
   if (!currentClass) return newClass;
   return ALERT_PRIORITY[newClass] > ALERT_PRIORITY[currentClass] ? newClass : currentClass;
 }
 
+/* ========== ЗАГРУЗКА ДАННЫХ ========== */
+
+// Загрузка данных с сервера с учетом выбранного временного диапазона
 export async function fetchData() {
   if (!csrfToken) {
     console.warn('[fetchData] CSRF-токен ещё не установлен, пропускаем fetch');
@@ -77,7 +96,6 @@ export async function fetchData() {
 
   try {
     const rangeMs = getSelectedTimeRangeMs();
-
     console.log('[fetchData] запрос /init?rangeMs=' + rangeMs);
     const res = await fetch('/init?rangeMs=' + encodeURIComponent(String(rangeMs)), {
       method: 'GET',
@@ -95,8 +113,9 @@ export async function fetchData() {
     const text = await res.text();
     let data;
 
-    try { data = JSON.parse(text); }
-    catch (e) {
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
       console.error('[fetchData] Ошибка парсинга JSON /init:', e);
       return;
     }
@@ -105,12 +124,17 @@ export async function fetchData() {
       console.error('[fetchData] Некорректный формат sensors:', data?.sensors);
       return;
     }
+
     const newAll = {};
     const newTimes = {};
     const sensors = data.sensors;
     let flatDetected = false;
+
     for (const k of Object.keys(sensors)) {
-      if (k.includes(':')) { flatDetected = true; break; }
+      if (k.includes(':')) {
+        flatDetected = true;
+        break;
+      }
     }
 
     if (flatDetected) {
@@ -142,14 +166,16 @@ export async function fetchData() {
         }
       }
     }
+
     setAllSensors(newAll);
     const allTimeKeys = Object.keys(sensorTimes);
     for (const key of allTimeKeys) {
-        delete sensorTimes[key];
+      delete sensorTimes[key];
     }
     for (const [key, times] of Object.entries(newTimes)) {
-        sensorTimes[key] = times.slice();
+      sensorTimes[key] = times.slice();
     }
+
     await syncNewSensors();
     updateSensorPanel();
     drawCurrent();
@@ -159,6 +185,9 @@ export async function fetchData() {
   }
 }
 
+/* ========== ФОРМАТИРОВАНИЕ ========== */
+
+// Форматирование времени в формат HH:MM:SS
 export function formatTimeHHMMSS(ms, useUTC = false) {
   const d = new Date(ms);
   const h = useUTC ? d.getUTCHours() : d.getHours();

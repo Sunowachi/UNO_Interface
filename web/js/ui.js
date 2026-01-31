@@ -1,5 +1,3 @@
-console.log('ui.js загружен');
-
 import {
   config,
   currentSensor,
@@ -16,7 +14,6 @@ import {
   currentUser,
   csrfToken
 } from './constants.js';
-
 import { initSession } from './session.js';
 import { init } from './api.js';
 import { drawCurrent, clearChart } from './charts.js';
@@ -26,6 +23,9 @@ import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData } from '.
 let editingId = null;
 let toastTimer = null;
 
+/* ========== УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ ========== */
+
+// Показать/скрыть основное приложение
 export function showApp() {
   if (!currentUser) return;
   const app = document.getElementById('appRoot');
@@ -33,12 +33,30 @@ export function showApp() {
 }
 
 export function hideApp() {
-    const app = document.getElementById('appRoot');
-    if (app) app.hidden = true;
+  const app = document.getElementById('appRoot');
+  if (app) app.hidden = true;
 }
 
-async function login(e) {
+// Применение разрешений к элементам интерфейса
+export function applyPermissions(role) {
+  const perms = ROLE_PERMISSIONS[role] || new Set();
+  const isDev = perms.has(PERMISSIONS.DEV_ALL);
 
+  const sensorPanel = document.getElementById('sensorPanel');
+  if (sensorPanel) {
+    sensorPanel.classList.toggle('hidden', !(isDev || perms.has(PERMISSIONS.VIEW_DATA)));
+  }
+
+  const addBtn = document.getElementById('addSensorBtn');
+  if (addBtn) {
+    addBtn.classList.toggle('hidden', !(isDev || perms.has(PERMISSIONS.EDIT_CONFIG)));
+  }
+}
+
+/* ========== АВТОРИЗАЦИЯ ========== */
+
+// Обработка входа пользователя
+async function login(e) {
   e?.preventDefault();
   setCurrentUser(null);
 
@@ -46,13 +64,13 @@ async function login(e) {
   const password = document.getElementById("loginPass").value;
 
   const res = await fetch('/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
-      },
-      body: JSON.stringify({ username, password }),
-      credentials: 'include'
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+    },
+    body: JSON.stringify({ username, password }),
+    credentials: 'include'
   });
 
   const data = await res.json();
@@ -74,11 +92,9 @@ async function login(e) {
     return;
   }
 
-  // Очищаем ошибку при успешном логине
   const errorEl = document.getElementById("loginError");
   if (errorEl) errorEl.textContent = '';
 
-  // После успешного логина инициализируем сессию и приложение
   closeLoginModal();
   try {
     await initSession();
@@ -91,10 +107,26 @@ async function login(e) {
   }
 }
 
-export function openLoginModal() {document.getElementById("loginModal").classList.add("show");}
+// Принудительный выход из системы
+export async function forceLogout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch {}
+  setCurrentUser(null);
+  hideApp();
+  openLoginModal();
+}
 
-export function closeLoginModal() {document.getElementById("loginModal").classList.remove("show");}
+// Управление модальным окном авторизации
+export function openLoginModal() {
+  document.getElementById("loginModal").classList.add("show");
+}
 
+export function closeLoginModal() {
+  document.getElementById("loginModal").classList.remove("show");
+}
+
+// Показать ошибку авторизации
 function showLoginError(message) {
   const errorEl = document.getElementById("loginError");
   if (errorEl) {
@@ -104,45 +136,12 @@ function showLoginError(message) {
   }
 }
 
-export function applyPermissions(role) {
-  const perms = ROLE_PERMISSIONS[role] || new Set();
-  const isDev = perms.has(PERMISSIONS.DEV_ALL);
+/* ========== НАСТРОЙКА ОБРАБОТЧИКОВ ========== */
 
-  const sensorPanel = document.getElementById('sensorPanel');
-  if (sensorPanel) {
-    sensorPanel.classList.toggle(
-      'hidden',
-      !(isDev || perms.has(PERMISSIONS.VIEW_DATA))
-    );
-  }
-
-  const addBtn = document.getElementById('addSensorBtn');
-  if (addBtn) {
-    addBtn.classList.toggle(
-      'hidden',
-      !(isDev || perms.has(PERMISSIONS.EDIT_CONFIG))
-    );
-  }
-}
-
-export async function forceLogout() {
-  try {
-    await fetch('/auth/logout', {
-      method: 'POST',
-      credentials: 'include'
-    });
-  } catch {}
-  setCurrentUser(null);
-  hideApp();
-  openLoginModal();
-}
-
-// ===== ПРИВЯЗКА КНОПОК
+// Настройка всех обработчиков событий
 export function setupButtonHandlers() {
   const loginBtn = document.getElementById('loginBtn');
-  if (loginBtn) {
-    loginBtn.addEventListener('click', login);
-  }
+  if (loginBtn) loginBtn.addEventListener('click', login);
 
   const addBtn = document.getElementById('addSensorBtn');
   const saveBtn = document.getElementById('saveSensorBtn');
@@ -169,6 +168,7 @@ export function setupButtonHandlers() {
   if (cancelBackBtn) cancelBackBtn.addEventListener('click', onCancelConfirmBack);
 }
 
+// Настройка элементов управления временным диапазоном
 export function setupTimeRangeControls() {
   const dInput = document.getElementById('timeDays');
   const hInput = document.getElementById('timeHours');
@@ -177,12 +177,11 @@ export function setupTimeRangeControls() {
 
   if (!dInput || !hInput || !mInput || !applyBtn) return;
 
-  // начальные значения
   dInput.value = timeRange.days;
   hInput.value = timeRange.hours;
   mInput.value = timeRange.minutes;
 
-  async function applyRange() { // СДЕЛАНО АСИНХРОННОЙ
+  async function applyRange() {
     const d = parseInt(dInput.value, 10);
     const h = parseInt(hInput.value, 10);
     const m = parseInt(mInput.value, 10);
@@ -196,39 +195,31 @@ export function setupTimeRangeControls() {
     timeRange.hours = isNaN(h) ? 0 : h;
     timeRange.minutes = isNaN(m) ? 0 : m;
 
-    // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Запрашиваем новые данные с сервера
-    // Показываем индикатор загрузки, если он есть
     const loadingIndicator = document.getElementById('chart-loading');
-    if (loadingIndicator) {
-      loadingIndicator.style.display = 'block';
-    }
+    if (loadingIndicator) loadingIndicator.style.display = 'block';
 
     try {
-      await fetchData(); // Вызываем функцию загрузки данных с новым диапазоном
-      // Функция fetchData сама обновит графики через drawCurrent()
+      await fetchData();
     } catch (error) {
       console.error('Ошибка при загрузке данных по новому диапазону:', error);
       alert('Не удалось загрузить данные за выбранный период.');
     } finally {
-      if (loadingIndicator) {
-        loadingIndicator.style.display = 'none';
-      }
+      if (loadingIndicator) loadingIndicator.style.display = 'none';
     }
   }
 
   applyBtn.addEventListener('click', applyRange);
 
-  // Enter на любом из трёх полей тоже применяет
   [dInput, hInput, mInput].forEach(inp => {
-    inp.addEventListener('keydown', async (e) => { // Обработчик тоже асинхронный
-      if (e.key === 'Enter') {
-        await applyRange();
-      }
+    inp.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') await applyRange();
     });
   });
 }
 
-// Обновление панели
+/* ========== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ========== */
+
+// Обновление панели списка датчиков
 export function updateSensorPanel() {
   const list = document.getElementById('sensorList');
   if (!list) return;
@@ -243,10 +234,8 @@ export function updateSensorPanel() {
     list.appendChild(li);
     setCurrentSensor(null);
 
-    // очищаем все графики динамически
     const chartsContainer = document.getElementById('chartsContainer');
     if (chartsContainer) chartsContainer.innerHTML = '';
-
     return;
   }
 
@@ -255,32 +244,25 @@ export function updateSensorPanel() {
     let sensorAlertClass = null;
 
     const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
-
-    // Нормализуем vars — поддерживаем либо строку с запятыми, либо массив
     const vars = Array.isArray(sCfg.vars)
       ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
       : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
     if (vars) {
       for (const v of vars) {
-        const sData =
-          allSensors[v] ||
-          allSensors[`${sCfg.id}:${v}`] ||
-          allSensors[`${sCfg.id}:${v.toLowerCase()}`];
+        const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
 
         if (sData && Array.isArray(sData.values)) {
           const arr = sData.values;
           if (arr.length > 0) {
             const lastVal = arr[arr.length - 1];
 
-            // заполняем текст только один раз — по первой найденной переменной
             if (lastTempText === 'нет данных' && Number.isFinite(lastVal)) {
               const vs = varSettings.find(x => x.var === v) || {};
               const unit = vs.unit || '';
               lastTempText = lastVal.toFixed(2) + (unit ? ' ' + unit : '');
             }
 
-            // считаем тревогу для этой переменной
             const vs = varSettings.find(x => x.var === v) || {};
             const varAlert = getAlertClass(vs, lastVal);
             sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
@@ -290,12 +272,7 @@ export function updateSensorPanel() {
     }
 
     const li = document.createElement('li');
-    li.style.cursor = 'pointer';
-    li.style.padding = '4px 4px';
-    li.style.borderBottom = '1px solid #eee';
-    li.style.display = 'flex';
-    li.style.alignItems = 'center';
-    li.style.gap = '4px';
+    li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
     const nameSpan = document.createElement('span');
     nameSpan.textContent = (sCfg.name || 'Датчик ' + (index + 1)) + ': ' + lastTempText;
@@ -306,16 +283,13 @@ export function updateSensorPanel() {
     if (canEdit) {
       const editBtn = document.createElement('button');
       editBtn.textContent = '✏️';
-      editBtn.style.border = 'none';
-      editBtn.style.background = 'transparent';
-      editBtn.style.cursor = 'pointer';
+      editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
       editBtn.title = 'Редактировать датчик';
 
       editBtn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         openEditModal(sCfg.id);
       });
-
       li.appendChild(editBtn);
     }
 
@@ -325,29 +299,25 @@ export function updateSensorPanel() {
       li.classList.add('sensor-selected');
     }
 
-    // применяем мигание к элементу датчика
     li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
-    if (sensorAlertClass) {
-      li.classList.add(sensorAlertClass);
-    }
+    if (sensorAlertClass) li.classList.add(sensorAlertClass);
 
     li.appendChild(nameSpan);
     list.appendChild(li);
   });
 }
 
+// Обновление панели списка устройств
 export function updateDevicePanel() {
   const deviceList = document.getElementById('deviceList');
   if (!deviceList) return;
 
-  deviceList.innerHTML = ''; // очищаем список
-
-  // Группируем переменные по sensorId (первая часть до двоеточия)
+  deviceList.innerHTML = '';
   const groupedBySensor = {};
 
   for (const key of Object.keys(allSensors)) {
     const idx = key.indexOf(':');
-    if (idx === -1) continue; // пропускаем ключи без двоеточия
+    if (idx === -1) continue;
     const sensorId = key.slice(0, idx);
     const variable = key.slice(idx + 1);
 
@@ -355,7 +325,6 @@ export function updateDevicePanel() {
     groupedBySensor[sensorId].push(variable);
   }
 
-  // Если нет активных устройств
   if (Object.keys(groupedBySensor).length === 0) {
     const li = document.createElement('li');
     li.textContent = 'Нет активных устройств';
@@ -364,7 +333,6 @@ export function updateDevicePanel() {
     return;
   }
 
-  // Отображаем результат
   for (const [sensorId, vars] of Object.entries(groupedBySensor)) {
     const li = document.createElement('li');
     li.style.padding = '4px 0';
@@ -373,23 +341,25 @@ export function updateDevicePanel() {
   }
 }
 
-// ===== МОДАЛКА РЕДАКТИРОВАНИЯ =====
+// Выбор датчика
+export function selectSensor(id) {
+  setCurrentSensor(id);
+  updateSensorPanel();
+  drawCurrent();
+}
+
+/* ========== УПРАВЛЕНИЕ ДАТЧИКАМИ ========== */
+
+// Открытие модального окна редактирования датчика
 export function openEditModal(id) {
-  if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) {
-    return;
-  }
+  if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) return;
   editingId = id;
   const backdrop = document.getElementById('editModalBackdrop');
   if (!backdrop) return;
 
   let sCfg = config.sensors.find(s => String(s.id) === String(id));
   if (!sCfg) {
-    sCfg = {
-      id,
-      name: 'Датчик ' + id,
-      vars: '',
-      deleted: false
-    };
+    sCfg = { id, name: 'Датчик ' + id, vars: '', deleted: false };
     config.sensors.push(sCfg);
   }
 
@@ -399,7 +369,6 @@ export function openEditModal(id) {
 
   if (sensorIdInput) sensorIdInput.value = sCfg.id != null ? String(sCfg.id) : '';
   if (sensorNameInput) sensorNameInput.value = sCfg.name || '';
-  // Если vars — массив, переводим в строку через запятую; иначе оставляем как есть
   if (sensorVarsInput) {
     if (Array.isArray(sCfg.vars)) {
       sensorVarsInput.value = sCfg.vars.join(',');
@@ -409,23 +378,23 @@ export function openEditModal(id) {
   }
 
   buildVarSettingsUI(sCfg);
-
   backdrop.style.display = 'flex';
 }
 
+// Закрытие модального окна редактирования
+export function closeEditModal() {
+  const backdrop = document.getElementById('editModalBackdrop');
+  if (backdrop) backdrop.style.display = 'none';
+}
+
+// Создание UI для настроек переменных
 export function buildVarSettingsUI(sCfg) {
   const container = document.getElementById('varSettingsContainer');
   const sensorVarsInput = document.getElementById('sensorVars');
   if (!container || !sensorVarsInput) return;
 
   container.innerHTML = '';
-
-  // текущий список переменных из input
-  const vars = sensorVarsInput.value
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean);
-
+  const vars = sensorVarsInput.value.split(',').map(v => v.trim()).filter(Boolean);
   const existing = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
 
   vars.forEach((varName, idx) => {
@@ -434,10 +403,7 @@ export function buildVarSettingsUI(sCfg) {
     const row = document.createElement('div');
     row.className = 'var-settings-row';
     row.dataset.var = varName;
-    row.style.display = 'flex';
-    row.style.alignItems = 'center';
-    row.style.gap = '6px';
-    row.style.flexWrap = 'wrap';
+    row.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap;';
 
     const varSpan = document.createElement('span');
     varSpan.textContent = varName;
@@ -450,10 +416,8 @@ export function buildVarSettingsUI(sCfg) {
     labelInput.className = 'var-label-input';
     labelInput.style.flex = '1 1 auto';
 
-    // выбор цвета
     const colorSelect = document.createElement('select');
     colorSelect.className = 'var-color-select';
-
     COLOR_CHOICES.forEach(choice => {
       const opt = document.createElement('option');
       opt.value = choice.value;
@@ -467,7 +431,6 @@ export function buildVarSettingsUI(sCfg) {
 
     const unitSelect = document.createElement('select');
     unitSelect.className = 'var-unit-select';
-
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
     defaultOption.textContent = 'Ед. изм.';
@@ -488,7 +451,6 @@ export function buildVarSettingsUI(sCfg) {
     const currentUnit = (found && found.unit) ? found.unit : '';
     unitSelect.value = currentUnit;
 
-    // === Пороги ===
     const lowInput = document.createElement('input');
     lowInput.type = 'number';
     lowInput.step = 'any';
@@ -513,10 +475,8 @@ export function buildVarSettingsUI(sCfg) {
     alarmInput.style.width = '90px';
     alarmInput.value = (found && found.alarmLimit != null) ? found.alarmLimit : '';
 
-    // === Обработка сигнала ===
     const processingSelect = document.createElement('select');
     processingSelect.className = 'var-processing-select';
-
     PROCESSING_MODES.forEach(mode => {
       const opt = document.createElement('option');
       opt.value = mode.value;
@@ -527,20 +487,16 @@ export function buildVarSettingsUI(sCfg) {
     const currentProcessing = (found && found.processing) ? found.processing : 'none';
     processingSelect.value = currentProcessing;
 
-    // чекбокс: показывать сырые данные
     const showRawCheckbox = document.createElement('input');
     showRawCheckbox.type = 'checkbox';
     showRawCheckbox.className = 'var-show-raw';
-    showRawCheckbox.checked = (found && typeof found.showRaw === 'boolean')
-      ? found.showRaw
-      : true;
+    showRawCheckbox.checked = (found && typeof found.showRaw === 'boolean') ? found.showRaw : true;
 
     const showRawLabel = document.createElement('label');
     showRawLabel.style.fontSize = '11px';
     showRawLabel.appendChild(showRawCheckbox);
     showRawLabel.appendChild(document.createTextNode(' RAW (сырые)'));
 
-    // чекбокс: показывать обработанные данные
     const showProcCheckbox = document.createElement('input');
     showProcCheckbox.type = 'checkbox';
     showProcCheckbox.className = 'var-show-processed';
@@ -554,7 +510,6 @@ export function buildVarSettingsUI(sCfg) {
     showProcLabel.appendChild(showProcCheckbox);
     showProcLabel.appendChild(document.createTextNode(' Обработанные'));
 
-    // Вкликиваем всё в строку
     row.appendChild(varSpan);
     row.appendChild(labelInput);
     row.appendChild(colorSelect);
@@ -570,13 +525,7 @@ export function buildVarSettingsUI(sCfg) {
   });
 }
 
-export function selectSensor(id) {
-  setCurrentSensor(id);
-  updateSensorPanel();
-  drawCurrent();
-}
-
-// ===== КНОПКА "ДОБАВИТЬ ДАТЧИК" =====
+// Добавление нового датчика
 export function onAddSensorClick() {
   let maxId = 0;
   config.sensors.forEach(s => {
@@ -585,13 +534,7 @@ export function onAddSensorClick() {
   });
   const newId = maxId + 1;
 
-  const newSensor = {
-    id: newId,
-    name: 'Датчик ' + newId,
-    vars: '',
-    deleted: false
-  };
-
+  const newSensor = { id: newId, name: 'Датчик ' + newId, vars: '', deleted: false };
   config.sensors.push(newSensor);
   setCurrentSensor(newId);
 
@@ -600,51 +543,8 @@ export function onAddSensorClick() {
   openEditModal(newId);
 }
 
-// === УДАЛЕНИЕ ДАТЧИКА ===
-export async function onDeleteSensorClick() {
-  if (editingId == null) return;
-  const idx = config.sensors.findIndex(s => String(s.id) === String(editingId));
-  if (idx === -1) return;
-  const name = config.sensors[idx].name || ('Датчик ' + editingId);
-  if (!confirm(`Удалить «${name}»?`)) return;
-
-  config.sensors.splice(idx, 1);
-  closeEditModal();
-  await saveConfigWithMessage();
-  updateSensorPanel();
-  drawCurrent();
-  editingId = null;
-}
-
-export function closeEditModal() {
-  const backdrop = document.getElementById('editModalBackdrop');
-  if (backdrop) backdrop.style.display = 'none';
-}
-
-// ===== МОДАЛКА ПОДТВЕРЖДЕНИЯ ОТМЕНЫ =====
-export function openCancelConfirm() {
-  const backdrop = document.getElementById('cancelConfirmBackdrop');
-  if (backdrop) backdrop.style.display = 'flex';
-}
-
-export function closeCancelConfirm() {
-  const backdrop = document.getElementById('cancelConfirmBackdrop');
-  if (backdrop) backdrop.style.display = 'none';
-}
-
-export function onCancelSensorClick() { openCancelConfirm(); }
-
-export function onCancelConfirmOk() {
-  closeCancelConfirm();
-  closeEditModal();
-  editingId = null;
-}
-
-export function onCancelConfirmBack() { closeCancelConfirm(); }
-
-// ===== СОХРАНЕНИЕ ИЗ МОДАЛКИ =====
+// Сохранение изменений датчика
 export async function onSaveSensorClick() {
-
   if (editingId == null) return;
 
   let sCfg = config.sensors.find(s => String(s.id) === String(editingId));
@@ -653,7 +553,6 @@ export async function onSaveSensorClick() {
     config.sensors.push(sCfg);
   }
 
-  // === ЧТЕНИЕ И ОБНОВЛЕНИЕ ID ДАТЧИКА ===
   const sensorIdInput = document.getElementById('sensorId');
   let newId = (sensorIdInput?.value.trim() || String(sCfg.id));
 
@@ -662,34 +561,20 @@ export async function onSaveSensorClick() {
     return;
   }
 
-  if (newId === '') {
-    // если пусто — оставляем прежний
-    newId = String(sCfg.id);
-  }
+  if (newId === '') newId = String(sCfg.id);
 
   const oldId = String(sCfg.id);
-
-  // проверка уникальности ID
-  const conflict = config.sensors.find(
-    s => String(s.id) === newId && s !== sCfg
-  );
+  const conflict = config.sensors.find(s => String(s.id) === newId && s !== sCfg);
   if (conflict) {
     alert(`❌ Датчик с ID «${newId}» уже существует. Укажите уникальный ID.`);
     return;
   }
 
-  // обновляем ID в конфиге
   sCfg.id = newId;
 
-  // если этот датчик сейчас выбран/редактируется — обновляем ссылки
-  if (String(currentSensor) === oldId) {
-    setCurrentSensor(newId);
-  }
-  if (String(editingId) === oldId) {
-    editingId = newId;
-  }
+  if (String(currentSensor) === oldId) setCurrentSensor(newId);
+  if (String(editingId) === oldId) editingId = newId;
 
-  // === ОСТАЛЬНЫЕ ПОЛЯ ДАТЧИКА ===
   const sensorNameInput = document.getElementById('sensorName');
   const sensorVarsInput = document.getElementById('sensorVars');
 
@@ -698,7 +583,6 @@ export async function onSaveSensorClick() {
     : ('Датчик ' + newId);
 
   const rawVars = sensorVarsInput ? sensorVarsInput.value.trim() : '';
-
   if (!/^[a-zA-Z0-9_,\s-]*$/.test(rawVars)) {
     alert('Недопустимые символы в списке переменных');
     return;
@@ -706,7 +590,6 @@ export async function onSaveSensorClick() {
 
   sCfg.vars = rawVars;
 
-  // Считываем настройки переменных из UI
   const container = document.getElementById('varSettingsContainer');
   if (container) {
     const rows = container.querySelectorAll('.var-settings-row');
@@ -714,6 +597,7 @@ export async function onSaveSensorClick() {
     rows.forEach(row => {
       const varName = row.dataset.var;
       if (!varName) return;
+
       const labelInput = row.querySelector('.var-label-input');
       const colorSelect = row.querySelector('.var-color-select');
       const unitSelect = row.querySelector('.var-unit-select');
@@ -764,11 +648,53 @@ export async function onSaveSensorClick() {
   drawCurrent();
 }
 
-// ===== ТАЙМЕР И ГРАФИКИ =====
+// Удаление датчика
+export async function onDeleteSensorClick() {
+  if (editingId == null) return;
+  const idx = config.sensors.findIndex(s => String(s.id) === String(editingId));
+  if (idx === -1) return;
+  const name = config.sensors[idx].name || ('Датчик ' + editingId);
+  if (!confirm(`Удалить «${name}»?`)) return;
+
+  config.sensors.splice(idx, 1);
+  closeEditModal();
+  await saveConfigWithMessage();
+  updateSensorPanel();
+  drawCurrent();
+  editingId = null;
+}
+
+/* ========== МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ОТМЕНЫ ========== */
+
+export function openCancelConfirm() {
+  const backdrop = document.getElementById('cancelConfirmBackdrop');
+  if (backdrop) backdrop.style.display = 'flex';
+}
+
+export function closeCancelConfirm() {
+  const backdrop = document.getElementById('cancelConfirmBackdrop');
+  if (backdrop) backdrop.style.display = 'none';
+}
+
+export function onCancelSensorClick() {
+  openCancelConfirm();
+}
+
+export function onCancelConfirmOk() {
+  closeCancelConfirm();
+  closeEditModal();
+  editingId = null;
+}
+
+export function onCancelConfirmBack() {
+  closeCancelConfirm();
+}
+
+/* ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ========== */
+
+// Обновление таймера работы системы
 export function updateTimer() {
-
   if (!serverStart) return;
-
   const timerEl = document.getElementById('timer');
   if (!timerEl) return;
 
@@ -776,10 +702,10 @@ export function updateTimer() {
   const h = Math.floor(elapsedSec / 3600);
   const m = Math.floor((elapsedSec % 3600) / 60);
   const s = elapsedSec % 60;
-  timerEl.textContent = `Время работы: ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+  timerEl.textContent = `Время работы: ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-// === ТОСТ ===
+// Показать всплывающее уведомление
 export function showToast(message) {
   let toast = document.getElementById('toastMessage');
   if (!toast) {
