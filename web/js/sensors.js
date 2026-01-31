@@ -1,6 +1,6 @@
 console.log('sensors.js загружен');
 
-import { config, setConfig, csrfToken, PERMISSIONS } from './constants.js';
+import { config, setConfig, csrfToken, PERMISSIONS, COLOR_CHOICES } from './constants.js';
 import { forceLogout, showToast, updateSensorPanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 
@@ -10,6 +10,33 @@ const MAX_SENSORS = 256;
 const SAVE_DEBOUNCE_MS = 2000;
 
 /* ================== UTILS ================== */
+
+function updateVarSettings(sCfg) {
+  if (!sCfg.varSettings) {
+    sCfg.varSettings = [];
+  }
+
+  const existingVars = new Set(sCfg.varSettings.map(vs => vs.var));
+  const newVars = sCfg.vars.filter(v => !existingVars.has(v));
+
+  newVars.forEach((v, idx) => {
+    const varIndex = sCfg.vars.indexOf(v);
+    const defaultColor = COLOR_CHOICES[varIndex % COLOR_CHOICES.length].value;
+
+    sCfg.varSettings.push({
+      var: v,
+      label: v,
+      color: defaultColor,
+      unit: '',
+      lowLimit: null,
+      warnLimit: null,
+      alarmLimit: null,
+      processing: 'none',
+      showRaw: true,
+      showProcessed: false
+    });
+  });
+}
 
 function normalizeVars(input) {
   if (Array.isArray(input)) {
@@ -63,12 +90,12 @@ export async function loadConfig() {
       return;
     }
 
-    // Нормализация vars и deleted
     parsed.sensors.forEach(s => {
       s.vars = normalizeVars(s.vars).filter(isValidVarName);
       if (typeof s.deleted !== 'boolean') {
         s.deleted = false;
       }
+      updateVarSettings(s);
     });
 
     setConfig(parsed);
@@ -106,6 +133,7 @@ export async function syncConfigInitial() {
         vars: varsFromData,
         deleted: false
       };
+      updateVarSettings(sCfg);
       config.sensors.push(sCfg);
       updated = true;
     } else {
@@ -122,6 +150,7 @@ export async function syncConfigInitial() {
         sCfg.vars = Array.from(merged);
         updated = true;
       }
+      updateVarSettings(sCfg);
     }
   }
 
@@ -162,6 +191,7 @@ export async function syncNewSensors() {
         vars: Array.from(varSet).filter(isValidVarName),
         deleted: false
       };
+      updateVarSettings(sCfg);
       config.sensors.push(sCfg);
       updated = true;
     }
@@ -175,6 +205,7 @@ export async function syncNewSensors() {
         sCfg.vars = Array.from(merged);
         updated = true;
       }
+      updateVarSettings(sCfg);
     }
   }
 

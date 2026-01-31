@@ -402,3 +402,4 @@
 2026-01-31 18:37:09 | pid=3684 | thread=pool-2-thread-40 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59660
 2026-01-31 18:38:21 | pid=3684 | thread=pool-2-thread-87 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
 2026-01-31 18:38:26 | pid=3684 | thread=pool-2-thread-92 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53874
+2026-01-31 18:58:57 | pid=3684 | thread=pool-2-thread-64 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1

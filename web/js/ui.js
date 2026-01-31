@@ -456,8 +456,8 @@ export function buildVarSettingsUI(sCfg) {
 
     COLOR_CHOICES.forEach(choice => {
       const opt = document.createElement('option');
-      opt.value = choice.value;      // #ff0000
-      opt.textContent = choice.name; // "Красный"
+      opt.value = choice.value;
+      opt.textContent = choice.name;
       colorSelect.appendChild(opt);
     });
 
@@ -465,7 +465,6 @@ export function buildVarSettingsUI(sCfg) {
     const currentColor = (found && found.color) ? found.color : defaultColor;
     colorSelect.value = currentColor;
 
-    // единицы измерения - выпадающий список по категориям
     const unitSelect = document.createElement('select');
     unitSelect.className = 'var-unit-select';
 
@@ -648,7 +647,6 @@ export async function onSaveSensorClick() {
 
   if (editingId == null) return;
 
-  // ищем текущую конфигурацию датчика по старому ID
   let sCfg = config.sensors.find(s => String(s.id) === String(editingId));
   if (!sCfg) {
     sCfg = { id: editingId, deleted: false };

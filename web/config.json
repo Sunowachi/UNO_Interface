@@ -11,9 +11,9 @@
       "varSettings": [
         {
           "var": "hum",
-          "label": "hum",
-          "color": "#ff0000",
-          "unit": "°C",
+          "label": "Влажность",
+          "color": "#0000ff",
+          "unit": "%",
           "lowLimit": 10,
           "warnLimit": 50,
           "alarmLimit": 80,
@@ -23,9 +23,9 @@
         },
         {
           "var": "temp",
-          "label": "temp",
-          "color": "#0000ff",
-          "unit": "%",
+          "label": "Температура",
+          "color": "#ff0000",
+          "unit": "°C",
           "lowLimit": 10,
           "warnLimit": 50,
           "alarmLimit": 80,
