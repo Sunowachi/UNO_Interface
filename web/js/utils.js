@@ -105,12 +105,9 @@ export async function fetchData() {
       console.error('[fetchData] Некорректный формат sensors:', data?.sensors);
       return;
     }
-
     const newAll = {};
     const newTimes = {};
-
     const sensors = data.sensors;
-
     let flatDetected = false;
     for (const k of Object.keys(sensors)) {
       if (k.includes(':')) { flatDetected = true; break; }
@@ -126,8 +123,6 @@ export async function fetchData() {
           const times = Array.isArray(payload.times) ? payload.times.slice() : null;
           newAll[flatKey] = { values: vals };
           if (times) newTimes[flatKey] = times;
-        } else {
-          continue;
         }
       }
     } else {
@@ -147,32 +142,18 @@ export async function fetchData() {
         }
       }
     }
-
-    const updatedSensors = { ...(allSensors || {}) };
-    for (const [key, newPayload] of Object.entries(newAll)) {
-        if (updatedSensors[key] && Array.isArray(updatedSensors[key].values) && Array.isArray(newPayload.values)) {
-            const combinedValues = [...updatedSensors[key].values, ...newPayload.values];
-            updatedSensors[key].values = [...new Set(combinedValues)];
-        } else {
-            updatedSensors[key] = { ...newPayload };
-        }
+    setAllSensors(newAll);
+    const allTimeKeys = Object.keys(sensorTimes);
+    for (const key of allTimeKeys) {
+        delete sensorTimes[key];
     }
-    setAllSensors(updatedSensors);
-
-    for (const [key, newTimeArray] of Object.entries(newTimes)) {
-        if (sensorTimes[key] && Array.isArray(sensorTimes[key]) && Array.isArray(newTimeArray)) {
-            const combinedTimes = [...sensorTimes[key], ...newTimeArray];
-            sensorTimes[key] = [...new Set(combinedTimes)];
-        } else {
-            sensorTimes[key] = newTimeArray.slice();
-        }
+    for (const [key, times] of Object.entries(newTimes)) {
+        sensorTimes[key] = times.slice();
     }
-
     await syncNewSensors();
     updateSensorPanel();
     drawCurrent();
     updateDevicePanel();
-
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }

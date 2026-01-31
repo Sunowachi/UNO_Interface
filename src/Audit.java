@@ -38,7 +38,6 @@ public class Audit {
                     fw.write(line);
                 }
             } catch (Exception e) {
-                // Последний шанс — stderr
                 System.err.println("[AUDIT FAIL] " + line.trim());
             }
         }

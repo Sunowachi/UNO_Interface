@@ -277,10 +277,9 @@ public class DataStore {
         long now = System.currentTimeMillis();
         long fromTs = rangeMs > 0 ? now - rangeMs : 0;
 
-        // Ограничиваем максимальный период 7 днями
-        long sevenDaysMs = 7L * 24 * 60 * 60 * 1000;
-        if (rangeMs > sevenDaysMs) {
-            fromTs = now - sevenDaysMs;
+        long MaxDaysMs = 7L * 24 * 60 * 60 * 1000;
+        if (rangeMs > MaxDaysMs) {
+            fromTs = now - MaxDaysMs;
         }
 
         Map<String, List<Point>> data = new LinkedHashMap<>();
