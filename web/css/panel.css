@@ -9,7 +9,7 @@ h1 {
 }
 
 #mainLayout {
-    width: 1100px;
+    width: 2000px;
     margin: 0 auto;
 }
 
@@ -28,7 +28,7 @@ canvas {
 /* ===== Layout ===== */
 
 .charts-area {
-    width: 900px;
+    width: 1500px;
 }
 
 .charts-container {

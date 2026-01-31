@@ -146,9 +146,9 @@ export let chartScroll = {};
 
 export let chartFollow = {};
 
-export const CHART_POINT_PX = 8;
+export const CHART_POINT_PX = 2;
 
-export const CHART_MIN_CANVAS_PX = 700;
+export const CHART_MIN_CANVAS_PX = 1275;
 export const CHART_MAX_CANVAS_PX = 2400;
 
 export const CHART_MAX_CONTENT_PX = 12000;

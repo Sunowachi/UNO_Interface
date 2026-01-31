@@ -2,18 +2,18 @@
   "sensors": [
     {
       "id": "testSensorA",
-      "name": "testSensorA",
+      "name": "Датчик 1",
       "vars": [
-        "hum",
-        "temp"
+        "temp",
+        "hum"
       ],
       "deleted": false,
       "varSettings": [
         {
-          "var": "hum",
-          "label": "Влажность",
-          "color": "#0000ff",
-          "unit": "%",
+          "var": "temp",
+          "label": "Температура",
+          "color": "#ff0000",
+          "unit": "°C",
           "lowLimit": 10,
           "warnLimit": 50,
           "alarmLimit": 80,
@@ -22,10 +22,10 @@
           "showProcessed": true
         },
         {
-          "var": "temp",
-          "label": "Температура",
-          "color": "#ff0000",
-          "unit": "°C",
+          "var": "hum",
+          "label": "Влажность",
+          "color": "#0000ff",
+          "unit": "%",
           "lowLimit": 10,
           "warnLimit": 50,
           "alarmLimit": 80,

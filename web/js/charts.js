@@ -59,7 +59,7 @@ export function drawCurrent() {
     const varName = vars[idx];
 
     // Определяем ключи данных
-    const keyColon      = `${sCfg.id}:${varName}`;
+    const keyColon = `${sCfg.id}:${varName}`;
     const keyLowerColon = `${sCfg.id}:${varName.toLowerCase()}`;
     let dataKey = null;
     if (allSensors[keyColon]) dataKey = keyColon;
@@ -134,59 +134,81 @@ export function drawCurrent() {
       wrapper.className = 'chart-wrapper';
       wrapper.id = wrapperId;
 
-      // valueCard
+      // ГЛАВНОЕ ИЗМЕНЕНИЕ: Делаем flex-контейнер с горизонтальным направлением
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'row';
+      wrapper.style.gap = '15px';
+      wrapper.style.alignItems = 'flex-start';
+      wrapper.style.marginBottom = '20px';
+
+      // valueCard - ПАНЕЛЬ СЛЕВА
       valueCard = document.createElement('div');
       valueCard.className = 'card';
-      valueCard.style.width = '160px';
-      valueCard.style.padding = '10px';
+      valueCard.style.width = '180px';
+      valueCard.style.height = '200px';
+      valueCard.style.padding = '15px';
       valueCard.style.textAlign = 'center';
       valueCard.style.display = 'flex';
       valueCard.style.flexDirection = 'column';
       valueCard.style.justifyContent = 'center';
       valueCard.style.alignItems = 'center';
+      valueCard.style.flexShrink = '0';
+      valueCard.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+      valueCard.style.borderRadius = '8px';
+      valueCard.style.backgroundColor = '#f8f9fa';
 
       const valueTitle = document.createElement('div');
       valueTitle.textContent = baseLabel;
       valueTitle.style.fontWeight = 'bold';
-      valueTitle.style.marginBottom = '6px';
+      valueTitle.style.fontSize = '16px';
+      valueTitle.style.marginBottom = '8px';
+      valueTitle.style.color = '#333';
 
       const valueText = document.createElement('div');
-      valueText.style.fontSize = '18px';
+      valueText.style.fontSize = '20px';
+      valueText.style.fontWeight = '600';
+      valueText.style.color = '#007bff';
       valueText.textContent = Number.isFinite(lastVal) ? (lastVal.toFixed(2) + (unit ? ' ' + unit : '')) : 'нет данных';
 
       valueCard.appendChild(valueTitle);
       valueCard.appendChild(valueText);
       if (alertClass) valueCard.classList.add(alertClass);
 
-      // chartContainer + title + scrollWrapper + canvas
       const chartContainer = document.createElement('div');
       chartContainer.style.flex = '1 1 auto';
       chartContainer.style.display = 'flex';
       chartContainer.style.flexDirection = 'column';
-      chartContainer.style.gap = '5px';
+      chartContainer.style.gap = '8px';
+      chartContainer.style.maxWidth = 'calc(100vw - 350px)';
+      chartContainer.style.overflow = 'hidden';
 
       const title = document.createElement('h3');
       title.textContent = titleText;
+      title.style.margin = '0 0 5px 0';
+      title.style.fontSize = '18px';
+      title.style.color = '#444';
       chartContainer.appendChild(title);
 
       scrollWrapper = document.createElement('div');
       scrollWrapper.style.overflowX = 'auto';
       scrollWrapper.style.overflowY = 'hidden';
       scrollWrapper.style.width = '100%';
+      scrollWrapper.style.maxWidth = '100%';
       scrollWrapper.style.paddingBottom = '6px';
       scrollWrapper.style.cursor = 'grab';
+      scrollWrapper.style.backgroundColor = '#fff';
+      scrollWrapper.style.borderRadius = '6px';
+      scrollWrapper.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
 
       canvas = document.createElement('canvas');
       canvas.id = canvasId;
       canvas.height = 220;
       canvas.style.display = 'block';
 
-      // ширина по количеству точек (css/логическое значение)
       const pointsCount = Math.max(rawValues?.length || 0, processedValues?.length || 0);
       const desiredWidth = Math.min(CHART_MAX_CONTENT_PX, Math.max(CHART_MIN_CANVAS_PX, pointsCount * CHART_POINT_PX));
       canvas.width = desiredWidth;
 
-      // добавляем слушатели один раз
       canvas.addEventListener('wheel', (e) => {
         const dx = (Math.abs(e.deltaX) > 0) ? e.deltaX : e.deltaY;
         if (dx !== 0) {
@@ -195,7 +217,6 @@ export function drawCurrent() {
         }
       }, { passive: false });
 
-      // drag handlers
       (function attachDrag(canvasEl, scrollEl) {
         let isDragging = false;
         let dragStartX = 0;
@@ -221,7 +242,6 @@ export function drawCurrent() {
         canvasEl.addEventListener('mouseleave', stop);
       })(canvas, scrollWrapper);
 
-      // собираем DOM
       scrollWrapper.appendChild(canvas);
       chartContainer.appendChild(scrollWrapper);
 
@@ -229,24 +249,62 @@ export function drawCurrent() {
       wrapper.appendChild(chartContainer);
       container.appendChild(wrapper);
 
-      // при создании пролистываем в конец
       requestAnimationFrame(() => {
         scrollWrapper.scrollLeft = Math.max(0, scrollWrapper.scrollWidth - scrollWrapper.clientWidth);
       });
 
     } else {
-      // Повторное использование wrapper: найдем элементы внутри
       valueCard = wrapper.querySelector('.card');
       scrollWrapper = wrapper.querySelector('div[style*="overflowX"]') || wrapper.querySelector('div');
       canvas = document.getElementById(canvasId) || wrapper.querySelector('canvas');
-      // обновим текст последнего значения и alert класс
+
+      const valueTitle = valueCard ? valueCard.querySelector('div:nth-child(1)') : null;
+      if (valueTitle) {
+        valueTitle.textContent = baseLabel;
+        valueTitle.style.fontSize = '16px';
+        valueTitle.style.color = '#333';
+      }
+
       const valueText = valueCard ? valueCard.querySelector('div:nth-child(2)') : null;
       if (valueText) {
-        valueText.textContent = Number.isFinite(lastVal) ? (lastVal.toFixed(2) + (unit ? ' ' + unit : '')) : 'нет данных';
+        valueText.textContent = Number.isFinite(lastVal)
+          ? (lastVal.toFixed(2) + (unit ? ' ' + unit : ''))
+          : 'нет данных';
+        valueText.style.fontSize = '20px';
+        valueText.style.color = '#007bff';
       }
+
       if (valueCard) {
-        valueCard.classList.remove('blink-blue','blink-yellow','blink-red');
+        valueCard.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
         if (alertClass) valueCard.classList.add(alertClass);
+      }
+
+      const title = wrapper.querySelector('h3');
+      if (title) {
+        title.textContent = titleText;
+        title.style.margin = '0 0 5px 0';
+        title.style.fontSize = '18px';
+        title.style.color = '#444';
+      }
+
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'row';
+      wrapper.style.gap = '15px';
+      wrapper.style.alignItems = 'flex-start';
+      wrapper.style.marginBottom = '20px';
+
+      if (valueCard) {
+        valueCard.style.width = '180px';
+        valueCard.style.padding = '15px';
+        valueCard.style.textAlign = 'center';
+        valueCard.style.display = 'flex';
+        valueCard.style.flexDirection = 'column';
+        valueCard.style.justifyContent = 'center';
+        valueCard.style.alignItems = 'center';
+        valueCard.style.flexShrink = '0';
+        valueCard.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        valueCard.style.borderRadius = '8px';
+        valueCard.style.backgroundColor = '#f8f9fa';
       }
     }
 
