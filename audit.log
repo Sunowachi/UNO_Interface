@@ -455,3 +455,4 @@
 2026-01-31 21:27:35 | pid=10504 | thread=pool-2-thread-45 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63739
 2026-01-31 21:27:41 | pid=10504 | thread=pool-2-thread-49 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50303
 2026-01-31 21:27:48 | pid=10504 | thread=pool-2-thread-53 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50195
+2026-01-31 21:27:59 | pid=10504 | thread=pool-2-thread-60 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50281
