@@ -341,3 +341,19 @@
 2026-01-31 17:21:16 | pid=29884 | thread=pool-2-thread-2 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:55378
 2026-01-31 17:21:21 | pid=29884 | thread=pool-2-thread-6 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51224
 2026-01-31 17:21:28 | pid=29884 | thread=pool-2-thread-12 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59422
+2026-01-31 17:46:02 | pid=15288 | thread=pool-2-thread-1 | user=testSensorA | action=SENSOR_IP_MISMATCH | ip=127.0.0.1
+2026-01-31 17:46:04 | pid=15288 | thread=pool-2-thread-2 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:54118 sid=803b44dd
+2026-01-31 17:46:04 | pid=15288 | thread=pool-2-thread-3 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:54118 sid=803b44dd
+2026-01-31 17:46:06 | pid=15288 | thread=pool-2-thread-17 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:59800 sid=803b44dd
+2026-01-31 17:46:06 | pid=15288 | thread=pool-2-thread-19 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:59800 sid=803b44dd
+2026-01-31 17:46:06 | pid=15288 | thread=pool-2-thread-20 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:59800 sid=803b44dd
+2026-01-31 17:46:07 | pid=15288 | thread=pool-2-thread-22 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-01-31 17:46:13 | pid=15288 | thread=pool-2-thread-35 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50977
+2026-01-31 17:46:18 | pid=15288 | thread=pool-2-thread-38 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50370
+2026-01-31 17:46:23 | pid=15288 | thread=pool-2-thread-47 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54298
+2026-01-31 17:46:30 | pid=15288 | thread=pool-2-thread-66 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59690
+2026-01-31 17:46:35 | pid=15288 | thread=pool-2-thread-75 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59946
+2026-01-31 17:46:40 | pid=15288 | thread=pool-2-thread-79 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:60733
+2026-01-31 17:46:45 | pid=15288 | thread=pool-2-thread-85 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:55296
+2026-01-31 17:46:50 | pid=15288 | thread=pool-2-thread-4 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64465
+2026-01-31 17:46:59 | pid=15288 | thread=pool-2-thread-43 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:58883
