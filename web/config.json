@@ -5,10 +5,7 @@
       "name": "testSensorA",
       "vars": [
         "hum",
-        "temp",
-        "voltage",
-        "rssi",
-        "timestamp"
+        "temp"
       ],
       "deleted": false,
       "varSettings": [

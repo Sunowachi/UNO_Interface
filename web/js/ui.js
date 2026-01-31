@@ -342,25 +342,33 @@ export function updateDevicePanel() {
 
   deviceList.innerHTML = ''; // очищаем список
 
-  // Группируем переменные по IP
-  const groupedByIP = {};
+  // Группируем переменные по sensorId (первая часть до двоеточия)
+  const groupedBySensor = {};
 
   for (const key of Object.keys(allSensors)) {
-
-    const idx = key.indexOf('_');
-    if (idx === -1) continue;
-    const ip = key.slice(0, idx);
+    const idx = key.indexOf(':');
+    if (idx === -1) continue; // пропускаем ключи без двоеточия
+    const sensorId = key.slice(0, idx);
     const variable = key.slice(idx + 1);
 
-    if (!groupedByIP[ip]) groupedByIP[ip] = [];
-    groupedByIP[ip].push(variable);
+    if (!groupedBySensor[sensorId]) groupedBySensor[sensorId] = [];
+    groupedBySensor[sensorId].push(variable);
+  }
+
+  // Если нет активных устройств
+  if (Object.keys(groupedBySensor).length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'Нет активных устройств';
+    li.style.color = '#777';
+    deviceList.appendChild(li);
+    return;
   }
 
   // Отображаем результат
-  for (const [ip, vars] of Object.entries(groupedByIP)) {
+  for (const [sensorId, vars] of Object.entries(groupedBySensor)) {
     const li = document.createElement('li');
     li.style.padding = '4px 0';
-    li.textContent = `IP: ${ip} | Переменные: ${vars.join(', ')}`;
+    li.textContent = `Датчик: ${sensorId} | Переменные: ${vars.join(', ')}`;
     deviceList.appendChild(li);
   }
 }
