@@ -117,12 +117,9 @@ export async function fetchData() {
     }
 
     if (flatDetected) {
-      // sensors is flat map: "sensor:var" -> { values: [...], times: [...] } OR -> array
       for (const [flatKey, payload] of Object.entries(sensors)) {
-        // payload expected either { values: [...], times: [...] } or array of numbers
         if (payload == null) continue;
         if (Array.isArray(payload)) {
-          // Unexpected array — store as values
           newAll[flatKey] = { values: payload.slice() };
         } else if (typeof payload === 'object') {
           const vals = Array.isArray(payload.values) ? payload.values.slice() : [];
@@ -130,19 +127,16 @@ export async function fetchData() {
           newAll[flatKey] = { values: vals };
           if (times) newTimes[flatKey] = times;
         } else {
-          // unsupported
           continue;
         }
       }
     } else {
-      // sensors is nested: sensorId -> { varName: rows | {values,times} }
       for (const [sensorId, vars] of Object.entries(sensors)) {
         if (!vars || typeof vars !== 'object') continue;
         for (const [varName, rows] of Object.entries(vars)) {
           const key = `${sensorId}:${varName}`;
           if (rows == null) continue;
           if (Array.isArray(rows)) {
-            // rows may be array of numbers (values)
             newAll[key] = { values: rows.slice() };
           } else if (typeof rows === 'object') {
             const vals = Array.isArray(rows.values) ? rows.values.slice() : [];
@@ -154,11 +148,24 @@ export async function fetchData() {
       }
     }
 
-    const merged = Object.assign({}, allSensors || {}, newAll);
-    setAllSensors(merged);
+    const updatedSensors = { ...(allSensors || {}) };
+    for (const [key, newPayload] of Object.entries(newAll)) {
+        if (updatedSensors[key] && Array.isArray(updatedSensors[key].values) && Array.isArray(newPayload.values)) {
+            const combinedValues = [...updatedSensors[key].values, ...newPayload.values];
+            updatedSensors[key].values = [...new Set(combinedValues)];
+        } else {
+            updatedSensors[key] = { ...newPayload };
+        }
+    }
+    setAllSensors(updatedSensors);
 
-    for (const [k, tarr] of Object.entries(newTimes)) {
-      sensorTimes[k] = tarr.slice();
+    for (const [key, newTimeArray] of Object.entries(newTimes)) {
+        if (sensorTimes[key] && Array.isArray(sensorTimes[key]) && Array.isArray(newTimeArray)) {
+            const combinedTimes = [...sensorTimes[key], ...newTimeArray];
+            sensorTimes[key] = [...new Set(combinedTimes)];
+        } else {
+            sensorTimes[key] = newTimeArray.slice();
+        }
     }
 
     await syncNewSensors();
