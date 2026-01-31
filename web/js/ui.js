@@ -21,7 +21,7 @@ import { initSession } from './session.js';
 import { init } from './api.js';
 import { drawCurrent, clearChart } from './charts.js';
 import { saveConfigWithMessage } from './sensors.js';
-import { getAlertClass, pickHigherAlertClass, hasPermission } from './utils.js';
+import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData } from './utils.js';
 
 let editingId = null;
 let toastTimer = null;
@@ -182,7 +182,7 @@ export function setupTimeRangeControls() {
   hInput.value = timeRange.hours;
   mInput.value = timeRange.minutes;
 
-  function applyRange() {
+  async function applyRange() { // СДЕЛАНО АСИНХРОННОЙ
     const d = parseInt(dInput.value, 10);
     const h = parseInt(hInput.value, 10);
     const m = parseInt(mInput.value, 10);
@@ -196,17 +196,33 @@ export function setupTimeRangeControls() {
     timeRange.hours = isNaN(h) ? 0 : h;
     timeRange.minutes = isNaN(m) ? 0 : m;
 
-    // просто перерисовываем графики по тем же данным, но в новом окне
-    drawCurrent();
+    // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Запрашиваем новые данные с сервера
+    // Показываем индикатор загрузки, если он есть
+    const loadingIndicator = document.getElementById('chart-loading');
+    if (loadingIndicator) {
+      loadingIndicator.style.display = 'block';
+    }
+
+    try {
+      await fetchData(); // Вызываем функцию загрузки данных с новым диапазоном
+      // Функция fetchData сама обновит графики через drawCurrent()
+    } catch (error) {
+      console.error('Ошибка при загрузке данных по новому диапазону:', error);
+      alert('Не удалось загрузить данные за выбранный период.');
+    } finally {
+      if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+      }
+    }
   }
 
   applyBtn.addEventListener('click', applyRange);
 
   // Enter на любом из трёх полей тоже применяет
   [dInput, hInput, mInput].forEach(inp => {
-    inp.addEventListener('keydown', (e) => {
+    inp.addEventListener('keydown', async (e) => { // Обработчик тоже асинхронный
       if (e.key === 'Enter') {
-        applyRange();
+        await applyRange();
       }
     });
   });
