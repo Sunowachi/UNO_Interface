@@ -270,14 +270,69 @@ public class DataStore {
     /* ====== JSON ====== */
 
     static String buildSensorsJson(long rangeMs) {
-        long fromTs = rangeMs > 0 ? System.currentTimeMillis() - rangeMs : 0;
+        long now = System.currentTimeMillis();
+        long fromTs = rangeMs > 0 ? now - rangeMs : 0;
+
+        // Ограничиваем максимальный период 7 днями (согласуем с cleanupHistoryDb)
+        long sevenDaysMs = 7L * 24 * 60 * 60 * 1000;
+        if (rangeMs > sevenDaysMs) {
+            fromTs = now - sevenDaysMs;
+        }
+
         Map<String, List<Point>> data = new LinkedHashMap<>();
 
+        // 1. ЗАГРУЖАЕМ ДАННЫЕ ИЗ БАЗЫ ДАННЫХ за запрошенный период
+        Map<String, List<Point>> dbData = loadFromDbGrouped(fromTs);
+        data.putAll(dbData);
+
+        // 2. ДОБАВЛЯЕМ АКТУАЛЬНЫЕ ДАННЫЕ ИЗ КЭША (которые могут быть новее)
         for (var e : cache.entrySet()) {
-            List<Point> pts = e.getValue().snapshot(fromTs);
-            if (!pts.isEmpty()) data.put(e.getKey(), pts);
+            String key = e.getKey();
+            List<Point> cachePoints = e.getValue().snapshot(fromTs);
+
+            if (cachePoints.isEmpty()) continue;
+
+            if (!data.containsKey(key)) {
+                data.put(key, new ArrayList<>(cachePoints));
+            } else {
+                // Объединяем данные из БД и кэша
+                List<Point> merged = new ArrayList<>(data.get(key));
+                long maxDbTime = 0;
+                for (Point p : merged) if (p.ts > maxDbTime) maxDbTime = p.ts;
+
+                // Добавляем только точки из кэша, которые новее чем в БД
+                for (Point cachePoint : cachePoints) {
+                    if (cachePoint.ts > maxDbTime) merged.add(cachePoint);
+                }
+
+                merged.sort((p1, p2) -> Long.compare(p1.ts, p2.ts));
+                data.put(key, merged);
+            }
         }
+
+        // 3. ОГРАНИЧИВАЕМ КОЛИЧЕСТВО ТОЧЕК (для производительности)
+        final int MAX_POINTS_PER_SENSOR = 1000;
+        for (var entry : data.entrySet()) {
+            List<Point> points = entry.getValue();
+            if (points.size() > MAX_POINTS_PER_SENSOR) {
+                entry.setValue(thinOutPoints(points, MAX_POINTS_PER_SENSOR));
+            }
+        }
+
         return pointsToJsonMap(data);
+    }
+
+    // Вспомогательный метод для прореживания точек (равномерная выборка)
+    private static List<Point> thinOutPoints(List<Point> points, int maxPoints) {
+        if (points.size() <= maxPoints) return points;
+        List<Point> result = new ArrayList<>();
+        double step = (double) points.size() / maxPoints;
+        for (int i = 0; i < maxPoints; i++) {
+            int index = (int) Math.round(i * step);
+            if (index >= points.size()) index = points.size() - 1;
+            result.add(points.get(index));
+        }
+        return result;
     }
 
     private static String pointsToJsonMap(Map<String, List<Point>> data) {
