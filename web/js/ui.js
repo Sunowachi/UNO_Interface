@@ -20,146 +20,185 @@ import { drawCurrent, clearChart } from './charts.js';
 import { saveConfigWithMessage } from './sensors.js';
 import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData } from './utils.js';
 
+// Переменная для хранения ID редактируемого датчика (null - не редактируется)
 let editingId = null;
+// Переменная для таймера скрытия всплывающего уведомления (чтобы можно было сбросить)
 let toastTimer = null;
 
 /* ========== УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ ========== */
 
-// Показать/скрыть основное приложение
+// Показать основное приложение (скрыть экран входа/загрузки)
 export function showApp() {
+  // Если пользователь не авторизован, ничего не делаем
   if (!currentUser) return;
-  const app = document.getElementById('appRoot');
-  if (app) app.hidden = false;
+  const app = document.getElementById('appRoot'); // Находим корневой элемент приложения
+  if (app) app.hidden = false;                    // Убираем атрибут hidden, показываем элемент
 }
 
+// Скрыть основное приложение
 export function hideApp() {
-  const app = document.getElementById('appRoot');
-  if (app) app.hidden = true;
+  const app = document.getElementById('appRoot'); // Находим корневой элемент
+  if (app) app.hidden = true;                      // Скрываем элемент
 }
 
-// Применение разрешений к элементам интерфейса
+// Применить права доступа к интерфейсу в зависимости от роли пользователя
 export function applyPermissions(role) {
+  // Получаем набор прав для данной роли (если роль не найдена - пустой Set)
   const perms = ROLE_PERMISSIONS[role] || new Set();
+  // Проверяем, есть ли у пользователя полные права разработчика (DEV_ALL)
   const isDev = perms.has(PERMISSIONS.DEV_ALL);
 
+  // Находим панель списка датчиков (sensorPanel)
   const sensorPanel = document.getElementById('sensorPanel');
   if (sensorPanel) {
+    // Скрываем панель, если у пользователя нет прав на просмотр данных (VIEW_DATA) и не разработчик
     sensorPanel.classList.toggle('hidden', !(isDev || perms.has(PERMISSIONS.VIEW_DATA)));
   }
 
+  // Находим кнопку добавления датчика
   const addBtn = document.getElementById('addSensorBtn');
   if (addBtn) {
+    // Скрываем кнопку, если у пользователя нет прав на редактирование конфигурации (EDIT_CONFIG)
     addBtn.classList.toggle('hidden', !(isDev || perms.has(PERMISSIONS.EDIT_CONFIG)));
   }
 }
 
 /* ========== АВТОРИЗАЦИЯ ========== */
 
-// Обработка входа пользователя
+// Асинхронная функция обработки входа пользователя
 async function login(e) {
+  // Если передан объект события, предотвращаем стандартное поведение формы (перезагрузку страницы)
   e?.preventDefault();
+  // Сбрасываем текущего пользователя (на время входа)
   setCurrentUser(null);
 
+  // Получаем значения полей логина и пароля из DOM
   const username = document.getElementById("loginUser").value;
   const password = document.getElementById("loginPass").value;
 
+  // Выполняем POST-запрос к серверу для аутентификации
   const res = await fetch('/auth/login', {
-    method: 'POST',
+    method: 'POST',                          // Метод запроса
     headers: {
-      'Content-Type': 'application/json',
-      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+      'Content-Type': 'application/json',    // Отправляем данные в формате JSON
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) // Если есть CSRF-токен, добавляем его в заголовки
     },
-    body: JSON.stringify({ username, password }),
-    credentials: 'include'
+    body: JSON.stringify({ username, password }), // Тело запроса: логин и пароль в JSON
+    credentials: 'include'                    // Включаем куки (для сессии)
   });
 
+  // Получаем ответ сервера в формате JSON
   const data = await res.json();
 
+  // Если статус ответа не OK (код не 2xx)
   if (!res.ok) {
-    hideApp();
-    openLoginModal();
+    hideApp();                // Скрываем приложение (на случай, если оно было показано)
+    openLoginModal();         // Открываем модальное окно входа
 
+    // Если сервер вернул ошибку "blocked" (блокировка из-за множества попыток)
     if (data.error === 'blocked') {
       showLoginError('Слишком много попыток. Попробуйте позже.');
     } else {
+      // Иначе показываем общую ошибку неверного логина/пароля
       showLoginError('Неверный логин или пароль');
     }
-    return;
+    return; // Прерываем выполнение функции
   }
 
+  // Проверяем поле status в ответе (ожидается "ok")
   if (data.status !== "ok") {
     alert("Ошибка входа");
     return;
   }
 
+  // Очищаем сообщение об ошибке в форме входа
   const errorEl = document.getElementById("loginError");
   if (errorEl) errorEl.textContent = '';
 
-  closeLoginModal();
+  closeLoginModal(); // Закрываем модальное окно входа
+
   try {
+    // Инициализируем сессию (загружаем данные пользователя, права и т.д.)
     await initSession();
+    // Инициализируем основное приложение (загружаем конфигурацию, данные датчиков)
     await init();
   } catch (err) {
+    // Если произошла ошибка при инициализации, выводим её в консоль
     console.error('Ошибка инициализации после логина:', err);
-    hideApp();
-    openLoginModal();
-    showLoginError('Ошибка инициализации приложения');
+    hideApp();                // Скрываем приложение
+    openLoginModal();         // Открываем окно входа снова
+    showLoginError('Ошибка инициализации приложения'); // Показываем ошибку
   }
 }
 
-// Принудительный выход из системы
+// Принудительный выход из системы (logout)
 export async function forceLogout() {
   try {
+    // Отправляем POST-запрос на выход (удаление сессии на сервере)
     await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
-  } catch {}
-  setCurrentUser(null);
-  hideApp();
-  openLoginModal();
+  } catch {} // Игнорируем ошибки сети (если сервер недоступен)
+
+  setCurrentUser(null); // Очищаем текущего пользователя в приложении
+  hideApp();            // Скрываем основное приложение
+  openLoginModal();     // Открываем окно входа
 }
 
-// Управление модальным окном авторизации
+// Функции для открытия/закрытия модального окна авторизации
 export function openLoginModal() {
-  document.getElementById("loginModal").classList.add("show");
+  document.getElementById("loginModal").classList.add("show"); // Добавляем класс "show" для отображения
 }
 
 export function closeLoginModal() {
-  document.getElementById("loginModal").classList.remove("show");
+  document.getElementById("loginModal").classList.remove("show"); // Убираем класс "show"
 }
 
-// Показать ошибку авторизации
+// Показать сообщение об ошибке в модальном окне входа
 function showLoginError(message) {
-  const errorEl = document.getElementById("loginError");
+  const errorEl = document.getElementById("loginError"); // Находим элемент для ошибки
   if (errorEl) {
-    errorEl.textContent = message;
-    errorEl.style.color = '#ff0000';
-    errorEl.style.marginTop = '10px';
+    errorEl.textContent = message;       // Устанавливаем текст ошибки
+    errorEl.style.color = '#ff0000';      // Красный цвет текста
+    errorEl.style.marginTop = '10px';     // Отступ сверху для визуального разделения
   }
 }
 
 /* ========== НАСТРОЙКА ОБРАБОТЧИКОВ ========== */
 
-// Настройка всех обработчиков событий
+// Настройка всех обработчиков событий для кнопок и элементов интерфейса
 export function setupButtonHandlers() {
+  // Кнопка входа в систему
   const loginBtn = document.getElementById('loginBtn');
-  if (loginBtn) loginBtn.addEventListener('click', login);
+  if (loginBtn) loginBtn.addEventListener('click', login); // При клике вызываем функцию login
 
+  // Кнопка добавления датчика
   const addBtn = document.getElementById('addSensorBtn');
+  // Кнопка сохранения изменений датчика
   const saveBtn = document.getElementById('saveSensorBtn');
+  // Кнопка отмены редактирования
   const cancelBtn = document.getElementById('cancelSensorBtn');
+  // Кнопка удаления датчика
   const deleteBtn = document.getElementById('deleteSensorBtn');
+  // Кнопка подтверждения отмены в модальном окне подтверждения
   const cancelOkBtn = document.getElementById('cancelConfirmOkBtn');
+  // Кнопка возврата из модального окна подтверждения
   const cancelBackBtn = document.getElementById('cancelConfirmBackBtn');
+  // Поле ввода переменных датчика (список переменных через запятую)
   const sensorVarsInput = document.getElementById('sensorVars');
 
+  // Обработчик изменения поля ввода переменных (срабатывает при вводе текста)
   if (sensorVarsInput) {
     sensorVarsInput.addEventListener('input', () => {
+      // Если нет редактируемого датчика, ничего не делаем
       if (editingId == null) return;
+      // Ищем конфигурацию редактируемого датчика в общем списке
       let sCfg = config.sensors.find(s => String(s.id) === String(editingId));
-      if (!sCfg) return;
+      if (!sCfg) return; // Если не найден, выходим
+      // Перестраиваем интерфейс настроек переменных (UI для каждой переменной)
       buildVarSettingsUI(sCfg);
     });
   }
 
+  // Привязываем обработчики кликов к соответствующим кнопкам
   if (addBtn) addBtn.addEventListener('click', onAddSensorClick);
   if (saveBtn) saveBtn.addEventListener('click', onSaveSensorClick);
   if (cancelBtn) cancelBtn.addEventListener('click', onCancelSensorClick);
@@ -168,48 +207,63 @@ export function setupButtonHandlers() {
   if (cancelBackBtn) cancelBackBtn.addEventListener('click', onCancelConfirmBack);
 }
 
-// Настройка элементов управления временным диапазоном
+// Настройка элементов управления временным диапазоном (поля дней, часов, минут и кнопка "Применить")
 export function setupTimeRangeControls() {
+  // Поле ввода количества дней
   const dInput = document.getElementById('timeDays');
+  // Поле ввода часов
   const hInput = document.getElementById('timeHours');
+  // Поле ввода минут
   const mInput = document.getElementById('timeMinutes');
+  // Кнопка применения нового диапазона
   const applyBtn = document.getElementById('applyTimeRangeBtn');
 
+  // Если хотя бы один из элементов не найден, прекращаем выполнение
   if (!dInput || !hInput || !mInput || !applyBtn) return;
 
+  // Устанавливаем значения полей из текущего объекта timeRange
   dInput.value = timeRange.days;
   hInput.value = timeRange.hours;
   mInput.value = timeRange.minutes;
 
+  // Внутренняя функция для применения нового диапазона (асинхронная)
   async function applyRange() {
+    // Получаем числа из полей ввода (parseInt с основанием 10)
     const d = parseInt(dInput.value, 10);
     const h = parseInt(hInput.value, 10);
     const m = parseInt(mInput.value, 10);
 
+    // Проверяем, что значения не отрицательные
     if ((d < 0) || (h < 0) || (m < 0)) {
       alert('Значения диапазона времени не могут быть отрицательными');
       return;
     }
 
+    // Обновляем объект timeRange, если значения не числа — подставляем 0
     timeRange.days = isNaN(d) ? 0 : d;
     timeRange.hours = isNaN(h) ? 0 : h;
     timeRange.minutes = isNaN(m) ? 0 : m;
 
+    // Показываем индикатор загрузки графиков
     const loadingIndicator = document.getElementById('chart-loading');
     if (loadingIndicator) loadingIndicator.style.display = 'block';
 
     try {
+      // Загружаем данные за новый диапазон (функция fetchData из utils)
       await fetchData();
     } catch (error) {
       console.error('Ошибка при загрузке данных по новому диапазону:', error);
       alert('Не удалось загрузить данные за выбранный период.');
     } finally {
+      // В любом случае скрываем индикатор загрузки
       if (loadingIndicator) loadingIndicator.style.display = 'none';
     }
   }
 
+  // Назначаем обработчик клика на кнопку "Применить"
   applyBtn.addEventListener('click', applyRange);
 
+  // Добавляем обработчик нажатия клавиш для полей ввода: если нажат Enter, вызываем applyRange
   [dInput, hInput, mInput].forEach(inp => {
     inp.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') await applyRange();
@@ -219,112 +273,142 @@ export function setupTimeRangeControls() {
 
 /* ========== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ========== */
 
-// Обновление панели списка датчиков
+// Обновление панели со списком датчиков (отображение в левой части)
 export function updateSensorPanel() {
-  const list = document.getElementById('sensorList');
-  if (!list) return;
+  const list = document.getElementById('sensorList'); // Находим контейнер списка (ul)
+  if (!list) return; // Если контейнер отсутствует, выходим
 
+  // Фильтруем датчики, исключая помеченные как удалённые (deleted = true)
   const visibleSensors = config.sensors.filter(s => !s.deleted);
-  list.innerHTML = '';
+  list.innerHTML = ''; // Очищаем список перед перестроением
 
+  // Если нет ни одного видимого датчика
   if (visibleSensors.length === 0) {
-    const li = document.createElement('li');
-    li.textContent = 'Нет настроенных датчиков';
-    li.style.color = '#777';
-    list.appendChild(li);
-    setCurrentSensor(null);
+    const li = document.createElement('li');          // Создаём элемент списка
+    li.textContent = 'Нет настроенных датчиков';      // Текст-заглушка
+    li.style.color = '#777';                           // Серый цвет текста
+    list.appendChild(li);                              // Добавляем в список
+    setCurrentSensor(null);                             // Сбрасываем выбранный датчик
 
-    const chartsContainer = document.getElementById('chartsContainer');
-    if (chartsContainer) chartsContainer.innerHTML = '';
-    return;
+    const chartsContainer = document.getElementById('chartsContainer'); // Контейнер графиков
+    if (chartsContainer) chartsContainer.innerHTML = ''; // Очищаем графики
+    return; // Завершаем функцию
   }
 
+  // Перебираем все видимые датчики
   visibleSensors.forEach((sCfg, index) => {
-    let lastTempText = 'нет данных';
-    let sensorAlertClass = null;
+    let lastTempText = 'нет данных'; // Переменная для последнего значения (температуры/данных)
+    let sensorAlertClass = null;     // Класс для подсветки датчика (тревога)
 
+    // Получаем настройки переменных для данного датчика (если есть)
     const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
+    // Получаем список переменных датчика: может быть массивом или строкой через запятую
     const vars = Array.isArray(sCfg.vars)
-      ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
-      : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+      ? sCfg.vars.map(v => String(v).trim()).filter(Boolean) // если массив, приводим к строке и удаляем пустые
+      : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean); // если строка, разбиваем по запятой
 
+    // Если есть переменные
     if (vars) {
+      // Перебираем каждую переменную
       for (const v of vars) {
+        // Ищем данные для этой переменной в allSensors по разным ключам
         const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
 
+        // Если данные найдены и есть массив значений
         if (sData && Array.isArray(sData.values)) {
-          const arr = sData.values;
+          const arr = sData.values; // массив значений
           if (arr.length > 0) {
-            const lastVal = arr[arr.length - 1];
+            const lastVal = arr[arr.length - 1]; // последнее значение
 
+            // Если ещё не установлено последнее значение (равно "нет данных") и последнее значение - число
             if (lastTempText === 'нет данных' && Number.isFinite(lastVal)) {
+              // Ищем настройки для данной переменной
               const vs = varSettings.find(x => x.var === v) || {};
-              const unit = vs.unit || '';
+              const unit = vs.unit || ''; // единица измерения
+              // Формируем строку: значение с двумя знаками после запятой + единица измерения
               lastTempText = lastVal.toFixed(2) + (unit ? ' ' + unit : '');
             }
 
+            // Определяем класс тревоги для этой переменной (синий, жёлтый, красный)
             const vs = varSettings.find(x => x.var === v) || {};
             const varAlert = getAlertClass(vs, lastVal);
+            // Выбираем более высокий приоритет тревоги (если уже есть)
             sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
           }
         }
       }
     }
 
+    // Создаём элемент списка для датчика
     const li = document.createElement('li');
+    // Задаём стили прямо через свойство cssText
     li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
+    // Создаём span для имени датчика и последнего значения
     const nameSpan = document.createElement('span');
     nameSpan.textContent = (sCfg.name || 'Датчик ' + (index + 1)) + ': ' + lastTempText;
-    nameSpan.style.flex = '1 1 auto';
+    nameSpan.style.flex = '1 1 auto'; // Растягиваем на всё доступное пространство
 
+    // Проверяем, есть ли у пользователя право на редактирование конфигурации
     const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
 
+    // Если есть право редактирования, добавляем кнопку "✏️" (редактировать)
     if (canEdit) {
       const editBtn = document.createElement('button');
       editBtn.textContent = '✏️';
       editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
-      editBtn.title = 'Редактировать датчик';
+      editBtn.title = 'Редактировать датчик'; // Подсказка при наведении
 
+      // Обработчик клика на кнопку редактирования (не всплывает до li)
       editBtn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        openEditModal(sCfg.id);
+        ev.stopPropagation(); // Останавливаем всплытие, чтобы не сработал клик на li
+        openEditModal(sCfg.id); // Открываем модальное окно редактирования для этого датчика
       });
-      li.appendChild(editBtn);
+      li.appendChild(editBtn); // Добавляем кнопку в элемент списка
     }
 
+    // Обработчик клика на сам элемент списка (выбор датчика)
     li.addEventListener('click', () => selectSensor(sCfg.id));
 
+    // Если ID датчика совпадает с текущим выбранным, добавляем класс для подсветки
     if (String(sCfg.id) === String(currentSensor)) {
       li.classList.add('sensor-selected');
     }
 
+    // Удаляем возможные старые классы тревоги (если элемент переиспользуется)
     li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+    // Если определён класс тревоги, добавляем его
     if (sensorAlertClass) li.classList.add(sensorAlertClass);
 
-    li.appendChild(nameSpan);
-    list.appendChild(li);
+    li.appendChild(nameSpan); // Добавляем span с именем в элемент списка
+    list.appendChild(li);      // Добавляем элемент в общий список
   });
 }
 
-// Обновление панели списка устройств
+// Обновление панели устройств (список активных датчиков с их переменными)
 export function updateDevicePanel() {
-  const deviceList = document.getElementById('deviceList');
+  const deviceList = document.getElementById('deviceList'); // Контейнер для списка устройств
   if (!deviceList) return;
 
-  deviceList.innerHTML = '';
+  deviceList.innerHTML = ''; // Очищаем список
+
+  // Объект для группировки переменных по ID датчика
   const groupedBySensor = {};
 
+  // Проходим по всем ключам в allSensors (каждый ключ имеет формат "id:переменная")
   for (const key of Object.keys(allSensors)) {
-    const idx = key.indexOf(':');
-    if (idx === -1) continue;
-    const sensorId = key.slice(0, idx);
-    const variable = key.slice(idx + 1);
+    const idx = key.indexOf(':'); // Ищем позицию двоеточия
+    if (idx === -1) continue;      // Если двоеточия нет, пропускаем (некорректный ключ)
+    const sensorId = key.slice(0, idx);   // ID датчика (часть до двоеточия)
+    const variable = key.slice(idx + 1);  // Имя переменной (часть после двоеточия)
 
+    // Если для данного sensorId ещё нет записи, создаём пустой массив
     if (!groupedBySensor[sensorId]) groupedBySensor[sensorId] = [];
+    // Добавляем переменную в массив для этого датчика
     groupedBySensor[sensorId].push(variable);
   }
 
+  // Если нет ни одного датчика с данными
   if (Object.keys(groupedBySensor).length === 0) {
     const li = document.createElement('li');
     li.textContent = 'Нет активных устройств';
@@ -333,6 +417,7 @@ export function updateDevicePanel() {
     return;
   }
 
+  // Перебираем все сгруппированные датчики и создаём для каждого элемент списка
   for (const [sensorId, vars] of Object.entries(groupedBySensor)) {
     const li = document.createElement('li');
     li.style.padding = '4px 0';
@@ -341,35 +426,42 @@ export function updateDevicePanel() {
   }
 }
 
-// Выбор датчика
+// Функция выбора датчика по его ID
 export function selectSensor(id) {
-  setCurrentSensor(id);
-  updateSensorPanel();
-  drawCurrent();
+  setCurrentSensor(id);          // Устанавливаем текущий датчик
+  updateSensorPanel();           // Обновляем панель датчиков (подсветка выбранного)
+  drawCurrent();                 // Отрисовываем графики для выбранного датчика
 }
 
 /* ========== УПРАВЛЕНИЕ ДАТЧИКАМИ ========== */
 
 // Открытие модального окна редактирования датчика
 export function openEditModal(id) {
+  // Если нет прав на редактирование, ничего не делаем
   if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) return;
-  editingId = id;
-  const backdrop = document.getElementById('editModalBackdrop');
+  editingId = id; // Запоминаем ID редактируемого датчика
+
+  const backdrop = document.getElementById('editModalBackdrop'); // Фон модального окна
   if (!backdrop) return;
 
+  // Ищем конфигурацию датчика с таким ID в общем списке
   let sCfg = config.sensors.find(s => String(s.id) === String(id));
+  // Если датчик не найден (возможно, новый), создаём временную конфигурацию
   if (!sCfg) {
     sCfg = { id, name: 'Датчик ' + id, vars: '', deleted: false };
-    config.sensors.push(sCfg);
+    config.sensors.push(sCfg); // Добавляем в конфигурацию
   }
 
+  // Получаем элементы формы редактирования
   const sensorIdInput = document.getElementById('sensorId');
   const sensorNameInput = document.getElementById('sensorName');
   const sensorVarsInput = document.getElementById('sensorVars');
 
+  // Заполняем поля значениями из конфигурации
   if (sensorIdInput) sensorIdInput.value = sCfg.id != null ? String(sCfg.id) : '';
   if (sensorNameInput) sensorNameInput.value = sCfg.name || '';
   if (sensorVarsInput) {
+    // Если vars - массив, объединяем через запятую, иначе используем как есть (строка)
     if (Array.isArray(sCfg.vars)) {
       sensorVarsInput.value = sCfg.vars.join(',');
     } else {
@@ -377,45 +469,56 @@ export function openEditModal(id) {
     }
   }
 
+  // Строим интерфейс для настройки каждой переменной (поля для цветов, пределов и т.д.)
   buildVarSettingsUI(sCfg);
+  // Показываем модальное окно (делаем фон видимым)
   backdrop.style.display = 'flex';
 }
 
 // Закрытие модального окна редактирования
 export function closeEditModal() {
   const backdrop = document.getElementById('editModalBackdrop');
-  if (backdrop) backdrop.style.display = 'none';
+  if (backdrop) backdrop.style.display = 'none'; // Скрываем фон
 }
 
-// Создание UI для настроек переменных
+// Создание пользовательского интерфейса для настройки параметров каждой переменной датчика
 export function buildVarSettingsUI(sCfg) {
-  const container = document.getElementById('varSettingsContainer');
-  const sensorVarsInput = document.getElementById('sensorVars');
+  const container = document.getElementById('varSettingsContainer'); // Контейнер для настроек
+  const sensorVarsInput = document.getElementById('sensorVars');    // Поле со списком переменных
   if (!container || !sensorVarsInput) return;
 
-  container.innerHTML = '';
+  container.innerHTML = ''; // Очищаем контейнер
+
+  // Получаем массив имён переменных из поля (разделяем по запятой, обрезаем пробелы, удаляем пустые)
   const vars = sensorVarsInput.value.split(',').map(v => v.trim()).filter(Boolean);
+  // Существующие настройки переменных из конфигурации (если есть)
   const existing = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
 
+  // Для каждой переменной создаём строку (ряд) с элементами управления
   vars.forEach((varName, idx) => {
+    // Пытаемся найти уже сохранённые настройки для этой переменной
     const found = existing.find(v => v.var === varName) || null;
 
+    // Создаём контейнер для строки
     const row = document.createElement('div');
     row.className = 'var-settings-row';
-    row.dataset.var = varName;
+    row.dataset.var = varName; // Сохраняем имя переменной в data-атрибуте
     row.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap;';
 
+    // Метка с именем переменной
     const varSpan = document.createElement('span');
     varSpan.textContent = varName;
     varSpan.style.minWidth = '80px';
 
+    // Поле ввода названия графика (label)
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.placeholder = 'Название графика';
-    labelInput.value = (found && found.label) ? found.label : varName;
+    labelInput.value = (found && found.label) ? found.label : varName; // Если есть сохранённое, иначе имя переменной
     labelInput.className = 'var-label-input';
     labelInput.style.flex = '1 1 auto';
 
+    // Выпадающий список для выбора цвета
     const colorSelect = document.createElement('select');
     colorSelect.className = 'var-color-select';
     COLOR_CHOICES.forEach(choice => {
@@ -425,10 +528,12 @@ export function buildVarSettingsUI(sCfg) {
       colorSelect.appendChild(opt);
     });
 
+    // Цвет по умолчанию: из списка по индексу (циклически)
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
     const currentColor = (found && found.color) ? found.color : defaultColor;
-    colorSelect.value = currentColor;
+    colorSelect.value = currentColor; // Устанавливаем выбранное значение
 
+    // Выпадающий список для выбора единицы измерения
     const unitSelect = document.createElement('select');
     unitSelect.className = 'var-unit-select';
     const defaultOption = document.createElement('option');
@@ -436,6 +541,7 @@ export function buildVarSettingsUI(sCfg) {
     defaultOption.textContent = 'Ед. изм.';
     unitSelect.appendChild(defaultOption);
 
+    // Добавляем категории единиц измерения из UNIT_CATEGORIES
     for (const category in UNIT_CATEGORIES) {
       const categoryOptGroup = document.createElement('optgroup');
       categoryOptGroup.label = category;
@@ -449,16 +555,18 @@ export function buildVarSettingsUI(sCfg) {
     }
 
     const currentUnit = (found && found.unit) ? found.unit : '';
-    unitSelect.value = currentUnit;
+    unitSelect.value = currentUnit; // Устанавливаем текущую единицу
 
+    // Поле ввода нижнего предела (синяя зона)
     const lowInput = document.createElement('input');
     lowInput.type = 'number';
-    lowInput.step = 'any';
+    lowInput.step = 'any'; // Любое число (с плавающей точкой)
     lowInput.placeholder = 'Синий <';
     lowInput.className = 'var-low-input';
     lowInput.style.width = '90px';
     lowInput.value = (found && found.lowLimit != null) ? found.lowLimit : '';
 
+    // Поле ввода предела предупреждения (жёлтая зона)
     const warnInput = document.createElement('input');
     warnInput.type = 'number';
     warnInput.step = 'any';
@@ -467,6 +575,7 @@ export function buildVarSettingsUI(sCfg) {
     warnInput.style.width = '90px';
     warnInput.value = (found && found.warnLimit != null) ? found.warnLimit : '';
 
+    // Поле ввода предела тревоги (красная зона)
     const alarmInput = document.createElement('input');
     alarmInput.type = 'number';
     alarmInput.step = 'any';
@@ -475,6 +584,7 @@ export function buildVarSettingsUI(sCfg) {
     alarmInput.style.width = '90px';
     alarmInput.value = (found && found.alarmLimit != null) ? found.alarmLimit : '';
 
+    // Выпадающий список режима обработки
     const processingSelect = document.createElement('select');
     processingSelect.className = 'var-processing-select';
     PROCESSING_MODES.forEach(mode => {
@@ -487,29 +597,35 @@ export function buildVarSettingsUI(sCfg) {
     const currentProcessing = (found && found.processing) ? found.processing : 'none';
     processingSelect.value = currentProcessing;
 
+    // Чекбокс "Показывать сырые данные"
     const showRawCheckbox = document.createElement('input');
     showRawCheckbox.type = 'checkbox';
     showRawCheckbox.className = 'var-show-raw';
     showRawCheckbox.checked = (found && typeof found.showRaw === 'boolean') ? found.showRaw : true;
 
+    // Подпись к чекбоксу (RAW)
     const showRawLabel = document.createElement('label');
     showRawLabel.style.fontSize = '11px';
     showRawLabel.appendChild(showRawCheckbox);
     showRawLabel.appendChild(document.createTextNode(' RAW (сырые)'));
 
+    // Чекбокс "Показывать обработанные данные"
     const showProcCheckbox = document.createElement('input');
     showProcCheckbox.type = 'checkbox';
     showProcCheckbox.className = 'var-show-processed';
+    // По умолчанию показывать обработанные, если выбран не "none" режим
     const defaultShowProcessed = currentProcessing !== 'none';
     showProcCheckbox.checked = (found && typeof found.showProcessed === 'boolean')
       ? found.showProcessed
       : defaultShowProcessed;
 
+    // Подпись к чекбоксу (Обработанные)
     const showProcLabel = document.createElement('label');
     showProcLabel.style.fontSize = '11px';
     showProcLabel.appendChild(showProcCheckbox);
     showProcLabel.appendChild(document.createTextNode(' Обработанные'));
 
+    // Добавляем все созданные элементы в строку
     row.appendChild(varSpan);
     row.appendChild(labelInput);
     row.appendChild(colorSelect);
@@ -521,83 +637,102 @@ export function buildVarSettingsUI(sCfg) {
     row.appendChild(showRawLabel);
     row.appendChild(showProcLabel);
 
+    // Добавляем строку в контейнер
     container.appendChild(row);
   });
 }
 
-// Добавление нового датчика
+// Обработчик нажатия на кнопку добавления нового датчика
 export function onAddSensorClick() {
   let maxId = 0;
+  // Находим максимальный числовой ID среди существующих датчиков
   config.sensors.forEach(s => {
     const n = Number(s.id);
     if (!isNaN(n) && n > maxId) maxId = n;
   });
-  const newId = maxId + 1;
+  const newId = maxId + 1; // Новый ID на единицу больше
 
+  // Создаём объект нового датчика
   const newSensor = { id: newId, name: 'Датчик ' + newId, vars: '', deleted: false };
-  config.sensors.push(newSensor);
-  setCurrentSensor(newId);
+  config.sensors.push(newSensor); // Добавляем в конфигурацию
+  setCurrentSensor(newId);        // Делаем его текущим
 
-  updateSensorPanel();
-  drawCurrent();
-  openEditModal(newId);
+  updateSensorPanel(); // Обновляем панель датчиков
+  drawCurrent();       // Отрисовываем графики (пока пустые)
+  openEditModal(newId); // Открываем окно редактирования для нового датчика
 }
 
-// Сохранение изменений датчика
+// Сохранение изменений датчика после редактирования
 export async function onSaveSensorClick() {
+  // Если нет редактируемого датчика, выходим
   if (editingId == null) return;
 
+  // Ищем конфигурацию редактируемого датчика
   let sCfg = config.sensors.find(s => String(s.id) === String(editingId));
+  // Если не найден (странно), создаём новый объект и добавляем
   if (!sCfg) {
     sCfg = { id: editingId, deleted: false };
     config.sensors.push(sCfg);
   }
 
+  // Получаем поле ввода ID датчика
   const sensorIdInput = document.getElementById('sensorId');
-  let newId = (sensorIdInput?.value.trim() || String(sCfg.id));
+  let newId = (sensorIdInput?.value.trim() || String(sCfg.id)); // Новый ID или старый
 
+  // Проверяем, что ID состоит только из допустимых символов (буквы, цифры, _, -)
   if (!/^[a-zA-Z0-9_-]+$/.test(newId)) {
     alert('ID датчика может содержать только буквы, цифры, "_" и "-"');
     return;
   }
 
+  // Если после проверки newId пустая строка, оставляем старый ID
   if (newId === '') newId = String(sCfg.id);
 
-  const oldId = String(sCfg.id);
+  const oldId = String(sCfg.id); // Сохраняем старый ID для сравнения
+
+  // Проверяем, не существует ли уже датчик с таким ID (кроме текущего)
   const conflict = config.sensors.find(s => String(s.id) === newId && s !== sCfg);
   if (conflict) {
     alert(`❌ Датчик с ID «${newId}» уже существует. Укажите уникальный ID.`);
     return;
   }
 
-  sCfg.id = newId;
+  sCfg.id = newId; // Присваиваем новый ID
 
+  // Если текущий выбранный датчик имел старый ID, обновляем его на новый
   if (String(currentSensor) === oldId) setCurrentSensor(newId);
+  // Если редактируемый датчик имел старый ID, обновляем editingId
   if (String(editingId) === oldId) editingId = newId;
 
+  // Получаем поле имени датчика
   const sensorNameInput = document.getElementById('sensorName');
+  // Получаем поле списка переменных
   const sensorVarsInput = document.getElementById('sensorVars');
 
+  // Устанавливаем имя: если поле не пустое, используем его, иначе "Датчик {newId}"
   sCfg.name = sensorNameInput
     ? (sensorNameInput.value.trim() || ('Датчик ' + newId))
     : ('Датчик ' + newId);
 
+  // Получаем строку переменных и проверяем на допустимые символы
   const rawVars = sensorVarsInput ? sensorVarsInput.value.trim() : '';
   if (!/^[a-zA-Z0-9_,\s-]*$/.test(rawVars)) {
     alert('Недопустимые символы в списке переменных');
     return;
   }
+  sCfg.vars = rawVars; // Сохраняем как есть (позже может быть преобразована)
 
-  sCfg.vars = rawVars;
-
+  // Собираем настройки для каждой переменной из UI
   const container = document.getElementById('varSettingsContainer');
   if (container) {
-    const rows = container.querySelectorAll('.var-settings-row');
-    const settings = [];
+    const rows = container.querySelectorAll('.var-settings-row'); // Все строки
+    const settings = []; // Массив для новых настроек
+
     rows.forEach(row => {
-      const varName = row.dataset.var;
+      const varName = row.dataset.var; // Имя переменной из data-атрибута
       if (!varName) return;
 
+      // Находим все элементы внутри строки
       const labelInput = row.querySelector('.var-label-input');
       const colorSelect = row.querySelector('.var-color-select');
       const unitSelect = row.querySelector('.var-unit-select');
@@ -608,6 +743,7 @@ export async function onSaveSensorClick() {
       const showRawCheckbox = row.querySelector('.var-show-raw');
       const showProcCheckbox = row.querySelector('.var-show-processed');
 
+      // Извлекаем значения (если элемент отсутствует, подставляем значения по умолчанию)
       const label = labelInput ? labelInput.value.trim() : varName;
       const color = colorSelect ? (colorSelect.value || '#ff0000') : '#ff0000';
       const unit = unitSelect ? unitSelect.value.trim() : '';
@@ -616,6 +752,7 @@ export async function onSaveSensorClick() {
       const warnStr = warnInput ? warnInput.value.trim() : '';
       const alarmStr = alarmInput ? alarmInput.value.trim() : '';
 
+      // Преобразуем в числа, если строка не пустая; иначе null
       const lowLimit = lowStr === '' ? null : Number(lowStr);
       const warnLimit = warnStr === '' ? null : Number(warnStr);
       const alarmLimit = alarmStr === '' ? null : Number(alarmStr);
@@ -624,8 +761,9 @@ export async function onSaveSensorClick() {
       const showRaw = showRawCheckbox ? showRawCheckbox.checked : true;
       const showProcessed = showProcCheckbox
         ? showProcCheckbox.checked
-        : (processing !== 'none');
+        : (processing !== 'none'); // По умолчанию показывать обработанные, если режим не "none"
 
+      // Формируем объект настроек для переменной
       settings.push({
         var: varName,
         label: label || varName,
@@ -639,87 +777,102 @@ export async function onSaveSensorClick() {
         showProcessed
       });
     });
-    sCfg.varSettings = settings;
+    sCfg.varSettings = settings; // Сохраняем в конфигурацию
   }
 
-  closeEditModal();
-  await saveConfigWithMessage();
-  updateSensorPanel();
-  drawCurrent();
+  closeEditModal(); // Закрываем окно редактирования
+  await saveConfigWithMessage(); // Сохраняем конфигурацию на сервер с уведомлением
+  updateSensorPanel(); // Обновляем панель датчиков
+  drawCurrent();       // Перерисовываем графики с новыми настройками
 }
 
-// Удаление датчика
+// Обработчик удаления датчика
 export async function onDeleteSensorClick() {
+  // Если нет редактируемого датчика, выходим
   if (editingId == null) return;
+  // Находим индекс датчика в массиве
   const idx = config.sensors.findIndex(s => String(s.id) === String(editingId));
   if (idx === -1) return;
+  // Получаем имя датчика для сообщения
   const name = config.sensors[idx].name || ('Датчик ' + editingId);
+  // Запрашиваем подтверждение у пользователя
   if (!confirm(`Удалить «${name}»?`)) return;
 
+  // Удаляем датчик из массива (splice)
   config.sensors.splice(idx, 1);
-  closeEditModal();
-  await saveConfigWithMessage();
-  updateSensorPanel();
-  drawCurrent();
-  editingId = null;
+  closeEditModal(); // Закрываем модальное окно
+  await saveConfigWithMessage(); // Сохраняем изменения
+  updateSensorPanel(); // Обновляем панель
+  drawCurrent();       // Перерисовываем графики (уже без удалённого)
+  editingId = null;    // Сбрасываем ID редактирования
 }
 
 /* ========== МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ОТМЕНЫ ========== */
 
+// Функции для управления окном подтверждения отмены редактирования
 export function openCancelConfirm() {
   const backdrop = document.getElementById('cancelConfirmBackdrop');
-  if (backdrop) backdrop.style.display = 'flex';
+  if (backdrop) backdrop.style.display = 'flex'; // Показываем фон
 }
 
 export function closeCancelConfirm() {
   const backdrop = document.getElementById('cancelConfirmBackdrop');
-  if (backdrop) backdrop.style.display = 'none';
+  if (backdrop) backdrop.style.display = 'none'; // Скрываем фон
 }
 
+// Обработчик нажатия на кнопку "Отмена" в форме редактирования (открывает подтверждение)
 export function onCancelSensorClick() {
   openCancelConfirm();
 }
 
+// Обработчик подтверждения отмены (кнопка "Да" в окне подтверждения)
 export function onCancelConfirmOk() {
-  closeCancelConfirm();
-  closeEditModal();
-  editingId = null;
+  closeCancelConfirm(); // Закрываем окно подтверждения
+  closeEditModal();      // Закрываем окно редактирования
+  editingId = null;      // Сбрасываем ID редактирования
 }
 
+// Обработчик возврата из окна подтверждения (кнопка "Назад")
 export function onCancelConfirmBack() {
-  closeCancelConfirm();
+  closeCancelConfirm(); // Просто закрываем окно подтверждения
 }
 
 /* ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ========== */
 
-// Обновление таймера работы системы
+// Обновление таймера работы системы (отображается в интерфейсе)
 export function updateTimer() {
-  if (!serverStart) return;
+  if (!serverStart) return; // Если время запуска неизвестно, ничего не делаем
   const timerEl = document.getElementById('timer');
   if (!timerEl) return;
 
+  // Вычисляем прошедшее время в секундах
   const elapsedSec = Math.floor((Date.now() - serverStart) / 1000);
+  // Разбиваем на часы, минуты, секунды
   const h = Math.floor(elapsedSec / 3600);
   const m = Math.floor((elapsedSec % 3600) / 60);
   const s = elapsedSec % 60;
+  // Форматируем строку с ведущими нулями и выводим
   timerEl.textContent = `Время работы: ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-// Показать всплывающее уведомление
+// Показать всплывающее уведомление (toast)
 export function showToast(message) {
-  let toast = document.getElementById('toastMessage');
+  let toast = document.getElementById('toastMessage'); // Ищем существующий элемент
   if (!toast) {
+    // Если элемента нет, создаём его
     toast = document.createElement('div');
     toast.id = 'toastMessage';
-    toast.className = 'toast';
+    toast.className = 'toast'; // Базовый класс для стилей
     document.body.appendChild(toast);
   }
 
-  toast.textContent = message;
-  toast.classList.add('toast-show');
+  toast.textContent = message;               // Устанавливаем текст
+  toast.classList.add('toast-show');          // Добавляем класс для отображения (анимация)
 
+  // Если уже есть запущенный таймер скрытия, сбрасываем его
   if (toastTimer) clearTimeout(toastTimer);
+  // Устанавливаем новый таймер на скрытие через 2.5 секунды
   toastTimer = setTimeout(() => {
-    toast.classList.remove('toast-show');
+    toast.classList.remove('toast-show');     // Убираем класс, скрываем
   }, 2500);
 }

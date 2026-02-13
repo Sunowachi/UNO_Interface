@@ -483,3 +483,16 @@
 2026-01-31 21:30:27 | pid=1656 | thread=pool-2-thread-51 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54069
 2026-01-31 21:30:39 | pid=1656 | thread=pool-2-thread-59 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53150
 2026-01-31 21:30:52 | pid=1656 | thread=pool-2-thread-67 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:58108
+2026-01-31 21:31:05 | pid=1656 | thread=pool-2-thread-75 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:60211
+2026-01-31 21:31:19 | pid=1656 | thread=pool-2-thread-89 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54659
+2026-01-31 21:31:36 | pid=1656 | thread=pool-2-thread-1 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:65138
+2026-01-31 21:32:20 | pid=1656 | thread=pool-2-thread-48 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50079
+2026-02-01 16:46:41 | pid=27276 | thread=pool-2-thread-7 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59293
+2026-02-01 16:46:47 | pid=27276 | thread=pool-2-thread-8 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59296
+2026-02-01 16:46:54 | pid=27276 | thread=pool-2-thread-9 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51478
+2026-02-01 16:47:05 | pid=27276 | thread=pool-2-thread-10 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51489
+2026-02-01 16:47:19 | pid=27276 | thread=pool-2-thread-11 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51492
+2026-02-01 16:47:32 | pid=27276 | thread=pool-2-thread-12 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51501
+2026-02-01 16:47:45 | pid=27276 | thread=pool-2-thread-13 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51502
+2026-02-01 16:47:59 | pid=27276 | thread=pool-2-thread-14 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51504
+2026-02-13 17:11:02 | pid=13088 | thread=pool-2-thread-17 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
