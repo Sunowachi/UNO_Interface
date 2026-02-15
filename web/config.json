@@ -34,6 +34,167 @@
           "showProcessed": true
         }
       ]
+    },
+    {
+      "id": "1",
+      "name": "Датчик 1",
+      "vars": "",
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "2",
+      "name": "Датчик 2",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "3",
+      "name": "Датчик 3",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "4",
+      "name": "Датчик 4",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "5",
+      "name": "Датчик 5",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "6",
+      "name": "Датчик 6",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "7",
+      "name": "Датчик 7",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "8",
+      "name": "Датчик 8",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "9",
+      "name": "Датчик 9",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "10",
+      "name": "Датчик 10",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "11",
+      "name": "Датчик 11",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "12",
+      "name": "Датчик 12",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "13",
+      "name": "Датчик 13",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "14",
+      "name": "Датчик 14",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "15",
+      "name": "Датчик 15",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "16",
+      "name": "Датчик 16",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "17",
+      "name": "Датчик 17",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "18",
+      "name": "Датчик 18",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "19",
+      "name": "Датчик 19",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "20",
+      "name": "Датчик 20",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "21",
+      "name": "Датчик 21",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "22",
+      "name": "Датчик 22",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
+    },
+    {
+      "id": "23",
+      "name": "Датчик 2300",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
     }
   ]
 }

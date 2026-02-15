@@ -370,6 +370,7 @@ public class Security {
     // Метод, вызываемый при старте для создания учётной записи разработчика по умолчанию
     static void ensureDefaultDeveloper() {
         Database.ensureDefaultDeveloper();
+        Database.Dev_User();
     }
 
     // ================= УЧЕТ НЕУДАЧНЫХ ПОПЫТОК ВХОДА =================

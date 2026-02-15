@@ -503,24 +503,22 @@ export function buildVarSettingsUI(sCfg) {
     const row = document.createElement('div');
     row.className = 'var-settings-row';
     row.dataset.var = varName; // Сохраняем имя переменной в data-атрибуте
-    row.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-wrap: wrap;';
 
     // Метка с именем переменной
     const varSpan = document.createElement('span');
     varSpan.textContent = varName;
-    varSpan.style.minWidth = '80px';
+    varSpan.className = 'var-name-label';
 
     // Поле ввода названия графика (label)
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.placeholder = 'Название графика';
     labelInput.value = (found && found.label) ? found.label : varName; // Если есть сохранённое, иначе имя переменной
-    labelInput.className = 'var-label-input';
-    labelInput.style.flex = '1 1 auto';
+    labelInput.className = 'var-label-input input-full';
 
     // Выпадающий список для выбора цвета
     const colorSelect = document.createElement('select');
-    colorSelect.className = 'var-color-select';
+    colorSelect.className = 'var-color-select select-full';
     COLOR_CHOICES.forEach(choice => {
       const opt = document.createElement('option');
       opt.value = choice.value;
@@ -530,12 +528,11 @@ export function buildVarSettingsUI(sCfg) {
 
     // Цвет по умолчанию: из списка по индексу (циклически)
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
-    const currentColor = (found && found.color) ? found.color : defaultColor;
-    colorSelect.value = currentColor; // Устанавливаем выбранное значение
+    colorSelect.value = (found && found.color) ? found.color : defaultColor;
 
-    // Выпадающий список для выбора единицы измерения
+    // Выпадающий список единиц измерения
     const unitSelect = document.createElement('select');
-    unitSelect.className = 'var-unit-select';
+    unitSelect.className = 'var-unit-select select-full';
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
     defaultOption.textContent = 'Ед. изм.';
@@ -543,26 +540,24 @@ export function buildVarSettingsUI(sCfg) {
 
     // Добавляем категории единиц измерения из UNIT_CATEGORIES
     for (const category in UNIT_CATEGORIES) {
-      const categoryOptGroup = document.createElement('optgroup');
-      categoryOptGroup.label = category;
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = category;
       UNIT_CATEGORIES[category].forEach(unit => {
         const option = document.createElement('option');
         option.value = unit.value;
         option.textContent = unit.name;
-        categoryOptGroup.appendChild(option);
+        optgroup.appendChild(option);
       });
-      unitSelect.appendChild(categoryOptGroup);
+      unitSelect.appendChild(optgroup);
     }
-
-    const currentUnit = (found && found.unit) ? found.unit : '';
-    unitSelect.value = currentUnit; // Устанавливаем текущую единицу
+    unitSelect.value = (found && found.unit) ? found.unit : ''; // Устанавливаем текущую единицу
 
     // Поле ввода нижнего предела (синяя зона)
     const lowInput = document.createElement('input');
     lowInput.type = 'number';
     lowInput.step = 'any'; // Любое число (с плавающей точкой)
     lowInput.placeholder = 'Синий <';
-    lowInput.className = 'var-low-input';
+    lowInput.className = 'var-low-input input-full';
     lowInput.style.width = '90px';
     lowInput.value = (found && found.lowLimit != null) ? found.lowLimit : '';
 
@@ -571,7 +566,7 @@ export function buildVarSettingsUI(sCfg) {
     warnInput.type = 'number';
     warnInput.step = 'any';
     warnInput.placeholder = 'Жёлтый ≥';
-    warnInput.className = 'var-warn-input';
+    warnInput.className = 'var-warn-input input-full';
     warnInput.style.width = '90px';
     warnInput.value = (found && found.warnLimit != null) ? found.warnLimit : '';
 
@@ -580,22 +575,20 @@ export function buildVarSettingsUI(sCfg) {
     alarmInput.type = 'number';
     alarmInput.step = 'any';
     alarmInput.placeholder = 'Красный ≥';
-    alarmInput.className = 'var-alarm-input';
+    alarmInput.className = 'var-alarm-input input-full';
     alarmInput.style.width = '90px';
     alarmInput.value = (found && found.alarmLimit != null) ? found.alarmLimit : '';
 
     // Выпадающий список режима обработки
     const processingSelect = document.createElement('select');
-    processingSelect.className = 'var-processing-select';
+    processingSelect.className = 'var-processing-select select-full';
     PROCESSING_MODES.forEach(mode => {
       const opt = document.createElement('option');
       opt.value = mode.value;
       opt.textContent = mode.label;
       processingSelect.appendChild(opt);
     });
-
-    const currentProcessing = (found && found.processing) ? found.processing : 'none';
-    processingSelect.value = currentProcessing;
+    processingSelect.value = (found && found.processing) ? found.processing : 'none';
 
     // Чекбокс "Показывать сырые данные"
     const showRawCheckbox = document.createElement('input');
@@ -605,7 +598,7 @@ export function buildVarSettingsUI(sCfg) {
 
     // Подпись к чекбоксу (RAW)
     const showRawLabel = document.createElement('label');
-    showRawLabel.style.fontSize = '11px';
+    showRawLabel.className = 'checkbox-label';
     showRawLabel.appendChild(showRawCheckbox);
     showRawLabel.appendChild(document.createTextNode(' RAW (сырые)'));
 
@@ -614,14 +607,14 @@ export function buildVarSettingsUI(sCfg) {
     showProcCheckbox.type = 'checkbox';
     showProcCheckbox.className = 'var-show-processed';
     // По умолчанию показывать обработанные, если выбран не "none" режим
-    const defaultShowProcessed = currentProcessing !== 'none';
+    const defaultShowProcessed = processingSelect.value !== 'none';
     showProcCheckbox.checked = (found && typeof found.showProcessed === 'boolean')
       ? found.showProcessed
       : defaultShowProcessed;
 
     // Подпись к чекбоксу (Обработанные)
     const showProcLabel = document.createElement('label');
-    showProcLabel.style.fontSize = '11px';
+    showProcLabel.className = 'checkbox-label';
     showProcLabel.appendChild(showProcCheckbox);
     showProcLabel.appendChild(document.createTextNode(' Обработанные'));
 

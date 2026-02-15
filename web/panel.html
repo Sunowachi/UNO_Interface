@@ -37,13 +37,19 @@
                 <div id="chartsContainer" class="charts-container"></div>
             </div>
 
-            <!-- Панель управления датчиками -->
+            <!-- Панель управления датчиками (исправлена) -->
             <div class="card" id="sensorPanel">
-                <h3>Датчики</h3>
-                <ul id="sensorList" class="list-reset"></ul>
-                <button id="addSensorBtn" class="btn btn-full margin-top">
-                    ➕ Добавить датчик
-                </button>
+                <div class="panel-header">
+                    <h3>Датчики</h3>
+                </div>
+                <div class="sensor-list-container">
+                    <ul id="sensorList" class="sensor-list"></ul>
+                </div>
+                <div class="panel-footer">
+                    <button id="addSensorBtn" class="btn btn-full">
+                        ➕ Добавить датчик
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -56,56 +62,44 @@
 </div>
 
 <!-- Модальные окна -->
-
-<!-- Модальное окно редактирования датчика -->
 <div id="editModalBackdrop" class="modal-backdrop">
     <div class="modal">
         <h3>Редактирование датчика</h3>
-
-        <label>
-            ID датчика:<br>
-            <input id="sensorId" class="input-full">
-        </label>
-
-        <br><br>
-
-        <label>
-            Название датчика:<br>
-            <input id="sensorName" class="input-full">
-        </label>
-
-        <br><br>
-
-        <label>
-            Переменные (через запятую):<br>
-            <input id="sensorVars" class="input-full">
-        </label>
-
-        <div id="varSettingsBlock" class="margin-top">
-            <h4>Настройки переменных</h4>
-            <div id="varSettingsContainer" class="var-settings-container"></div>
+        <div class="modal-content-scroll">
+            <label>
+                ID датчика:<br>
+                <input id="sensorId" class="input-full">
+            </label>
+            <br><br>
+            <label>
+                Название датчика:<br>
+                <input id="sensorName" class="input-full">
+            </label>
+            <br><br>
+            <label>
+                Переменные (через запятую):<br>
+                <input id="sensorVars" class="input-full">
+            </label>
+            <div id="varSettingsBlock" class="margin-top">
+                <h4>Настройки переменных</h4>
+                <div id="varSettingsContainer" class="var-settings-container"></div>
+            </div>
         </div>
-
         <div class="modal-footer">
-            <button id="deleteSensorBtn" class="btn btn-danger margin-right-auto">
-                Удалить
-            </button>
+            <button id="deleteSensorBtn" class="btn btn-danger margin-right-auto">Удалить</button>
             <button id="cancelSensorBtn" class="btn">Отмена</button>
             <button id="saveSensorBtn" class="btn btn-primary">Сохранить</button>
         </div>
     </div>
 </div>
 
-<!-- Модальное окно подтверждения отмены -->
 <div id="cancelConfirmBackdrop" class="modal-backdrop">
     <div class="modal">
         <h3>Отменить изменения?</h3>
         <p>Изменения не будут сохранены.</p>
         <div class="modal-footer">
             <button id="cancelConfirmBackBtn" class="btn">Вернуться</button>
-            <button id="cancelConfirmOkBtn" class="btn btn-danger">
-                Подтвердить
-            </button>
+            <button id="cancelConfirmOkBtn" class="btn btn-danger">Подтвердить</button>
         </div>
     </div>
 </div>
@@ -114,14 +108,9 @@
 <div id="loginModal" class="login-backdrop">
     <div class="login-box">
         <h2>Вход</h2>
-
         <input id="loginUser" placeholder="Логин">
         <input id="loginPass" type="password" placeholder="Пароль">
-
-        <button id="loginBtn" type="button" class="btn btn-primary btn-full">
-            Войти
-        </button>
-
+        <button id="loginBtn" type="button" class="btn btn-primary btn-full">Войти</button>
         <div id="loginError"></div>
     </div>
 </div>

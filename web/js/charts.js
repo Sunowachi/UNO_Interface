@@ -152,43 +152,40 @@ export function drawCurrent() {
 
       // Создаём карточку с текущим значением
       valueCard = document.createElement('div');
-      valueCard.className = 'card';
-      valueCard.style.cssText = 'width: 180px; height: 200px; padding: 15px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 8px; background-color: #f8f9fa;';
+      valueCard.className = 'card chart-value-card';
 
       // Заголовок карточки (имя переменной)
       const valueTitle = document.createElement('div');
+      valueTitle.className = 'chart-value-title';
       valueTitle.textContent = baseLabel;
-      valueTitle.style.cssText = 'font-weight: bold; font-size: 16px; margin-bottom: 8px; color: #333;';
 
       // Текст с последним значением
       const valueText = document.createElement('div');
-      valueText.style.cssText = 'font-size: 20px; font-weight: 600; color: #007bff;';
+      valueText.className = 'chart-value-number';
       valueText.textContent = Number.isFinite(lastVal) ? (lastVal.toFixed(2) + (unit ? ' ' + unit : '')) : 'нет данных';
 
       // Собираем карточку
       valueCard.appendChild(valueTitle);
       valueCard.appendChild(valueText);
-      if (alertClass) valueCard.classList.add(alertClass); // Добавляем класс мигания, если есть
+      if (alertClass) valueCard.classList.add(alertClass); // Добавляем класс мигания
 
       // Контейнер для графика (заголовок + область прокрутки)
       const chartContainer = document.createElement('div');
-      chartContainer.style.cssText = 'flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; max-width: calc(100vw - 350px); overflow: hidden;';
+      chartContainer.className = 'chart-graph-container';
 
       // Заголовок графика
       const title = document.createElement('h3');
+      title.className = 'chart-title';
       title.textContent = titleText;
-      title.style.cssText = 'margin: 0 0 5px 0; font-size: 18px; color: #444;';
-      chartContainer.appendChild(title);
 
       // Обёртка для прокрутки (горизонтальный скролл)
       scrollWrapper = document.createElement('div');
-      scrollWrapper.style.cssText = 'overflow-x: auto; overflow-y: hidden; width: 100%; max-width: 100%; padding-bottom: 6px; cursor: grab; background-color: #fff; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);';
+      scrollWrapper.className = 'chart-scroll-wrapper';
 
       // Сам холст для рисования графика
       canvas = document.createElement('canvas');
       canvas.id = canvasId;
       canvas.height = 220; // Фиксированная высота
-      canvas.style.display = 'block';
 
       // Вычисляем желаемую ширину холста на основе количества точек и CHART_POINT_PX
       const pointsCount = Math.max(rawValues?.length || 0, processedValues?.length || 0);
@@ -250,76 +247,49 @@ export function drawCurrent() {
 
     } else {
       // Если обёртка уже существует, обновляем её содержимое
-      valueCard = wrapper.querySelector('.card'); // Ищем карточку
-      scrollWrapper = wrapper.querySelector('div[style*="overflowX"]') || wrapper.querySelector('div'); // Ищем элемент с прокруткой
-      canvas = document.getElementById(canvasId) || wrapper.querySelector('canvas'); // Ищем холст
-
-      // Обновляем заголовок карточки
-      const valueTitle = valueCard ? valueCard.querySelector('div:nth-child(1)') : null;
-      if (valueTitle) {
-        valueTitle.textContent = baseLabel;
-        valueTitle.style.cssText = 'font-weight: bold; font-size: 16px; color: #333;';
-      }
-
-      // Обновляем текст значения в карточке
-      const valueText = valueCard ? valueCard.querySelector('div:nth-child(2)') : null;
-      if (valueText) {
-        valueText.textContent = Number.isFinite(lastVal)
-          ? (lastVal.toFixed(2) + (unit ? ' ' + unit : ''))
-          : 'нет данных';
-        valueText.style.cssText = 'font-size: 20px; color: #007bff;';
-      }
-
-      // Обновляем классы мигания
+      valueCard = wrapper.querySelector('.card.chart-value-card');
       if (valueCard) {
+        const valueTitle = valueCard.querySelector('.chart-value-title');
+        if (valueTitle) valueTitle.textContent = baseLabel;
+        const valueText = valueCard.querySelector('.chart-value-number');
+        if (valueText) {
+          valueText.textContent = Number.isFinite(lastVal)
+            ? (lastVal.toFixed(2) + (unit ? ' ' + unit : ''))
+            : 'нет данных';
+        }
         valueCard.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
         if (alertClass) valueCard.classList.add(alertClass);
       }
 
-      // Обновляем заголовок графика
-      const title = wrapper.querySelector('h3');
-      if (title) {
-        title.textContent = titleText;
-        title.style.cssText = 'margin: 0 0 5px 0; font-size: 18px; color: #444;';
-      }
+      const title = wrapper.querySelector('.chart-title');
+      if (title) title.textContent = titleText;
 
-      // Убеждаемся, что стили wrapper правильные (на случай изменений)
-      wrapper.style.cssText = 'display: flex; flex-direction: row; gap: 15px; align-items: flex-start; margin-bottom: 20px;';
-
-      if (valueCard) {
-        valueCard.style.cssText = 'width: 180px; height: 200px; padding: 15px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 8px; background-color: #f8f9fa;';
-      }
+      scrollWrapper = wrapper.querySelector('.chart-scroll-wrapper');
+      canvas = document.getElementById(canvasId) || wrapper.querySelector('canvas');
     }
 
-    // Если холст найден или создан, обновляем его размер и перерисовываем
     if (canvas) {
-      // Количество точек для определения ширины
       const pointsCountNow = Math.max(rawValues?.length || 0, processedValues?.length || 0);
       const desiredWidth = Math.min(CHART_MAX_CONTENT_PX, Math.max(CHART_MIN_CANVAS_PX, pointsCountNow * CHART_POINT_PX));
 
-      // Определяем, находится ли прокрутка в конце (чтобы после изменения ширины остаться там же)
       const atEnd = scrollWrapper ? (Math.abs(scrollWrapper.scrollLeft - (scrollWrapper.scrollWidth - scrollWrapper.clientWidth)) <= 2) : true;
       const prevScrollWidth = scrollWrapper ? scrollWrapper.scrollWidth : 0;
       const prevScrollLeft = scrollWrapper ? scrollWrapper.scrollLeft : 0;
 
-      // Если ширина холста изменилась
       if (canvas.width !== desiredWidth) {
         canvas.width = desiredWidth;
         if (scrollWrapper) {
           if (atEnd) {
-            // Если были в конце, после изменения ширины снова прокручиваем в конец
             requestAnimationFrame(() => {
               scrollWrapper.scrollLeft = Math.max(0, scrollWrapper.scrollWidth - scrollWrapper.clientWidth);
             });
           } else {
-            // Иначе сохраняем относительную позицию (добавляем разницу в ширине)
             const delta = (scrollWrapper.scrollWidth - prevScrollWidth);
             scrollWrapper.scrollLeft = Math.max(0, prevScrollLeft + delta);
           }
         }
       }
 
-      // Вызываем функцию отрисовки графика на холсте
       drawChart(canvas.id, showRaw ? rawValues : null, showProcessed ? processedValues : null, times, {
         rawColor: RAW_COLOR,
         processedColor: color,
@@ -328,7 +298,6 @@ export function drawCurrent() {
     }
   }
 
-  // Удаляем лишние обёртки, которые больше не нужны (например, для переменных, которых больше нет)
   const toRemove = [];
   for (const child of Array.from(container.children)) {
     if (child.id && child.id.startsWith('wrapper_chart_') && !desiredWrapperIds.has(child.id)) {
@@ -353,11 +322,14 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   const w = canvas.width;   // ширина холста
   const h = canvas.height;  // высота холста
 
+  // Получаем цвета из CSS-переменных
+  const rootStyles = getComputedStyle(document.documentElement);
+  const textColor = rootStyles.getPropertyValue('--color-text').trim();
+  const gridColor = rootStyles.getPropertyValue('--color-border').trim();
+  const axisColor = rootStyles.getPropertyValue('--color-text-secondary').trim();
+
   // Отступы от краёв для области рисования графика
-  const left = 80;
-  const right = 40;
-  const top = 25;
-  const bottom = 55;
+  const left = 80, right = 40, top = 25, bottom = 55;
 
   // Очищаем холст (заливаем прозрачным)
   ctx.clearRect(0, 0, w, h);
@@ -410,7 +382,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   }
 
   // Отрисовка горизонтальных линий сетки (пунктир)
-  ctx.strokeStyle = '#ddd';
+  ctx.strokeStyle = gridColor;
   ctx.setLineDash([4, 4]);
   for (let i = 0; i <= 5; i++) {
     const y = top + (ch / 5) * i; // позиция по Y
@@ -422,7 +394,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   ctx.setLineDash([]); // сбрасываем пунктир
 
   // Отрисовка осей (вертикальная и горизонтальная линии)
-  ctx.strokeStyle = '#000';
+  ctx.strokeStyle = axisColor;
   ctx.beginPath();
   ctx.moveTo(left, top);
   ctx.lineTo(left, h - bottom);
@@ -430,7 +402,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
   ctx.stroke();
 
   // Подписи значений по оси Y (слева)
-  ctx.fillStyle = '#333';
+  ctx.fillStyle = textColor;
   ctx.font = '12px sans-serif';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
@@ -446,6 +418,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
     ctx.translate(18, h / 2); // смещаем в левую часть по центру высоты
     ctx.rotate(-Math.PI / 2); // поворачиваем на -90 градусов (вертикально)
     ctx.textAlign = 'center';
+    ctx.fillStyle = textColor;
     ctx.fillText(options.ylabel, 0, 0); // рисуем текст
     ctx.restore(); // восстанавливаем состояние
   }
@@ -461,7 +434,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
       2 * 3600e3;                              // иначе шаг 2 часа
 
     ctx.font = '11px sans-serif';
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
@@ -471,7 +444,7 @@ export function drawChart(id, rawData, processedData, times, options = {}) {
       const x = left + ((t - tStart) / tSpan) * cw;
 
       // Рисуем пунктирную вертикальную линию
-      ctx.strokeStyle = '#ddd';
+      ctx.strokeStyle = gridColor;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(x, top);

@@ -496,3 +496,86 @@
 2026-02-01 16:47:45 | pid=27276 | thread=pool-2-thread-13 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51502
 2026-02-01 16:47:59 | pid=27276 | thread=pool-2-thread-14 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51504
 2026-02-13 17:11:02 | pid=13088 | thread=pool-2-thread-17 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-13 18:01:24 | pid=17136 | thread=pool-2-thread-2 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:53390 sid=80a437d9
+2026-02-13 18:01:24 | pid=17136 | thread=pool-2-thread-3 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:53390 sid=80a437d9
+2026-02-13 18:01:24 | pid=17136 | thread=pool-2-thread-4 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:53390 sid=80a437d9
+2026-02-13 18:01:27 | pid=17136 | thread=pool-2-thread-6 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-14 09:30:07 | pid=24100 | thread=pool-2-thread-91 | user=developer | action=LOGIN_FAIL | ip=192.168.3.132
+2026-02-14 09:30:14 | pid=24100 | thread=pool-2-thread-93 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53634
+2026-02-14 09:30:20 | pid=24100 | thread=pool-2-thread-94 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53635
+2026-02-14 09:30:27 | pid=24100 | thread=pool-2-thread-95 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53636
+2026-02-14 09:30:28 | pid=24100 | thread=pool-2-thread-96 | user=developer | action=LOGIN_FAIL | ip=192.168.3.132
+2026-02-14 09:30:39 | pid=24100 | thread=pool-2-thread-97 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53637
+2026-02-14 09:30:52 | pid=24100 | thread=pool-2-thread-98 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53639
+2026-02-14 09:31:07 | pid=24100 | thread=pool-2-thread-100 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53641
+2026-02-14 09:31:12 | pid=24100 | thread=pool-2-thread-1 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53642
+2026-02-14 09:31:15 | pid=24100 | thread=pool-2-thread-6 | user= | action=LOGIN_FAIL | ip=192.168.3.132
+2026-02-14 09:31:19 | pid=24100 | thread=pool-2-thread-7 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53644
+2026-02-14 09:31:30 | pid=24100 | thread=pool-2-thread-9 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-14 09:31:35 | pid=24100 | thread=pool-2-thread-16 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53534
+2026-02-14 09:34:53 | pid=24100 | thread=pool-2-thread-37 | user=developer | action=LOGIN_FAIL | ip=192.168.3.132
+2026-02-14 09:37:57 | pid=24100 | thread=pool-2-thread-25 | user=developer | action=LOGIN_FAIL | ip=192.168.3.132
+2026-02-14 09:59:01 | pid=20068 | thread=pool-2-thread-10 | user=Dev_User | action=LOGIN_FAIL | ip=192.168.3.132
+2026-02-14 09:59:06 | pid=20068 | thread=pool-2-thread-12 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57104
+2026-02-14 09:59:12 | pid=20068 | thread=pool-2-thread-13 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57913
+2026-02-14 09:59:19 | pid=20068 | thread=pool-2-thread-14 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:49971
+2026-02-14 09:59:30 | pid=20068 | thread=pool-2-thread-15 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:52344
+2026-02-14 09:59:44 | pid=20068 | thread=pool-2-thread-16 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63778
+2026-02-14 09:59:58 | pid=20068 | thread=pool-2-thread-17 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53130
+2026-02-14 10:00:12 | pid=20068 | thread=pool-2-thread-18 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54308
+2026-02-14 10:00:25 | pid=20068 | thread=pool-2-thread-19 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:50061
+2026-02-14 10:01:04 | pid=17044 | thread=pool-2-thread-7 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:56951
+2026-02-14 10:01:10 | pid=17044 | thread=pool-2-thread-8 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:54673
+2026-02-14 10:01:18 | pid=17044 | thread=pool-2-thread-9 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:55606
+2026-02-14 10:01:30 | pid=17044 | thread=pool-2-thread-10 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64697
+2026-02-14 10:01:44 | pid=17044 | thread=pool-2-thread-11 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57463
+2026-02-14 10:01:57 | pid=17044 | thread=pool-2-thread-12 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51379
+2026-02-14 10:02:11 | pid=17044 | thread=pool-2-thread-13 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53216
+2026-02-14 10:02:26 | pid=17044 | thread=pool-2-thread-15 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63526
+2026-02-14 10:02:39 | pid=17044 | thread=pool-2-thread-20 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-14 10:02:43 | pid=17044 | thread=pool-2-thread-25 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51569
+2026-02-14 10:04:51 | pid=24972 | thread=pool-2-thread-1 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:65304 sid=a6fdcd6f
+2026-02-14 10:04:51 | pid=24972 | thread=pool-2-thread-2 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:65304 sid=a6fdcd6f
+2026-02-14 10:05:02 | pid=24972 | thread=pool-2-thread-7 | user=Dev_User | action=LOGIN_SUCCESS | ip=192.168.3.132
+2026-02-14 10:05:12 | pid=24972 | thread=pool-2-thread-19 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:52241
+2026-02-14 10:05:17 | pid=24972 | thread=pool-2-thread-23 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57077
+2026-02-14 10:05:25 | pid=24972 | thread=pool-2-thread-28 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63740
+2026-02-14 10:05:37 | pid=24972 | thread=pool-2-thread-37 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64034
+2026-02-14 10:05:50 | pid=24972 | thread=pool-2-thread-45 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:49829
+2026-02-14 10:06:05 | pid=24972 | thread=pool-2-thread-55 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63285
+2026-02-14 10:06:10 | pid=24972 | thread=pool-2-thread-59 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:59018
+2026-02-14 10:06:18 | pid=24972 | thread=pool-2-thread-65 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:53913
+2026-02-14 10:06:29 | pid=24972 | thread=pool-2-thread-73 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:61399
+2026-02-14 10:31:14 | pid=24972 | thread=pool-2-thread-23 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:52325 sid=a6fdcd6f
+2026-02-14 10:31:14 | pid=24972 | thread=pool-2-thread-25 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:52325 sid=a6fdcd6f
+2026-02-14 10:31:14 | pid=24972 | thread=pool-2-thread-26 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:52325 sid=a6fdcd6f
+2026-02-14 10:31:15 | pid=24972 | thread=pool-2-thread-29 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-14 10:52:34 | pid=24972 | thread=pool-2-thread-68 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-14 11:09:18 | pid=10132 | thread=pool-2-thread-1 | user=- | action=SESSION_MISS | ip=/127.0.0.1:57302 sid=15206f77
+2026-02-14 11:09:18 | pid=10132 | thread=pool-2-thread-2 | user=- | action=SESSION_MISS | ip=/127.0.0.1:57302 sid=15206f77
+2026-02-14 11:09:19 | pid=10132 | thread=pool-2-thread-5 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:49178 sid=15206f77
+2026-02-14 11:09:19 | pid=10132 | thread=pool-2-thread-6 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:49178 sid=15206f77
+2026-02-14 11:09:19 | pid=10132 | thread=pool-2-thread-7 | user=- | action=SESSION_MISS | ip=/[0:0:0:0:0:0:0:1]:49178 sid=15206f77
+2026-02-14 11:09:21 | pid=10132 | thread=pool-2-thread-9 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-14 11:09:32 | pid=10132 | thread=pool-2-thread-22 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:56916
+2026-02-14 11:09:37 | pid=10132 | thread=pool-2-thread-25 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63831
+2026-02-14 11:09:45 | pid=10132 | thread=pool-2-thread-30 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:52660
+2026-02-14 11:09:57 | pid=10132 | thread=pool-2-thread-42 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:65112
+2026-02-14 11:10:10 | pid=10132 | thread=pool-2-thread-50 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:60044
+2026-02-14 11:10:24 | pid=10132 | thread=pool-2-thread-59 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:49657
+2026-02-14 11:10:37 | pid=10132 | thread=pool-2-thread-22 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:55929
+2026-02-14 11:10:51 | pid=10132 | thread=pool-2-thread-38 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:64051
+2026-02-14 11:11:04 | pid=10132 | thread=pool-2-thread-46 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:51688
+2026-02-15 16:26:26 | pid=21132 | thread=pool-2-thread-22 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:61815
+2026-02-15 16:26:31 | pid=21132 | thread=pool-2-thread-23 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63784
+2026-02-15 16:26:38 | pid=21132 | thread=pool-2-thread-24 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:63787
+2026-02-15 16:26:50 | pid=21132 | thread=pool-2-thread-59 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:58836
+2026-02-15 16:27:04 | pid=21132 | thread=pool-2-thread-60 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57130
+2026-02-15 16:27:17 | pid=21132 | thread=pool-2-thread-61 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57137
+2026-02-15 16:27:30 | pid=21132 | thread=pool-2-thread-62 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57140
+2026-02-15 16:27:44 | pid=21132 | thread=pool-2-thread-63 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57141
+2026-02-15 16:30:26 | pid=21132 | thread=pool-2-thread-57 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-15 16:30:31 | pid=21132 | thread=pool-2-thread-62 | user=testSensorA | action=SENSOR_AUTH_FAIL | ip=/[0:0:0:0:0:0:0:1]:57840
+2026-02-15 17:12:46 | pid=21132 | thread=pool-2-thread-21 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-15 18:25:54 | pid=21132 | thread=pool-2-thread-32 | user=developer | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
+2026-02-15 19:06:22 | pid=21132 | thread=pool-2-thread-21 | user=Dev_User | action=LOGIN_SUCCESS | ip=0:0:0:0:0:0:0:1
