@@ -371,6 +371,7 @@ public class Security {
     static void ensureDefaultDeveloper() {
         Database.ensureDefaultDeveloper();
         Database.Dev_User();
+        Database.User();
     }
 
     // ================= УЧЕТ НЕУДАЧНЫХ ПОПЫТОК ВХОДА =================

@@ -15,7 +15,7 @@ import {
 } from './ui.js';
 import { drawCurrent } from './charts.js';
 import { fetchData } from './utils.js';
-import { syncConfigInitial, loadConfig, syncNewSensors } from './sensors.js';
+import { syncConfigInitial, loadConfig, syncNewSensors, startConfigPolling } from './sensors.js';
 
 /* ========== СОСТОЯНИЕ ПРИЛОЖЕНИЯ ========== */
 
@@ -158,6 +158,7 @@ export async function init() {
 
     // Устанавливаем состояние приложения "готово"
     appState = 'ready';
+    startConfigPolling();
 
   } catch (e) {
     // В случае ошибки логируем её и возвращаем состояние в idle

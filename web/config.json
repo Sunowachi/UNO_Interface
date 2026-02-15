@@ -339,7 +339,7 @@
           "var": "pressure",
           "label": "Давление",
           "color": "#ffa500",
-          "unit": "atm",
+          "unit": "kPa",
           "lowLimit": 500,
           "warnLimit": 1200,
           "alarmLimit": 1500,

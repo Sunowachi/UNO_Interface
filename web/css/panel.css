@@ -684,6 +684,10 @@ body.red-alert {
     background: transparent;
 }
 
+.hidden {
+  display: none !important;
+}
+
 /* ========== КЛАССЫ ДЛЯ ГРАФИКОВ (ИЗ CHARTS.JS) ========== */
 .chart-wrapper {
     display: flex;

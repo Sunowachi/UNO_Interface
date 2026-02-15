@@ -1,5 +1,5 @@
 import { config, setConfig, csrfToken, PERMISSIONS, COLOR_CHOICES } from './constants.js';
-import { forceLogout, showToast, updateSensorPanel } from './ui.js';
+import { forceLogout, showToast, updateSensorPanel, updateDevicePanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 
 /* ========== КОНСТАНТЫ ========== */
@@ -11,6 +11,8 @@ const SAVE_DEBOUNCE_MS = 2000;
 /* ========== СИСТЕМА АВТОСОХРАНЕНИЯ ========== */
 // Переменная для хранения идентификатора таймера автосохранения
 let saveTimer = null;
+// Переменная для хранения таймера опроса
+let configPollTimer = null;
 
 // Функция планирования автосохранения: сбрасывает предыдущий таймер и устанавливает новый
 function scheduleSave() {
@@ -78,6 +80,65 @@ function isValidVarName(v) {
 }
 
 /* ========== ЗАГРУЗКА КОНФИГУРАЦИИ ========== */
+
+// Функция опроса конфигурации
+export async function pollConfig() {
+  try {
+    const res = await fetch('/config/load', {
+      credentials: 'include',
+      headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+    });
+
+    // Если сессия истекла – выходим, блокировку обработает ping
+    if (res.status === 401 || res.status === 403) {
+      return;
+    }
+
+    if (!res.ok) throw new Error('HTTP error: ' + res.status);
+
+    const text = await res.text();
+    const parsed = JSON.parse(text);
+
+    if (!parsed || !Array.isArray(parsed.sensors)) return;
+
+    // Нормализуем полученную конфигурацию (как в loadConfig)
+    parsed.sensors.forEach(s => {
+      s.vars = normalizeVars(s.vars).filter(isValidVarName);
+      if (typeof s.deleted !== 'boolean') s.deleted = false;
+      updateVarSettings(s);
+    });
+
+    // Сравниваем с текущей конфигурацией (глубокое сравнение JSON)
+    const currentJson = JSON.stringify(config);
+    const newJson = JSON.stringify(parsed);
+    if (currentJson !== newJson) {
+      console.log('[pollConfig] конфигурация изменилась, обновляем');
+      setConfig(parsed); // обновляем глобальный config
+
+      // Полное обновление интерфейса
+      updateSensorPanel(true);
+      drawCurrent();
+      // Панель устройств обновляется отдельно, но она зависит от allSensors, а не от конфига
+      // Если нужно, можно также вызвать updateDevicePanel(true)
+    }
+  } catch (e) {
+    console.warn('[pollConfig] ошибка:', e);
+  }
+}
+
+// Запуск периодического опроса
+export function startConfigPolling(intervalMs = 1000) {
+  if (configPollTimer) clearInterval(configPollTimer);
+  configPollTimer = setInterval(pollConfig, intervalMs);
+}
+
+// Остановка опроса
+export function stopConfigPolling() {
+  if (configPollTimer) {
+    clearInterval(configPollTimer);
+    configPollTimer = null;
+  }
+}
 
 // Загрузка конфигурации с сервера (из файла)
 export async function loadConfig() {

@@ -57,12 +57,8 @@ export function applyPermissions(role) {
     sensorPanel.classList.toggle('hidden', !(isDev || perms.has(PERMISSIONS.VIEW_DATA)));
   }
 
-  // Находим кнопку добавления датчика
-  const addBtn = document.getElementById('addSensorBtn');
-  if (addBtn) {
-    // Скрываем кнопку, если у пользователя нет прав на редактирование конфигурации (EDIT_CONFIG)
-    addBtn.classList.toggle('hidden', !(isDev || perms.has(PERMISSIONS.EDIT_CONFIG)));
-  }
+  // Управление кнопкой добавления датчика
+  updateAddButtonVisibility();
 }
 
 /* ========== АВТОРИЗАЦИЯ ========== */
@@ -718,6 +714,7 @@ export function buildVarSettingsUI(sCfg) {
 
 // Обработчик нажатия на кнопку добавления нового датчика
 export function onAddSensorClick() {
+  if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) return;
   let maxId = 0;
   // Находим максимальный числовой ID среди существующих датчиков
   config.sensors.forEach(s => {
@@ -736,8 +733,33 @@ export function onAddSensorClick() {
   openEditModal(newId); // Открываем окно редактирования для нового датчика
 }
 
+// Функция для управления кнопкой добавления датчика
+function updateAddButtonVisibility() {
+  const footer = document.getElementById('sensorPanelFooter');
+  if (!footer) return;
+
+  const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+  let addBtn = document.getElementById('addSensorBtn');
+
+  if (canEdit) {
+    if (!addBtn) {
+      // Создаём кнопку, если её нет
+      addBtn = document.createElement('button');
+      addBtn.id = 'addSensorBtn';
+      addBtn.className = 'btn btn-full';
+      addBtn.innerHTML = '➕ Добавить датчик';
+      addBtn.addEventListener('click', onAddSensorClick);
+      footer.appendChild(addBtn);
+    }
+  } else {
+    // Удаляем кнопку, если она есть
+    if (addBtn) addBtn.remove();
+  }
+}
+
 // Сохранение изменений датчика после редактирования
 export async function onSaveSensorClick() {
+  if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) return;
   // Если нет редактируемого датчика, выходим
   if (editingId == null) return;
 
@@ -862,6 +884,7 @@ export async function onSaveSensorClick() {
 
 // Обработчик удаления датчика
 export async function onDeleteSensorClick() {
+  if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) return;
   // Если нет редактируемого датчика, выходим
   if (editingId == null) return;
   // Находим индекс датчика в массиве

@@ -1,6 +1,7 @@
 import { openLoginModal, hideApp, showApp, closeLoginModal, applyPermissions } from './ui.js';
 import { setCurrentUser, currentUser, setCsrfToken, csrfToken } from './constants.js';
 import { clearIntervals } from './api.js';
+import { stopConfigPolling } from './sensors.js';
 
 // Константа: время бездействия в миллисекундах до блокировки сессии (10 минут)
 const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 минут
@@ -54,13 +55,14 @@ export async function lockSession() {
   if (sessionLocked) return;
   // Устанавливаем флаг блокировки
   sessionLocked = true;
-
   // Останавливаем все интервалы обновления данных (графики, списки и т.д.)
   clearIntervals();
   // Останавливаем мониторинг бездействия
   stopIdleWatch();
   // Останавливаем периодическую проверку сессии
   stopPing();
+  // Останавливаем опрос конфигурации
+  stopConfigPolling();
 
   try {
     // Отправляем запрос на выход (logout), чтобы завершить сессию на сервере
@@ -78,6 +80,7 @@ export async function lockSession() {
   setCurrentUser(null);
   // Очищаем CSRF-токен
   setCsrfToken(null);
+  updateAddButtonVisibility();
   // Скрываем основное приложение
   hideApp();
   // Открываем модальное окно входа
