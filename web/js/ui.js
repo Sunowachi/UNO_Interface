@@ -24,6 +24,8 @@ import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData } from '.
 let editingId = null;
 // Переменная для таймера скрытия всплывающего уведомления (чтобы можно было сбросить)
 let toastTimer = null;
+// Переменная для отслеживания состояния панели устройств
+let prevDeviceKeys = null;
 
 /* ========== УПРАВЛЕНИЕ ИНТЕРФЕЙСОМ ========== */
 
@@ -274,13 +276,12 @@ export function setupTimeRangeControls() {
 /* ========== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ========== */
 
 // Панель датчиков
-export function updateSensorPanel() {
+export function updateSensorPanel(forceRebuild = false) {
   const list = document.getElementById('sensorList'); // Находим контейнер списка (ul)
   if (!list) return; // Если контейнер отсутствует, выходим
 
   // Фильтруем датчики, исключая помеченные как удалённые (deleted = true)
   const visibleSensors = config.sensors.filter(s => !s.deleted);
-  list.innerHTML = ''; // Очищаем список перед перестроением
 
   // Если нет ни одного видимого датчика
   if (visibleSensors.length === 0) {
@@ -295,33 +296,98 @@ export function updateSensorPanel() {
     return; // Завершаем функцию
   }
 
-  // Массив для хранения имён датчиков в красной тревоге
+  // Полная перестройка (при изменении конфигурации)
+  if (forceRebuild) {
+    list.innerHTML = ''; // Очищаем список перед перестроением
+    let redAlertSensors = [];
+
+    visibleSensors.forEach((sCfg, index) => {
+      let sensorAlertClass = null;
+      const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
+      const vars = Array.isArray(sCfg.vars)
+        ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
+        : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+
+      for (const v of vars) {
+        const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
+        if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
+          const lastVal = sData.values[sData.values.length - 1];
+          const vs = varSettings.find(x => x.var === v) || {};
+          const varAlert = getAlertClass(vs, lastVal);
+          sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
+        }
+      }
+
+      if (sensorAlertClass === 'blink-red') {
+        const sensorName = sCfg.name || 'Датчик ' + (index + 1);
+        redAlertSensors.push(sensorName);
+      }
+
+      const li = document.createElement('li');
+      li.dataset.sensorId = sCfg.id;
+      li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'sensor-name';
+      nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
+      nameSpan.style.flex = '1 1 auto';
+
+      const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+      if (canEdit) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
+        editBtn.title = 'Редактировать датчик';
+        editBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openEditModal(sCfg.id);
+        });
+        li.appendChild(editBtn);
+      }
+
+      li.addEventListener('click', () => selectSensor(sCfg.id));
+
+      if (String(sCfg.id) === String(currentSensor)) {
+        li.classList.add('sensor-selected');
+      }
+
+      li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+      if (sensorAlertClass) li.classList.add(sensorAlertClass);
+
+      li.appendChild(nameSpan);
+      list.appendChild(li);
+    });
+
+    updateRedAlert(redAlertSensors);
+    return;
+  }
+  // Инкрементальное обновление (только классы тревоги и выделение)
+  const existingMap = new Map();
+  for (let li of list.children) {
+    const id = li.dataset.sensorId;
+    if (id) existingMap.set(id, li);
+  }
+
   let redAlertSensors = [];
 
-  // Перебираем все видимые датчики
   visibleSensors.forEach((sCfg, index) => {
-    let sensorAlertClass = null;     // Класс для подсветки датчика (тревога)
+    const id = String(sCfg.id);
+    let li = existingMap.get(id);
 
-    // Получаем настройки переменных для данного датчика (если есть)
+    // Определяем класс тревоги
+    let sensorAlertClass = null;
     const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
-    // Получаем список переменных датчика: может быть массивом или строкой через запятую
     const vars = Array.isArray(sCfg.vars)
       ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
       : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
-    // Перебираем переменные для определения класса тревоги (мигания)
-    if (vars) {
-      for (const v of vars) {
-        // Ищем данные для этой переменной в allSensors по разным ключам
-        const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
-
-        if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
-          const lastVal = sData.values[sData.values.length - 1]; // последнее значение
-          const vs = varSettings.find(x => x.var === v) || {};
-          const varAlert = getAlertClass(vs, lastVal);
-          // Выбираем более высокий приоритет тревоги
-          sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
-        }
+    for (const v of vars) {
+      const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
+      if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
+        const lastVal = sData.values[sData.values.length - 1];
+        const vs = varSettings.find(x => x.var === v) || {};
+        const varAlert = getAlertClass(vs, lastVal);
+        sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
       }
     }
 
@@ -330,115 +396,90 @@ export function updateSensorPanel() {
       redAlertSensors.push(sensorName);
     }
 
-    // Создаём элемент списка для датчика
-    const li = document.createElement('li');
-    li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
+    if (li) {
+      // Обновляем классы
+      li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+      if (sensorAlertClass) li.classList.add(sensorAlertClass);
 
-    // Создаём span для имени датчика (без значения)
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
-    nameSpan.style.flex = '1 1 auto'; // Растягиваем на всё доступное пространство
+      // Обновляем выделение
+      if (String(sCfg.id) === String(currentSensor)) {
+        li.classList.add('sensor-selected');
+      } else {
+        li.classList.remove('sensor-selected');
+      }
 
-    // Проверяем, есть ли у пользователя право на редактирование конфигурации
-    const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+      existingMap.delete(id);
+    } else {
+      // Новый датчик – создаём элемент
+      li = document.createElement('li');
+      li.dataset.sensorId = id;
+      li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
-    // Если есть право редактирования, добавляем кнопку "✏️" (редактировать)
-    if (canEdit) {
-      const editBtn = document.createElement('button');
-      editBtn.textContent = '✏️';
-      editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
-      editBtn.title = 'Редактировать датчик'; // Подсказка при наведении
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'sensor-name';
+      nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
+      nameSpan.style.flex = '1 1 auto';
 
-      // Обработчик клика на кнопку редактирования (не всплывает до li)
-      editBtn.addEventListener('click', (ev) => {
-        ev.stopPropagation(); // Останавливаем всплытие, чтобы не сработал клик на li
-        openEditModal(sCfg.id); // Открываем модальное окно редактирования для этого датчика
-      });
-      li.appendChild(editBtn); // Добавляем кнопку в элемент списка
+      const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+      if (canEdit) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
+        editBtn.title = 'Редактировать датчик';
+        editBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openEditModal(sCfg.id);
+        });
+        li.appendChild(editBtn);
+      }
+
+      li.addEventListener('click', () => selectSensor(sCfg.id));
+
+      if (String(sCfg.id) === String(currentSensor)) {
+        li.classList.add('sensor-selected');
+      }
+
+      li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+      if (sensorAlertClass) li.classList.add(sensorAlertClass);
+
+      li.appendChild(nameSpan);
+      list.appendChild(li);
     }
-
-    // Обработчик клика на сам элемент списка (выбор датчика)
-    li.addEventListener('click', () => selectSensor(sCfg.id));
-
-    // Если ID датчика совпадает с текущим выбранным, добавляем класс для подсветки
-    if (String(sCfg.id) === String(currentSensor)) {
-      li.classList.add('sensor-selected');
-    }
-
-    // Удаляем возможные старые классы тревоги (если элемент переиспользуется)
-    li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
-    // Если определён класс тревоги, добавляем его
-    if (sensorAlertClass) li.classList.add(sensorAlertClass);
-
-    li.appendChild(nameSpan); // Добавляем span с именем в элемент списка
-    list.appendChild(li);      // Добавляем элемент в общий список
   });
 
-  // Управление глобальной тревогой
-  const body = document.body;
-  const redAlertBar = document.getElementById('redAlertBar');
-  const alertMessageSpan = redAlertBar ? redAlertBar.querySelector('.alert-message') : null;
-  const sensorPanel = document.getElementById('sensorPanel');
-  const ALERT_BAR_HEIGHT = 60; // должна совпадать с высотой в CSS
-
-  if (redAlertSensors.length > 0) {
-    // Включаем пульсацию страницы
-    body.classList.add('red-alert');
-    // Сдвигаем контент вниз, чтобы панель тревоги не перекрывала его
-    body.style.paddingTop = ALERT_BAR_HEIGHT + 'px';
-    // Сдвигаем фиксированную панель датчиков вниз
-    if (sensorPanel) sensorPanel.classList.add('alert-shown');
-
-    if (redAlertBar && alertMessageSpan) {
-      let message = '⚠️ Тревога: ' + redAlertSensors.join(', ');
-      alertMessageSpan.textContent = message;
-      redAlertBar.classList.add('show');
-      redAlertBar.hidden = false;
-    }
-  } else {
-    // Выключаем пульсацию
-    body.classList.remove('red-alert');
-    // Убираем сдвиг контента
-    body.style.paddingTop = '';
-    // Возвращаем панель датчиков на место
-    if (sensorPanel) sensorPanel.classList.remove('alert-shown');
-
-    if (redAlertBar) {
-      redAlertBar.classList.remove('show');
-      // Скрываем после завершения анимации
-      setTimeout(() => {
-        if (!redAlertBar.classList.contains('show')) {
-          redAlertBar.hidden = true;
-        }
-      }, 300);
-    }
+  // Удаляем элементы датчиков, которых больше нет
+  for (let li of existingMap.values()) {
+    li.remove();
   }
+  updateRedAlert(redAlertSensors);
 }
 
 // Обновление панели устройств (список активных датчиков с их переменными)
-export function updateDevicePanel() {
-  const deviceList = document.getElementById('deviceList'); // Контейнер для списка устройств
+export function updateDevicePanel(forceRebuild = false) {
+  const deviceList = document.getElementById('deviceList');
   if (!deviceList) return;
 
-  deviceList.innerHTML = ''; // Очищаем список
+  let prevDeviceKeys = null;
 
-  // Объект для группировки переменных по ID датчика
+  // Формируем строку из всех ключей allSensors (чтобы отслеживать изменения)
+  const currentKeys = Object.keys(allSensors).filter(k => k.includes(':')).sort().join(',');
+
+  // Если не принудительно и ключи не изменились – ничего не делаем
+  if (!forceRebuild && prevDeviceKeys === currentKeys) return;
+
+  prevDeviceKeys = currentKeys;
+  deviceList.innerHTML = '';
+
   const groupedBySensor = {};
-
-  // Проходим по всем ключам в allSensors (каждый ключ имеет формат "id:переменная")
   for (const key of Object.keys(allSensors)) {
-    const idx = key.indexOf(':'); // Ищем позицию двоеточия
-    if (idx === -1) continue;      // Если двоеточия нет, пропускаем (некорректный ключ)
-    const sensorId = key.slice(0, idx);   // ID датчика (часть до двоеточия)
-    const variable = key.slice(idx + 1);  // Имя переменной (часть после двоеточия)
-
-    // Если для данного sensorId ещё нет записи, создаём пустой массив
+    const idx = key.indexOf(':');
+    if (idx === -1) continue;
+    const sensorId = key.slice(0, idx);
+    const variable = key.slice(idx + 1);
     if (!groupedBySensor[sensorId]) groupedBySensor[sensorId] = [];
-    // Добавляем переменную в массив для этого датчика
     groupedBySensor[sensorId].push(variable);
   }
 
-  // Если нет ни одного датчика с данными
   if (Object.keys(groupedBySensor).length === 0) {
     const li = document.createElement('li');
     li.textContent = 'Нет активных устройств';
@@ -447,7 +488,6 @@ export function updateDevicePanel() {
     return;
   }
 
-  // Перебираем все сгруппированные датчики и создаём для каждого элемент списка
   for (const [sensorId, vars] of Object.entries(groupedBySensor)) {
     const li = document.createElement('li');
     li.style.padding = '4px 0';
@@ -691,7 +731,7 @@ export function onAddSensorClick() {
   config.sensors.push(newSensor); // Добавляем в конфигурацию
   setCurrentSensor(newId);        // Делаем его текущим
 
-  updateSensorPanel(); // Обновляем панель датчиков
+  updateSensorPanel(true); // Обновляем панель датчиков
   drawCurrent();       // Отрисовываем графики (пока пустые)
   openEditModal(newId); // Открываем окно редактирования для нового датчика
 }
@@ -816,7 +856,7 @@ export async function onSaveSensorClick() {
 
   closeEditModal(); // Закрываем окно редактирования
   await saveConfigWithMessage(); // Сохраняем конфигурацию на сервер с уведомлением
-  updateSensorPanel(); // Обновляем панель датчиков
+  updateSensorPanel(true); // Обновляем панель датчиков
   drawCurrent();       // Перерисовываем графики с новыми настройками
 }
 
@@ -836,7 +876,7 @@ export async function onDeleteSensorClick() {
   config.sensors.splice(idx, 1);
   closeEditModal(); // Закрываем модальное окно
   await saveConfigWithMessage(); // Сохраняем изменения
-  updateSensorPanel(); // Обновляем панель
+  updateSensorPanel(true); // Обновляем панель
   drawCurrent();       // Перерисовываем графики (уже без удалённого)
   editingId = null;    // Сбрасываем ID редактирования
 }
@@ -872,6 +912,40 @@ export function onCancelConfirmBack() {
 }
 
 /* ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ========== */
+
+// Управление глобальной тревогой
+function updateRedAlert(redAlertSensors) {
+  const body = document.body;
+  const redAlertBar = document.getElementById('redAlertBar');
+  const alertMessageSpan = redAlertBar ? redAlertBar.querySelector('.alert-message') : null;
+  const sensorPanel = document.getElementById('sensorPanel');
+  const ALERT_BAR_HEIGHT = 60;
+
+  if (redAlertSensors.length > 0) {
+    body.classList.add('red-alert');
+    body.style.paddingTop = ALERT_BAR_HEIGHT + 'px';
+    if (sensorPanel) sensorPanel.classList.add('alert-shown');
+
+    if (redAlertBar && alertMessageSpan) {
+      alertMessageSpan.textContent = '⚠️ Тревога: ' + redAlertSensors.join(', ');
+      redAlertBar.classList.add('show');
+      redAlertBar.hidden = false;
+    }
+  } else {
+    body.classList.remove('red-alert');
+    body.style.paddingTop = '';
+    if (sensorPanel) sensorPanel.classList.remove('alert-shown');
+
+    if (redAlertBar) {
+      redAlertBar.classList.remove('show');
+      setTimeout(() => {
+        if (!redAlertBar.classList.contains('show')) {
+          redAlertBar.hidden = true;
+        }
+      }, 300);
+    }
+  }
+}
 
 // Обновление таймера работы системы (отображается в интерфейсе)
 export function updateTimer() {

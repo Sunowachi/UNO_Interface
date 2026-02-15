@@ -186,7 +186,8 @@ export async function syncConfigInitial() {
       showToast('❌ Недостаточно прав для сохранения конфигурации');
     }
     // Обновляем панель датчиков в интерфейсе
-    updateSensorPanel();
+    scheduleSave();
+    updateSensorPanel(true);
   }
 }
 
@@ -233,14 +234,14 @@ export async function syncNewSensors() {
 
   // Если были изменения
   if (updated) {
-    // Проверяем право на сохранение
     if (hasPermission(PERMISSIONS.SAVE_CONFIG)) {
-      scheduleSave(); // Планируем автосохранение
+      scheduleSave();
       showToast('✅ Добавлены новые датчики');
     } else {
       showToast('⚠️ Найдены новые датчики (нет прав на сохранение)');
     }
-    updateSensorPanel(); // Обновляем панель
+    updateSensorPanel(true);   // ← было updateSensorPanel();
+    updateDevicePanel(true);   // добавляем обновление панели устройств
   }
 }
 

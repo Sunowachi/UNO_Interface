@@ -216,12 +216,12 @@ export async function fetchData() {
 
     // Синхронизируем новые датчики (добавляем в конфиг, если их там нет)
     await syncNewSensors();
-    // Обновляем панель датчиков
-    updateSensorPanel();
+    // Обновляем панель датчиков (только классы тревоги)
+    updateSensorPanel(false);
     // Перерисовываем графики для текущего датчика
     drawCurrent();
-    // Обновляем панель устройств
-    updateDevicePanel();
+    // Обновляем панель устройств (только если изменился набор ключей)
+    updateDevicePanel(false);
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }
