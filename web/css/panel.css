@@ -54,18 +54,33 @@ body {
     margin-right: 360px;
 }
 
-@media (max-width: 900px) {
-    .charts-area {
-        margin-right: 0;
-    }
-}
-
 .charts-container {
     display: flex;
     flex-direction: column;
     gap: 25px;
     overflow-x: auto;
     padding-bottom: 5px;
+}
+
+.chart-axis-container {
+    width: 80px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.chart-axis-canvas {
+    width: 100%;
+    height: 220px;
+    display: block;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-right: none;
+    border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.chart-scroll-wrapper {
+    border-left: none;
+    border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 canvas {
@@ -85,7 +100,7 @@ canvas {
     top: 10px;
     right: 10px;
     width: 300px;
-    max-height: calc(100vh - 40px);
+    max-height: calc(100vh - 400px);
     background: var(--color-surface);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -101,7 +116,7 @@ canvas {
 /* Заголовок панели */
 .panel-header {
     flex-shrink: 0;
-    padding: 0px 100px 0px;
+    padding: 0px 90px 0px;
 }
 
 .panel-header h3 {
@@ -113,7 +128,7 @@ canvas {
 .sensor-list-container {
     flex: 1;
     overflow-y: auto;
-    padding: 0 20px;
+    padding: 0 0px;
 }
 
 /* Список датчиков */
@@ -124,7 +139,7 @@ canvas {
 }
 
 .sensor-list li {
-    padding: 10px 0;
+    padding: 1px 0;
     border-bottom: 1px solid var(--color-border);
     cursor: pointer;
     transition: var(--transition);
@@ -502,17 +517,61 @@ input[type="checkbox"] {
 }
 
 /* ========== ПАНЕЛЬ УСТРОЙСТВ ========== */
-.device-panel {
-    margin-top: 40px;
-    background: var(--color-primary-dark);
-    padding: 15px 20px;
-    border-radius: 30px;
-    color: white;
+#devicePanel {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(calc(-100% - 220px), -50%);
+    width: 400px;
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    z-index: 1999;
+    display: none;
+    flex-direction: column;
+    max-height: 80vh;
+    overflow: hidden;
+    padding: 10px;
+    margin: 0;
+    gap: 0;
+    flex-wrap: nowrap;
+    align-items: stretch;
+}
+
+#devicePanel.show {
     display: flex;
-    gap: 15px;
-    flex-wrap: wrap;
-    align-items: center;
-    border: 1px solid var(--color-primary-light);
+}
+
+/* Заголовок панели */
+#devicePanel h3 {
+    flex-shrink: 0;
+    margin: 0 0 10px 0;
+    color: var(--color-text);
+    font-size: 16px;
+}
+
+/* Контейнер списка устройств */
+#deviceList {
+    flex: 1;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--color-border); /* опционально */
+}
+
+/* Элементы списка */
+#deviceList li {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
+#deviceList li:last-child {
+    border-bottom: none;
 }
 
 /* ========== ВСПОМОГАТЕЛЬНОЕ ========== */

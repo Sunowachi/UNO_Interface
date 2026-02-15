@@ -421,7 +421,7 @@ export function updateDevicePanel() {
   for (const [sensorId, vars] of Object.entries(groupedBySensor)) {
     const li = document.createElement('li');
     li.style.padding = '4px 0';
-    li.textContent = `Датчик: ${sensorId} | Переменные: ${vars.join(', ')}`;
+    li.textContent = `ID: ${sensorId} | Переменные: ${vars.join(', ')}`;
     deviceList.appendChild(li);
   }
 }
@@ -443,6 +443,13 @@ export function openEditModal(id) {
 
   const backdrop = document.getElementById('editModalBackdrop'); // Фон модального окна
   if (!backdrop) return;
+
+  // Показываем панель устройств
+  const devicePanel = document.getElementById('devicePanel');
+  if (devicePanel) {
+  updateDevicePanel();
+  devicePanel.classList.add('show');
+  }
 
   // Ищем конфигурацию датчика с таким ID в общем списке
   let sCfg = config.sensors.find(s => String(s.id) === String(id));
@@ -479,6 +486,10 @@ export function openEditModal(id) {
 export function closeEditModal() {
   const backdrop = document.getElementById('editModalBackdrop');
   if (backdrop) backdrop.style.display = 'none'; // Скрываем фон
+
+  // Скрываем панель устройств
+  const devicePanel = document.getElementById('devicePanel');
+  if (devicePanel) devicePanel.classList.remove('show');
 }
 
 // Создание пользовательского интерфейса для настройки параметров каждой переменной датчика
