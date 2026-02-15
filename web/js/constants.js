@@ -11,36 +11,151 @@ export let COLOR_CHOICES = [
 
 // Категории единиц измерения для выпадающего списка в настройках переменных
 // Ключ - название категории, значение - массив объектов с именем и значением единицы
+// Категории единиц измерения для выпадающего списка в настройках переменных
 export let UNIT_CATEGORIES = {
-  "Температура": [
-    { name: "°C", value: "°C" },
-    { name: "°F", value: "°F" },
-    { name: "K", value: "K" }
+  "Вибрация": [
+    { name: "g", value: "g" },
+    { name: "м/с²", value: "m/s²" },
+    { name: "мкм", value: "µm" },
+    { name: "мм", value: "mm" },
+    { name: "мм/с", value: "mm/s" }
   ],
   "Влажность": [
     { name: "%", value: "%" },
-    { name: "g/m³", value: "g/m³" }
+    { name: "абс. влажность", value: "g/kg" },
+    { name: "г/м³", value: "g/m³" }
+  ],
+  "Время": [
+    { name: "мкс", value: "us" },
+    { name: "мин", value: "min" },
+    { name: "мс", value: "ms" },
+    { name: "с", value: "s" },
+    { name: "ч", value: "h" }
+  ],
+  "Вязкость": [
+    { name: "Па·с", value: "Pa·s" },
+    { name: "сП", value: "cP" }
   ],
   "Давление": [
-    { name: "Па", value: "Pa" },
+    { name: "атм", value: "atm" },
     { name: "бар", value: "bar" },
-    { name: "мм рт. ст.", value: "mmHg" }
+    { name: "кПа", value: "kPa" },
+    { name: "мбар", value: "mbar" },
+    { name: "мм рт. ст.", value: "mmHg" },
+    { name: "МПа", value: "MPa" },
+    { name: "Па", value: "Pa" },
+    { name: "psi", value: "psi" }
   ],
   "Длина": [
+    { name: "дюйм", value: "in" },
+    { name: "км", value: "km" },
     { name: "м", value: "m" },
-    { name: "см", value: "cm" },
     { name: "мм", value: "mm" },
-    { name: "км", value: "km" }
+    { name: "см", value: "cm" },
+    { name: "фут", value: "ft" }
+  ],
+  "Звук": [
+    { name: "дБ", value: "dB" },
+    { name: "дБА", value: "dBA" }
+  ],
+  "Концентрация": [
+    { name: "%", value: "%" },
+    { name: "г/л", value: "g/L" },
+    { name: "мг/м³", value: "mg/m3" },
+    { name: "моль/л", value: "mol/L" },
+    { name: "ppb", value: "ppb" },
+    { name: "ppm", value: "ppm" }
   ],
   "Масса": [
-    { name: "кг", value: "kg" },
     { name: "г", value: "g" },
-    { name: "т", value: "t" }
+    { name: "кг", value: "kg" },
+    { name: "мг", value: "mg" },
+    { name: "т", value: "t" },
+    { name: "фунт", value: "lb" }
+  ],
+  "Плотность": [
+    { name: "г/см³", value: "g/cm3" },
+    { name: "кг/м³", value: "kg/m3" }
+  ],
+  "Расход": [
+    { name: "гал/мин", value: "gpm" },
+    { name: "кг/с", value: "kg/s" },
+    { name: "л/мин", value: "L/min" },
+    { name: "л/с", value: "L/s" },
+    { name: "м³/с", value: "m3/s" },
+    { name: "м³/ч", value: "m3/h" },
+    { name: "т/ч", value: "t/h" }
+  ],
+  "Радиация": [
+    { name: "Бк", value: "Bq" },
+    { name: "Зв", value: "Sv" },
+    { name: "мЗв", value: "mSv" },
+    { name: "мкЗв/ч", value: "uSv/h" }
+  ],
+  "Свет": [
+    { name: "кд", value: "cd" },
+    { name: "лк", value: "lx" },
+    { name: "лм", value: "lm" }
+  ],
+  "Сила": [
+    { name: "кгс", value: "kgf" },
+    { name: "кН", value: "kN" },
+    { name: "Н", value: "N" }
   ],
   "Скорость": [
-    { name: "м/с", value: "m/s" },
     { name: "км/ч", value: "km/h" },
-    { name: "миль/ч", value: "mph" }
+    { name: "миль/ч", value: "mph" },
+    { name: "м/с", value: "m/s" },
+    { name: "узел", value: "kn" }
+  ],
+  "Скорость вращения": [
+    { name: "об/мин", value: "rpm" },
+    { name: "об/с", value: "rps" }
+  ],
+  "Температура": [
+    { name: "°C", value: "°C" },
+    { name: "°F", value: "°F" },
+    { name: "K", value: "K" },
+    { name: "°R", value: "R" }
+  ],
+  "Уровень": [
+    { name: "%", value: "%" },
+    { name: "м", value: "m" },
+    { name: "мм", value: "mm" },
+    { name: "см", value: "cm" }
+  ],
+  "Электрические": [
+    { name: "А", value: "A" },
+    { name: "В", value: "V" },
+    { name: "Вт", value: "W" },
+    { name: "Гн", value: "H" },
+    { name: "Гц", value: "Hz" },
+    { name: "кА", value: "kA" },
+    { name: "кВ", value: "kV" },
+    { name: "кВт", value: "kW" },
+    { name: "кГц", value: "kHz" },
+    { name: "кОм", value: "kOhm" },
+    { name: "мА", value: "mA" },
+    { name: "мВ", value: "mV" },
+    { name: "МВт", value: "MW" },
+    { name: "мГн", value: "mH" },
+    { name: "МГц", value: "MHz" },
+    { name: "МОм", value: "MOhm" },
+    { name: "мкФ", value: "uF" },
+    { name: "Ом", value: "Ohm" },
+    { name: "пФ", value: "pF" },
+    { name: "Ф", value: "F" }
+  ],
+  "Энергия": [
+    { name: "Вт·ч", value: "Wh" },
+    { name: "Дж", value: "J" },
+    { name: "кал", value: "cal" },
+    { name: "кДж", value: "kJ" },
+    { name: "кВт·ч", value: "kWh" },
+    { name: "ккал", value: "kcal" }
+  ],
+  "pH": [
+    { name: "pH", value: "pH" }
   ]
 };
 

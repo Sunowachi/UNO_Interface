@@ -63,13 +63,13 @@ body {
 }
 
 .chart-axis-container {
-    width: 80px;
+    width: 60px;
     flex-shrink: 0;
     position: relative;
 }
 
 .chart-axis-canvas {
-    width: 100%;
+    width: 60px;
     height: 220px;
     display: block;
     background: var(--color-bg);
@@ -160,6 +160,10 @@ canvas {
 /* Кнопка добавления датчика */
 .btn-full {
     width: 100%;
+}
+
+#sensorPanel.alert-shown {
+    top: 70px; /* 10px (обычный top) + 60px (высота панели тревоги) */
 }
 
 /* ========== КАРТОЧКИ И ЭЛЕМЕНТЫ С ДАННЫМИ ========== */
@@ -471,26 +475,116 @@ input[type="checkbox"] {
 }
 
 /* ========== АНИМАЦИИ СТАТУСОВ ========== */
-.blink-blue { animation: pulse-blue 2.2s ease-in-out infinite; }
-.blink-yellow { animation: pulse-yellow 1.8s ease-in-out infinite; }
-.blink-red { animation: pulse-red 1.4s ease-in-out infinite; }
+.blink-blue {
+    animation: pulse-blue 1.2s ease-in-out infinite;
+}
+
+.blink-yellow {
+    animation: pulse-yellow 1.0s ease-in-out infinite;
+}
+
+.blink-red {
+    animation: pulse-red 0.8s ease-in-out infinite;
+}
 
 @keyframes pulse-blue {
-    0% { box-shadow: inset 0 0 0 rgba(64, 176, 255, 0); }
-    50% { box-shadow: inset 0 0 18px rgba(64, 176, 255, 0.4); }
-    100% { box-shadow: inset 0 0 0 rgba(64, 176, 255, 0); }
+    0% {
+        box-shadow: inset 0 0 0 rgba(64, 176, 255, 0);
+        background-color: var(--color-surface);
+    }
+    50% {
+        box-shadow: inset 0 0 25px rgba(64, 176, 255, 0.9);
+        background-color: rgba(64, 176, 255, 0.25);
+    }
+    100% {
+        box-shadow: inset 0 0 0 rgba(64, 176, 255, 0);
+        background-color: var(--color-surface);
+    }
 }
 
 @keyframes pulse-yellow {
-    0% { box-shadow: inset 0 0 0 rgba(255, 151, 51, 0); }
-    50% { box-shadow: inset 0 0 18px rgba(255, 151, 51, 0.4); }
-    100% { box-shadow: inset 0 0 0 rgba(255, 151, 51, 0); }
+    0% {
+        box-shadow: inset 0 0 0 rgba(255, 151, 51, 0);
+        background-color: var(--color-surface);
+    }
+    50% {
+        box-shadow: inset 0 0 25px rgba(255, 151, 51, 0.9);
+        background-color: rgba(255, 151, 51, 0.25);
+    }
+    100% {
+        box-shadow: inset 0 0 0 rgba(255, 151, 51, 0);
+        background-color: var(--color-surface);
+    }
 }
 
 @keyframes pulse-red {
-    0% { box-shadow: inset 0 0 0 rgba(244, 67, 54, 0); }
-    50% { box-shadow: inset 0 0 22px rgba(244, 67, 54, 0.45); }
-    100% { box-shadow: inset 0 0 0 rgba(244, 67, 54, 0); }
+    0% {
+        box-shadow: inset 0 0 0 rgba(244, 67, 54, 0);
+        background-color: var(--color-surface);
+    }
+    50% {
+        box-shadow: inset 0 0 30px rgba(244, 67, 54, 0.95);
+        background-color: rgba(244, 67, 54, 0.3);
+    }
+    100% {
+        box-shadow: inset 0 0 0 rgba(244, 67, 54, 0);
+        background-color: var(--color-surface);
+    }
+}
+
+/* ========== ГЛОБАЛЬНАЯ ТРЕВОГА ПО КРАЯМ ЭКРАНА ========== */
+body.red-alert {
+    animation: page-alert 0.8s infinite;
+}
+
+@keyframes page-alert {
+    0% { box-shadow: inset 0 0 50px rgba(244, 67, 54, 0); }
+    50% { box-shadow: inset 0 0 80px rgba(244, 67, 54, 0.7); }
+    100% { box-shadow: inset 0 0 50px rgba(244, 67, 54, 0); }
+}
+
+/* ========== ПАНЕЛЬ ГЛОБАЛЬНОЙ ТРЕВОГИ ========== */
+.red-alert-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: #d32f2f;
+    color: white;
+    padding: 0 20px;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+    border-bottom: 2px solid #ffcccc;
+    line-height: 60px;
+}
+
+.red-alert-bar.show {
+    transform: translateY(0);
+}
+
+.red-alert-bar .alert-icon {
+    font-size: 28px;
+    animation: alertPulse 1s infinite;
+}
+
+@keyframes alertPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.red-alert-bar .alert-message {
+    flex: 1;
+    text-align: center;
 }
 
 /* ========== УВЕДОМЛЕНИЯ ========== */
@@ -636,12 +730,6 @@ input[type="checkbox"] {
     gap: 8px;
     max-width: calc(100vw - 350px);
     overflow: hidden;
-}
-
-.chart-title {
-    margin: 0 0 5px 0;
-    font-size: 18px;
-    color: var(--color-text);
 }
 
 .chart-scroll-wrapper {

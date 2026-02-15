@@ -273,7 +273,7 @@ export function setupTimeRangeControls() {
 
 /* ========== ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ========== */
 
-// Обновление панели со списком датчиков (отображение в левой части)
+// Панель датчиков
 export function updateSensorPanel() {
   const list = document.getElementById('sensorList'); // Находим контейнер списка (ul)
   if (!list) return; // Если контейнер отсутствует, выходим
@@ -285,8 +285,8 @@ export function updateSensorPanel() {
   // Если нет ни одного видимого датчика
   if (visibleSensors.length === 0) {
     const li = document.createElement('li');          // Создаём элемент списка
-    li.textContent = 'Нет настроенных датчиков';      // Текст-заглушка
-    li.style.color = '#777';                           // Серый цвет текста
+    li.textContent = 'Нет настроенных датчиков';
+    li.style.color = '#777';
     list.appendChild(li);                              // Добавляем в список
     setCurrentSensor(null);                             // Сбрасываем выбранный датчик
 
@@ -295,58 +295,48 @@ export function updateSensorPanel() {
     return; // Завершаем функцию
   }
 
+  // Массив для хранения имён датчиков в красной тревоге
+  let redAlertSensors = [];
+
   // Перебираем все видимые датчики
   visibleSensors.forEach((sCfg, index) => {
-    let lastTempText = 'нет данных'; // Переменная для последнего значения (температуры/данных)
     let sensorAlertClass = null;     // Класс для подсветки датчика (тревога)
 
     // Получаем настройки переменных для данного датчика (если есть)
     const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
     // Получаем список переменных датчика: может быть массивом или строкой через запятую
     const vars = Array.isArray(sCfg.vars)
-      ? sCfg.vars.map(v => String(v).trim()).filter(Boolean) // если массив, приводим к строке и удаляем пустые
-      : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean); // если строка, разбиваем по запятой
+      ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
+      : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
 
-    // Если есть переменные
+    // Перебираем переменные для определения класса тревоги (мигания)
     if (vars) {
-      // Перебираем каждую переменную
       for (const v of vars) {
         // Ищем данные для этой переменной в allSensors по разным ключам
         const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
 
-        // Если данные найдены и есть массив значений
-        if (sData && Array.isArray(sData.values)) {
-          const arr = sData.values; // массив значений
-          if (arr.length > 0) {
-            const lastVal = arr[arr.length - 1]; // последнее значение
-
-            // Если ещё не установлено последнее значение (равно "нет данных") и последнее значение - число
-            if (lastTempText === 'нет данных' && Number.isFinite(lastVal)) {
-              // Ищем настройки для данной переменной
-              const vs = varSettings.find(x => x.var === v) || {};
-              const unit = vs.unit || ''; // единица измерения
-              // Формируем строку: значение с двумя знаками после запятой + единица измерения
-              lastTempText = lastVal.toFixed(2) + (unit ? ' ' + unit : '');
-            }
-
-            // Определяем класс тревоги для этой переменной (синий, жёлтый, красный)
-            const vs = varSettings.find(x => x.var === v) || {};
-            const varAlert = getAlertClass(vs, lastVal);
-            // Выбираем более высокий приоритет тревоги (если уже есть)
-            sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
-          }
+        if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
+          const lastVal = sData.values[sData.values.length - 1]; // последнее значение
+          const vs = varSettings.find(x => x.var === v) || {};
+          const varAlert = getAlertClass(vs, lastVal);
+          // Выбираем более высокий приоритет тревоги
+          sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
         }
       }
     }
 
+    if (sensorAlertClass === 'blink-red') {
+      const sensorName = sCfg.name || 'Датчик ' + (index + 1);
+      redAlertSensors.push(sensorName);
+    }
+
     // Создаём элемент списка для датчика
     const li = document.createElement('li');
-    // Задаём стили прямо через свойство cssText
     li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
-    // Создаём span для имени датчика и последнего значения
+    // Создаём span для имени датчика (без значения)
     const nameSpan = document.createElement('span');
-    nameSpan.textContent = (sCfg.name || 'Датчик ' + (index + 1)) + ': ' + lastTempText;
+    nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
     nameSpan.style.flex = '1 1 auto'; // Растягиваем на всё доступное пространство
 
     // Проверяем, есть ли у пользователя право на редактирование конфигурации
@@ -383,6 +373,46 @@ export function updateSensorPanel() {
     li.appendChild(nameSpan); // Добавляем span с именем в элемент списка
     list.appendChild(li);      // Добавляем элемент в общий список
   });
+
+  // Управление глобальной тревогой
+  const body = document.body;
+  const redAlertBar = document.getElementById('redAlertBar');
+  const alertMessageSpan = redAlertBar ? redAlertBar.querySelector('.alert-message') : null;
+  const sensorPanel = document.getElementById('sensorPanel');
+  const ALERT_BAR_HEIGHT = 60; // должна совпадать с высотой в CSS
+
+  if (redAlertSensors.length > 0) {
+    // Включаем пульсацию страницы
+    body.classList.add('red-alert');
+    // Сдвигаем контент вниз, чтобы панель тревоги не перекрывала его
+    body.style.paddingTop = ALERT_BAR_HEIGHT + 'px';
+    // Сдвигаем фиксированную панель датчиков вниз
+    if (sensorPanel) sensorPanel.classList.add('alert-shown');
+
+    if (redAlertBar && alertMessageSpan) {
+      let message = '⚠️ Тревога: ' + redAlertSensors.join(', ');
+      alertMessageSpan.textContent = message;
+      redAlertBar.classList.add('show');
+      redAlertBar.hidden = false;
+    }
+  } else {
+    // Выключаем пульсацию
+    body.classList.remove('red-alert');
+    // Убираем сдвиг контента
+    body.style.paddingTop = '';
+    // Возвращаем панель датчиков на место
+    if (sensorPanel) sensorPanel.classList.remove('alert-shown');
+
+    if (redAlertBar) {
+      redAlertBar.classList.remove('show');
+      // Скрываем после завершения анимации
+      setTimeout(() => {
+        if (!redAlertBar.classList.contains('show')) {
+          redAlertBar.hidden = true;
+        }
+      }, 300);
+    }
+  }
 }
 
 // Обновление панели устройств (список активных датчиков с их переменными)

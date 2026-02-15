@@ -126,11 +126,6 @@ export function drawCurrent() {
       const chartContainer = document.createElement('div');
       chartContainer.className = 'chart-graph-container';
 
-      const title = document.createElement('h3');
-      title.className = 'chart-title';
-      title.textContent = titleText;
-      chartContainer.appendChild(title);
-
       const axisDataRow = document.createElement('div');
       axisDataRow.style.display = 'flex';
       axisDataRow.style.flexDirection = 'row';
@@ -142,7 +137,7 @@ export function drawCurrent() {
       axisCanvas = document.createElement('canvas');
       axisCanvas.className = 'chart-axis-canvas';
       axisCanvas.height = 220;
-      axisCanvas.width = 80;
+      axisCanvas.width = 60;
       axisContainer.appendChild(axisCanvas);
 
       // Область данных с прокруткой
@@ -222,9 +217,6 @@ export function drawCurrent() {
         if (alertClass) valueCard.classList.add(alertClass);
       }
 
-      const title = wrapper.querySelector('.chart-title');
-      if (title) title.textContent = titleText;
-
       axisCanvas = wrapper.querySelector('.chart-axis-canvas');
       scrollWrapper = wrapper.querySelector('.chart-scroll-wrapper');
       dataCanvas = document.getElementById(canvasId);
@@ -271,7 +263,7 @@ export function drawCurrent() {
             min -= 0.5;
             max += 0.5;
           }
-          drawYAxis(axisCanvas, min, max, titleText);
+          drawYAxis(axisCanvas, min, max);
         }
       }
 
@@ -295,10 +287,10 @@ export function drawCurrent() {
 }
 
 // Рисует ось Y на отдельном canvas
-function drawYAxis(canvas, min, max, ylabel) {
+function drawYAxis(canvas, min, max) {
   const ctx = canvas.getContext('2d');
-  const w = canvas.width;   // 80
-  const h = canvas.height;  // 220
+  const w = canvas.width;
+  const h = canvas.height;
 
   const rootStyles = getComputedStyle(document.documentElement);
   const textColor = rootStyles.getPropertyValue('--color-text').trim() || '#F0F4F8';
@@ -306,10 +298,17 @@ function drawYAxis(canvas, min, max, ylabel) {
 
   ctx.clearRect(0, 0, w, h);
 
+  // Настройки текста
+  ctx.font = '500 12px "Segoe UI", "Arial", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = textColor;
+  ctx.textRendering = 'optimizeLegibility';
+
   const top = 25, bottom = 55;
   const ch = h - top - bottom;
 
-  // Вертикальная линия оси справа
+  // Вертикальная линия оси
   ctx.strokeStyle = axisColor;
   ctx.beginPath();
   ctx.moveTo(w - 1, top);
@@ -317,26 +316,10 @@ function drawYAxis(canvas, min, max, ylabel) {
   ctx.stroke();
 
   // Подписи значений
-  ctx.fillStyle = textColor;
-  ctx.font = '12px sans-serif';
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
   for (let i = 0; i <= 5; i++) {
     const v = max - (max - min) * i / 5;
     const y = top + (ch / 5) * i;
     ctx.fillText(v.toFixed(1), w - 4, y);
-  }
-
-  // Подпись оси Y (вертикальная)
-  if (ylabel) {
-    ctx.save();
-    ctx.translate(12, h / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = textColor;
-    ctx.font = '12px sans-serif';
-    ctx.fillText(ylabel, 0, 0);
-    ctx.restore();
   }
 }
 

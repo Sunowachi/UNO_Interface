@@ -2,7 +2,7 @@
   "sensors": [
     {
       "id": "testSensorA",
-      "name": "Датчик 1",
+      "name": "Тестовый Датчик",
       "vars": [
         "temp",
         "hum"
@@ -14,9 +14,9 @@
           "label": "Температура",
           "color": "#ff0000",
           "unit": "°C",
-          "lowLimit": 10,
-          "warnLimit": 50,
-          "alarmLimit": 80,
+          "lowLimit": 5,
+          "warnLimit": 10,
+          "alarmLimit": 30,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
@@ -26,10 +26,324 @@
           "label": "Влажность",
           "color": "#0000ff",
           "unit": "%",
-          "lowLimit": 10,
-          "warnLimit": 50,
-          "alarmLimit": 80,
+          "lowLimit": 5,
+          "warnLimit": 80,
+          "alarmLimit": 95,
           "processing": "median",
+          "showRaw": true,
+          "showProcessed": true
+        }
+      ]
+    },
+    {
+      "id": "testSensorB",
+      "name": "Тестовый Датчик 2",
+      "vars": [
+        "vibration",
+        "noise"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "vibration",
+          "label": "Вибрация",
+          "color": "#008000",
+          "unit": "mm/s",
+          "lowLimit": null,
+          "warnLimit": 4,
+          "alarmLimit": 7,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "noise",
+          "label": "Шум",
+          "color": "#ffa500",
+          "unit": "dB",
+          "lowLimit": null,
+          "warnLimit": 60,
+          "alarmLimit": 80,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        }
+      ]
+    },
+    {
+      "id": "Sensor3",
+      "name": "Офис",
+      "vars": [
+        "temp",
+        "co2",
+        "noise",
+        "hum"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "temp",
+          "label": "Температура",
+          "color": "#ff0000",
+          "unit": "°C",
+          "lowLimit": 16,
+          "warnLimit": 28,
+          "alarmLimit": 30,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "co2",
+          "label": "Содержание CO2",
+          "color": "#ffa500",
+          "unit": "ppm",
+          "lowLimit": null,
+          "warnLimit": 1000,
+          "alarmLimit": 4500,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "noise",
+          "label": "Шум",
+          "color": "#0000ff",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 50,
+          "alarmLimit": 70,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "hum",
+          "label": "Влажность",
+          "color": "#ffa500",
+          "unit": "%",
+          "lowLimit": 25,
+          "warnLimit": 40,
+          "alarmLimit": 60,
+          "processing": "median",
+          "showRaw": true,
+          "showProcessed": true
+        }
+      ]
+    },
+    {
+      "id": "Sensor5",
+      "name": "Серверная",
+      "vars": [
+        "voltage",
+        "hum",
+        "temp"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "voltage",
+          "label": "voltage",
+          "color": "#ff0000",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 240,
+          "alarmLimit": 280,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "hum",
+          "label": "hum",
+          "color": "#0000ff",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 40,
+          "alarmLimit": 60,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "temp",
+          "label": "temp",
+          "color": "#ffa500",
+          "unit": "",
+          "lowLimit": 10,
+          "warnLimit": 32,
+          "alarmLimit": 40,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        }
+      ]
+    },
+    {
+      "id": "Sensor1",
+      "name": "Сварочный Цех",
+      "vars": [
+        "temp",
+        "co2",
+        "noise",
+        "vibration"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "temp",
+          "label": "Температура",
+          "color": "#ff0000",
+          "unit": "°C",
+          "lowLimit": 16,
+          "warnLimit": 28,
+          "alarmLimit": 30,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "co2",
+          "label": "Содержание CO2",
+          "color": "#ffa500",
+          "unit": "ppm",
+          "lowLimit": 0,
+          "warnLimit": 1000,
+          "alarmLimit": 4500,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "noise",
+          "label": "Шум",
+          "color": "#008000",
+          "unit": "dB",
+          "lowLimit": 0,
+          "warnLimit": 60,
+          "alarmLimit": 80,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "vibration",
+          "label": "Вибрация",
+          "color": "#008000",
+          "unit": "mm/s",
+          "lowLimit": null,
+          "warnLimit": 4.5,
+          "alarmLimit": 7.1,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        }
+      ]
+    },
+    {
+      "id": "Sensor4",
+      "name": "Насосная станция",
+      "vars": [
+        "voltage",
+        "temp",
+        "vibration",
+        "noise"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "voltage",
+          "label": "voltage",
+          "color": "#ff0000",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 300,
+          "alarmLimit": 500,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "temp",
+          "label": "temp",
+          "color": "#0000ff",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 100,
+          "alarmLimit": 200,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "vibration",
+          "label": "vibration",
+          "color": "#ffa500",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 10,
+          "alarmLimit": 20,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "noise",
+          "label": "noise",
+          "color": "#008000",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": 80,
+          "alarmLimit": 120,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        }
+      ]
+    },
+    {
+      "id": "Sensor2",
+      "name": "Складское Помещение",
+      "vars": [
+        "temp",
+        "hum",
+        "pressure"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "temp",
+          "label": "Температура",
+          "color": "#ff0000",
+          "unit": "°C",
+          "lowLimit": 16,
+          "warnLimit": 28,
+          "alarmLimit": 32,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "hum",
+          "label": "Влажность",
+          "color": "#0000ff",
+          "unit": "%",
+          "lowLimit": 5,
+          "warnLimit": 40,
+          "alarmLimit": 70,
+          "processing": "moving_avg",
+          "showRaw": true,
+          "showProcessed": true
+        },
+        {
+          "var": "pressure",
+          "label": "Давление",
+          "color": "#ffa500",
+          "unit": "atm",
+          "lowLimit": 500,
+          "warnLimit": 1200,
+          "alarmLimit": 1500,
+          "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
         }
