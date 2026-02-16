@@ -265,12 +265,19 @@ canvas {
 .time-range-controls {
     display: flex;
     gap: 10px;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
 }
 
+.time-range-controls label {
+    flex-shrink: 0;
+}
+
+/* Поля ввода времени (главная страница) */
 .time-input {
-    width: 60px; /* уменьшено для компактности */
+    width: 90px;
     padding: 8px 10px;
     border: 1px solid var(--color-border);
     border-radius: 8px;
@@ -379,10 +386,11 @@ canvas {
     color: var(--color-text-secondary);
 }
 
+/* Поля ввода пределов (редактор датчика) */
 .var-low-input,
 .var-warn-input,
 .var-alarm-input {
-    width: 80px !important; /* уменьшено, но достаточно для 3-4 цифр */
+    width: 90px !important;
     flex: none;
 }
 
@@ -394,7 +402,7 @@ canvas {
 .var-color-select,
 .var-unit-select,
 .var-processing-select {
-    min-width: 100px;
+    width: 100px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
     color: var(--color-text);
@@ -403,7 +411,7 @@ canvas {
 }
 
 .var-rawcolor-select {
-    min-width: 80px;
+    width: 100px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
     color: var(--color-text);
@@ -748,13 +756,13 @@ body.red-alert {
     position: relative;
     display: inline-flex;
     align-items: center;
-    width: 100%; /* растягивается на ширину родителя */
+    width: 90px;
 }
 
 .custom-number-wrapper input[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
-    padding-right: 28px; /* место для кнопок */
+    padding-right: 28px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -772,7 +780,7 @@ body.red-alert {
     display: flex;
     flex-direction: column;
     height: calc(100% - 4px);
-    width: 24px;
+    width: 15px;
 }
 
 .custom-number-buttons button {
