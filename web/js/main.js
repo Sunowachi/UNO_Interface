@@ -6,6 +6,7 @@ import {
   hideApp,
   openLoginModal
 } from './ui.js';
+import { initCustomNumberInputs } from './customNumberInput.js';
 
 // Добавляем обработчик события, которое срабатывает после полной загрузки HTML-документа
 document.addEventListener('DOMContentLoaded', async () => {
@@ -23,4 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Если сессия успешно восстановлена, инициализируем основное приложение (загружаем данные, конфиги)
   await init();
+
+  // Обработчик всех числовых полей на страницы (визуал)
+  initCustomNumberInputs();
 });

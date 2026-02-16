@@ -3,10 +3,7 @@
     {
       "id": "testSensorA",
       "name": "Тестовый Датчик",
-      "vars": [
-        "temp",
-        "hum"
-      ],
+      "vars": "temp,hum",
       "deleted": false,
       "varSettings": [
         {
@@ -51,8 +48,8 @@
         {
           "var": "temp",
           "label": "Температура",
-          "color": "#ff0000",
-          "rawColor": "",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
           "unit": "°C",
           "lowLimit": 16,
           "warnLimit": 28,
@@ -64,8 +61,8 @@
         {
           "var": "co2",
           "label": "Содержание CO2",
-          "color": "#ff0000",
-          "rawColor": "",
+          "color": "#8D6E63",
+          "rawColor": "#B0BEC5",
           "unit": "ppm",
           "lowLimit": null,
           "warnLimit": 1000,
@@ -77,8 +74,8 @@
         {
           "var": "noise",
           "label": "Шум",
-          "color": "#ff0000",
-          "rawColor": "",
+          "color": "#FFEE58",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 50,
@@ -90,8 +87,8 @@
         {
           "var": "hum",
           "label": "Влажность",
-          "color": "#ff0000",
-          "rawColor": "",
+          "color": "#42A5F5",
+          "rawColor": "#B0BEC5",
           "unit": "%",
           "lowLimit": 25,
           "warnLimit": 40,
@@ -115,38 +112,41 @@
         {
           "var": "voltage",
           "label": "voltage",
-          "color": "#ff0000",
+          "color": "#FFEE58",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 240,
           "alarmLimit": 280,
-          "processing": "none",
+          "processing": "diff",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         },
         {
           "var": "hum",
           "label": "hum",
-          "color": "#0000ff",
+          "color": "#42A5F5",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 40,
           "alarmLimit": 60,
-          "processing": "none",
+          "processing": "median",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         },
         {
           "var": "temp",
           "label": "temp",
-          "color": "#ffa500",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": 10,
           "warnLimit": 32,
           "alarmLimit": 40,
-          "processing": "none",
+          "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         }
       ]
     },
@@ -164,7 +164,8 @@
         {
           "var": "temp",
           "label": "Температура",
-          "color": "#ff0000",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
           "unit": "°C",
           "lowLimit": 16,
           "warnLimit": 28,
@@ -176,7 +177,8 @@
         {
           "var": "co2",
           "label": "Содержание CO2",
-          "color": "#ffa500",
+          "color": "#8D6E63",
+          "rawColor": "#B0BEC5",
           "unit": "ppm",
           "lowLimit": 0,
           "warnLimit": 1000,
@@ -188,7 +190,8 @@
         {
           "var": "noise",
           "label": "Шум",
-          "color": "#008000",
+          "color": "#AB47BC",
+          "rawColor": "#B0BEC5",
           "unit": "dB",
           "lowLimit": 0,
           "warnLimit": 60,
@@ -200,7 +203,8 @@
         {
           "var": "vibration",
           "label": "Вибрация",
-          "color": "#008000",
+          "color": "#26C6DA",
+          "rawColor": "#B0BEC5",
           "unit": "mm/s",
           "lowLimit": null,
           "warnLimit": 4.5,
@@ -225,50 +229,54 @@
         {
           "var": "voltage",
           "label": "voltage",
-          "color": "#ff0000",
+          "color": "#FFEE58",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 300,
           "alarmLimit": 350,
-          "processing": "none",
+          "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         },
         {
           "var": "temp",
           "label": "temp",
-          "color": "#0000ff",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 100,
           "alarmLimit": 200,
-          "processing": "none",
+          "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         },
         {
           "var": "vibration",
           "label": "vibration",
-          "color": "#ffa500",
+          "color": "#AB47BC",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 10,
           "alarmLimit": 20,
-          "processing": "none",
+          "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         },
         {
           "var": "noise",
           "label": "noise",
-          "color": "#008000",
+          "color": "#EC407A",
+          "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 80,
           "alarmLimit": 120,
-          "processing": "none",
+          "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         }
       ]
     },
@@ -286,6 +294,7 @@
           "var": "temp",
           "label": "Температура",
           "color": "#ff0000",
+          "rawColor": "#B0BEC5",
           "unit": "°C",
           "lowLimit": 16,
           "warnLimit": 28,
@@ -297,7 +306,8 @@
         {
           "var": "hum",
           "label": "Влажность",
-          "color": "#0000ff",
+          "color": "#ff0000",
+          "rawColor": "#B0BEC5",
           "unit": "%",
           "lowLimit": 5,
           "warnLimit": 40,
@@ -309,7 +319,8 @@
         {
           "var": "pressure",
           "label": "Давление",
-          "color": "#ffa500",
+          "color": "#ff0000",
+          "rawColor": "#B0BEC5",
           "unit": "kPa",
           "lowLimit": 500,
           "warnLimit": 1200,
@@ -322,7 +333,7 @@
     },
     {
       "id": "testSensorB",
-      "name": "testSensorB",
+      "name": "Тест 2",
       "vars": [
         "vibration",
         "noise"
@@ -333,27 +344,27 @@
           "var": "vibration",
           "label": "vibration",
           "color": "#FF5252",
-          "rawColor": "#999999",
+          "rawColor": "#B0BEC5",
           "unit": "",
-          "lowLimit": null,
-          "warnLimit": null,
-          "alarmLimit": null,
-          "processing": "none",
+          "lowLimit": 0,
+          "warnLimit": 100,
+          "alarmLimit": 200,
+          "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         },
         {
           "var": "noise",
           "label": "noise",
           "color": "#42A5F5",
-          "rawColor": "#999999",
+          "rawColor": "#B0BEC5",
           "unit": "",
-          "lowLimit": null,
-          "warnLimit": null,
-          "alarmLimit": null,
-          "processing": "none",
+          "lowLimit": 0,
+          "warnLimit": 100,
+          "alarmLimit": 200,
+          "processing": "median",
           "showRaw": true,
-          "showProcessed": false
+          "showProcessed": true
         }
       ]
     }

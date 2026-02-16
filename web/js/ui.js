@@ -17,8 +17,9 @@ import {
 import { initSession } from './session.js';
 import { init } from './api.js';
 import { drawCurrent, clearChart } from './charts.js';
-import { saveConfigWithMessage } from './sensors.js';
+import { saveConfigWithMessage, markSensorDeleted } from './sensors.js';
 import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData } from './utils.js';
+import { initCustomNumberInputs } from './customNumberInput.js';
 
 // Переменная для хранения ID редактируемого датчика (null - не редактируется)
 let editingId = null;
@@ -620,7 +621,7 @@ export function buildVarSettingsUI(sCfg) {
       opt.textContent = choice.name;
       rawColorSelect.appendChild(opt);
     });
-    rawColorSelect.value = (found && found.rawColor) ? found.rawColor : '#999999';
+    rawColorSelect.value = (found && found.rawColor) ? found.rawColor : '#B0BEC5';
     rawColorSelect.title = 'Цвет сырых данных (RAW)';
 
     // Выпадающий список единиц измерения
@@ -735,11 +736,12 @@ export function buildVarSettingsUI(sCfg) {
 
     // Добавляем строку в контейнер
     container.appendChild(row);
+    initCustomNumberInputs(container);
   });
 }
 
 // Обработчик нажатия на кнопку добавления нового датчика
-export function onAddSensorClick() {
+export async function onAddSensorClick() {
   if (!hasPermission(PERMISSIONS.EDIT_CONFIG)) return;
   let maxId = 0;
   // Находим максимальный числовой ID среди существующих датчиков
@@ -757,6 +759,8 @@ export function onAddSensorClick() {
   updateSensorPanel(true); // Обновляем панель датчиков
   drawCurrent();       // Отрисовываем графики (пока пустые)
   openEditModal(newId); // Открываем окно редактирования для нового датчика
+  // Немедленное сохранение
+  await saveConfigWithMessage();
 }
 
 // Функция для управления кнопкой добавления датчика
@@ -858,7 +862,7 @@ export async function onSaveSensorClick() {
       const labelInput = row.querySelector('.var-label-input');
       const colorSelect = row.querySelector('.var-color-select');
       const rawColorSelect = row.querySelector('.var-rawcolor-select');
-      const rawColor = rawColorSelect ? rawColorSelect.value : '#999999';
+      const rawColor = rawColorSelect ? rawColorSelect.value : '#B0BEC5';
       const unitSelect = row.querySelector('.var-unit-select');
       const lowInput = row.querySelector('.var-low-input');
       const warnInput = row.querySelector('.var-warn-input');
@@ -926,6 +930,8 @@ export async function onDeleteSensorClick() {
 
   // Удаляем датчик из массива (splice)
   config.sensors.splice(idx, 1);
+  // Помечаем датчик как недавно удалённый, чтобы избежать авто-восстановления
+  markSensorDeleted(editingId);
   closeEditModal(); // Закрываем модальное окно
   await saveConfigWithMessage(); // Сохраняем изменения
   updateSensorPanel(true); // Обновляем панель

@@ -6,8 +6,26 @@ import { drawCurrent } from './charts.js';
 /* ========== КОНСТАНТЫ ========== */
 // Максимальное количество датчиков, которое можно добавить (ограничение)
 const MAX_SENSORS = 256;
-// Задержка перед автосохранением после изменений (2 секунды)
-const SAVE_DEBOUNCE_MS = 2000;
+// Задержка перед автосохранением после изменений
+const SAVE_DEBOUNCE_MS = 1000; // 1 секунда
+
+let isPolling = false;          // флаг, чтобы избежать параллельных вызовов pollConfig
+let saveCount = 0;
+function isSaving() {
+  return saveCount > 0;
+}
+// Множество ID датчиков, которые были недавно удалены (чтобы не создавать их автоматически)
+const recentlyDeleted = new Set();
+const RECENTLY_DELETED_TIMEOUT = 3000; // 3 секунды
+
+// Функция для пометки датчика как недавно удалённого
+export function markSensorDeleted(id) {
+  const idStr = String(id);
+  recentlyDeleted.add(idStr);
+  setTimeout(() => {
+    recentlyDeleted.delete(idStr);
+  }, RECENTLY_DELETED_TIMEOUT);
+}
 
 /* ========== СИСТЕМА АВТОСОХРАНЕНИЯ ========== */
 // Переменная для хранения идентификатора таймера автосохранения
@@ -47,7 +65,7 @@ function updateVarSettings(sCfg) {
       var: v,                       // Имя переменной
       label: v,                     // Метка для графика (по умолчанию имя)
       color: defaultColor,          // Цвет
-      rawColor: '#999999',          // Цвет без обработки
+      rawColor: '#B0BEC5',          // Цвет без обработки
       unit: '',                     // Единица измерения (пусто)
       lowLimit: null,               // Нижний предел (синяя зона)
       warnLimit: null,              // Предел предупреждения (жёлтая зона)
@@ -84,52 +102,70 @@ function isValidVarName(v) {
 /* ========== ЗАГРУЗКА КОНФИГУРАЦИИ ========== */
 
 // Функция опроса конфигурации
-export async function pollConfig() {
+export async function pollConfig(force = false) {
+  if (!force && isPolling) return;
+  if (!force && isSaving()) {
+    console.log('[pollConfig] пропущен, идёт сохранение');
+    return;
+  }
+  isPolling = true;
   try {
     const res = await fetch('/config/load', {
       credentials: 'include',
       headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     });
 
-    // Если сессия истекла – выходим, блокировку обработает ping
-    if (res.status === 401 || res.status === 403) {
-      return;
-    }
-
+    if (res.status === 401 || res.status === 403) return;
     if (!res.ok) throw new Error('HTTP error: ' + res.status);
 
     const text = await res.text();
     const parsed = JSON.parse(text);
-
     if (!parsed || !Array.isArray(parsed.sensors)) return;
 
-    // Нормализуем полученную конфигурацию (как в loadConfig)
+    // Нормализуем
     parsed.sensors.forEach(s => {
       s.vars = normalizeVars(s.vars).filter(isValidVarName);
       if (typeof s.deleted !== 'boolean') s.deleted = false;
       updateVarSettings(s);
     });
 
-    // Сравниваем с текущей конфигурацией (глубокое сравнение JSON)
-    const currentJson = JSON.stringify(config);
-    const newJson = JSON.stringify(parsed);
+    // Проверяем, нет ли в новой конфигурации датчиков, которые были недавно удалены
+    const hasRecentlyDeleted = parsed.sensors.some(s => recentlyDeleted.has(String(s.id)));
+    if (hasRecentlyDeleted) {
+      console.log('[pollConfig] обнаружен недавно удалённый датчик, игнорируем обновление');
+      return;
+    }
+
+    const sortSensors = (arr) => [...arr].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const sortKeys = (obj) => {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(sortKeys);
+      return Object.keys(obj).sort().reduce((acc, key) => {
+        acc[key] = sortKeys(obj[key]);
+        return acc;
+      }, {});
+    };
+
+    const normalizedCurrent = sortKeys({ sensors: sortSensors(config.sensors) });
+    const normalizedParsed = sortKeys({ sensors: sortSensors(parsed.sensors) });
+    const currentJson = JSON.stringify(normalizedCurrent);
+    const newJson = JSON.stringify(normalizedParsed);
+
     if (currentJson !== newJson) {
       console.log('[pollConfig] конфигурация изменилась, обновляем');
-      setConfig(parsed); // обновляем глобальный config
-
-      // Полное обновление интерфейса
+      setConfig(parsed);
       updateSensorPanel(true);
       drawCurrent();
-      // Панель устройств обновляется отдельно, но она зависит от allSensors, а не от конфига
-      // Если нужно, можно также вызвать updateDevicePanel(true)
     }
   } catch (e) {
     console.warn('[pollConfig] ошибка:', e);
+  } finally {
+    isPolling = false;
   }
 }
 
 // Запуск периодического опроса
-export function startConfigPolling(intervalMs = 1000) {
+export function startConfigPolling(intervalMs = 2000) {
   if (configPollTimer) clearInterval(configPollTimer);
   configPollTimer = setInterval(pollConfig, intervalMs);
 }
@@ -248,8 +284,6 @@ export async function syncConfigInitial() {
       // Если прав недостаточно, показываем уведомление
       showToast('❌ Недостаточно прав для сохранения конфигурации');
     }
-    // Обновляем панель датчиков в интерфейсе
-    scheduleSave();
     updateSensorPanel(true);
   }
 }
@@ -273,8 +307,17 @@ export async function syncNewSensors() {
 
     // Если датчик не найден
     if (!sCfg) {
+      if (recentlyDeleted.has(sensorId)) {
+        continue;
+      }
       // Создаём новый
-      sCfg = { id: sensorId, name: sensorId, vars: Array.from(varSet).filter(isValidVarName), deleted: false };
+      sCfg = {
+        id: sensorId,
+        name: sensorId,
+        vars: Array.from(varSet).filter(isValidVarName),
+        deleted: false
+      };
+
       updateVarSettings(sCfg);
       config.sensors.push(sCfg);
       updated = true;
@@ -303,7 +346,7 @@ export async function syncNewSensors() {
     } else {
       showToast('⚠️ Найдены новые датчики (нет прав на сохранение)');
     }
-    updateSensorPanel(true);   // ← было updateSensorPanel();
+    updateSensorPanel(true);
     updateDevicePanel(true);   // добавляем обновление панели устройств
   }
 }
@@ -312,6 +355,7 @@ export async function syncNewSensors() {
 
 // Фоновая отправка конфигурации на сервер (без уведомления пользователя)
 export async function saveConfigSilent() {
+  saveCount++;
   try {
     // Выполняем POST-запрос к /config/save
     const res = await fetch('/config/save', {
@@ -332,14 +376,18 @@ export async function saveConfigSilent() {
 
     // Если ответ не успешен, генерируем ошибку
     if (!res.ok) throw new Error('HTTP error: ' + res.status);
+    await pollConfig(true);  // принудительная синхронизация
   } catch (e) {
     // Логируем ошибку, но не показываем пользователю
     console.error('Ошибка автосохранения:', e);
+  } finally {
+    saveCount--;
   }
 }
 
 // Сохранение конфигурации с отображением статуса пользователю (вызывается при ручном сохранении)
 export async function saveConfigWithMessage() {
+  saveCount++;
   try {
     // Выполняем POST-запрос к /config/save
     const res = await fetch('/config/save', {
@@ -364,11 +412,14 @@ export async function saveConfigWithMessage() {
     // Если ответ содержит "OK", считаем сохранение успешным
     if (text.includes('OK')) {
       showToast('✅ Настройки сохранены');
+      await pollConfig(true);  // принудительная синхронизация
     } else {
       // Иначе показываем ошибку
       alert('❌ Ошибка сохранения: ' + text);
     }
   } catch (e) {
     alert('❌ Ошибка сохранения: ' + e.message);
+  } finally {
+  saveCount--;
   }
 }
