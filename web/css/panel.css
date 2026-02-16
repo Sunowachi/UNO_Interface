@@ -1,3 +1,4 @@
+/* ========== ПЕРЕМЕННЫЕ ========== */
 :root {
     --color-primary-dark: #1A4B77;
     --color-primary: #0077CC;
@@ -16,6 +17,7 @@
     --transition: all 0.2s ease;
 }
 
+/* ========== СБРОСЫ И БАЗОВЫЕ СТИЛИ ========== */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -47,6 +49,68 @@ body {
     flex-wrap: wrap;
 }
 
+/* ========== ПАНЕЛЬ ДАТЧИКОВ ========== */
+#sensorPanel {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 300px;
+    max-height: calc(100vh - 400px);
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#sensorPanel.alert-shown {
+    top: 70px; /* 10px + 60px (высота панели тревоги) */
+}
+
+.panel-header {
+    flex-shrink: 0;
+    padding: 0 90px 0 0; /* исправлено лишнее значение */
+}
+
+.panel-header h3 {
+    margin: 0;
+    color: var(--color-text);
+}
+
+.sensor-list-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.sensor-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sensor-list li {
+    padding: 1px 0;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--color-text);
+}
+
+.sensor-list li:hover {
+    background-color: var(--color-surface-hover);
+    padding-left: 8px;
+}
+
+.panel-footer {
+    flex-shrink: 0;
+    padding: 15px 5px 5px;
+}
+
 /* ========== ГРАФИКИ ========== */
 .charts-area {
     flex: 1 1 600px;
@@ -70,7 +134,7 @@ body {
 
 .chart-axis-canvas {
     width: 60px;
-    height: 220px;
+    height: 240px;
     display: block;
     background: var(--color-bg);
     border: 1px solid var(--color-border);
@@ -79,8 +143,22 @@ body {
 }
 
 .chart-scroll-wrapper {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    max-width: 100%;
+    padding-bottom: 6px;
+    cursor: grab;
+    background-color: var(--color-bg);
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    border: 1px solid var(--color-border);
     border-left: none;
     border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.chart-scroll-wrapper:active {
+    cursor: grabbing;
 }
 
 canvas {
@@ -94,76 +172,66 @@ canvas {
     height: auto;
 }
 
-/* ========== ПАНЕЛЬ ДАТЧИКОВ ========== */
-#sensorPanel {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    width: 300px;
-    max-height: calc(100vh - 400px);
-    background: var(--color-surface);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    z-index: 1000;
+.chart-wrapper {
+    display: flex;
+    flex-direction: row;
+    gap: 15px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
 
+.chart-value-card {
+    width: 120px;
+    height: 240px;
+    padding: 15px;
+    text-align: center;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    box-shadow: var(--shadow);
+    border-radius: var(--radius);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.chart-value-title {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: var(--color-text);
+}
+
+.chart-value-number {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-primary-light);
+}
+
+.chart-graph-container {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: calc(100vw - 350px);
     overflow: hidden;
 }
 
-/* Заголовок панели */
-.panel-header {
-    flex-shrink: 0;
-    padding: 0px 90px 0px;
+.chart-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: auto;
+    background: transparent;
+    z-index: 2;
 }
 
-.panel-header h3 {
-    margin: 0;
-    color: var(--color-text);
-}
-
-/* Контейнер списка датчиков */
-.sensor-list-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0 0px;
-}
-
-/* Список датчиков */
-.sensor-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.sensor-list li {
-    padding: 1px 0;
-    border-bottom: 1px solid var(--color-border);
-    cursor: pointer;
-    transition: var(--transition);
-    color: var(--color-text);
-}
-
-.sensor-list li:hover {
-    background-color: var(--color-surface-hover);
-    padding-left: 8px;
-}
-
-/* Нижняя часть с кнопкой */
-.panel-footer {
-    flex-shrink: 0;
-    padding: 15px 5px 5px;
-}
-
-/* Кнопка добавления датчика */
-.btn-full {
-    width: 100%;
-}
-
-#sensorPanel.alert-shown {
-    top: 70px; /* 10px (обычный top) + 60px (высота панели тревоги) */
+.chart-content-spacer {
+    display: inline-block;
+    height: 220px;
+    background: transparent;
 }
 
 /* ========== КАРТОЧКИ И ЭЛЕМЕНТЫ С ДАННЫМИ ========== */
@@ -268,39 +336,6 @@ canvas {
     width: 100%;
 }
 
-/* ========== СТИЛИЗАЦИЯ СКРОЛЛБАРОВ ========== */
-
-/* Для браузеров на движках WebKit (Chrome, Edge, Safari, Opera) */
-::-webkit-scrollbar {
-    width: 8px;          /* ширина вертикального скролла */
-    height: 8px;         /* высота горизонтального скролла */
-}
-
-::-webkit-scrollbar-track {
-    background: var(--color-surface);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--color-primary-dark);
-    border-radius: 4px;
-    border: 1px solid var(--color-border);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--color-primary);
-}
-
-::-webkit-scrollbar-corner {
-    background: transparent;
-}
-
-/* Для Firefox (стандартные свойства) */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-primary-dark) var(--color-surface);
-}
-
 /* ========== ПОЛЯ ВВОДА ========== */
 .input-full {
     width: 100%;
@@ -318,18 +353,13 @@ canvas {
     box-shadow: 0 0 0 3px rgba(64, 176, 255, 0.3);
 }
 
-/* ========== ОТСТУПЫ ========== */
-.margin-top { margin-top: 20px; }
-.margin-right-auto { margin-right: auto; }
-
-/* ========== СПИСКИ ========== */
-.list-reset {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+/* ========== НАСТРОЙКИ ПЕРЕМЕННЫХ ДАТЧИКОВ ========== */
+.var-settings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-/* ========== СТИЛИ ДЛЯ СТРОК НАСТРОЙКИ ПЕРЕМЕННЫХ ========== */
 .var-settings-row {
     display: flex;
     align-items: center;
@@ -343,14 +373,12 @@ canvas {
     border-bottom: none;
 }
 
-/* Метка с именем переменной */
 .var-name-label {
     min-width: 80px;
     font-weight: 500;
     color: var(--color-text-secondary);
 }
 
-/* Поля ввода пределов */
 .var-low-input,
 .var-warn-input,
 .var-alarm-input {
@@ -358,13 +386,11 @@ canvas {
     flex: none;
 }
 
-/* Поле названия графика занимает оставшееся пространство */
 .var-label-input {
     flex: 1 1 auto;
     min-width: 150px;
 }
 
-/* Выпадающие списки цветов и единиц измерения */
 .var-color-select,
 .var-unit-select,
 .var-processing-select {
@@ -376,7 +402,15 @@ canvas {
     flex: 0 1 auto;
 }
 
-/* Стилизация чекбоксов */
+.var-rawcolor-select {
+    min-width: 80px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    background: var(--color-bg);
+    flex: 0 1 auto;
+}
+
 .checkbox-label {
     display: inline-flex;
     align-items: center;
@@ -441,13 +475,6 @@ input[type="checkbox"] {
     gap: 12px;
 }
 
-/* ========== НАСТРОЙКИ ПЕРЕМЕННЫХ ========== */
-.var-settings-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
 /* ========== ОКНО АВТОРИЗАЦИИ ========== */
 .login-box {
     background: var(--color-primary-dark);
@@ -472,6 +499,128 @@ input[type="checkbox"] {
 
 .login-box input:focus {
     outline: 2px solid var(--color-accent);
+}
+
+/* ========== ПАНЕЛЬ УСТРОЙСТВ ========== */
+#devicePanel {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(calc(-100% - 220px), -50%);
+    width: 400px;
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    z-index: 1999;
+    display: none;
+    flex-direction: column;
+    max-height: 80vh;
+    overflow: hidden;
+    padding: 10px;
+    margin: 0;
+    gap: 0;
+    flex-wrap: nowrap;
+    align-items: stretch;
+}
+
+#devicePanel.show {
+    display: flex;
+}
+
+#devicePanel h3 {
+    flex-shrink: 0;
+    margin: 0 0 10px 0;
+    color: var(--color-text);
+    font-size: 16px;
+}
+
+#deviceList {
+    flex: 1;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--color-border);
+}
+
+#deviceList li {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
+#deviceList li:last-child {
+    border-bottom: none;
+}
+
+/* ========== ПАНЕЛЬ ГЛОБАЛЬНОЙ ТРЕВОГИ ========== */
+.red-alert-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: #d32f2f;
+    color: white;
+    padding: 0 20px;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+    border-bottom: 2px solid #ffcccc;
+    line-height: 60px;
+}
+
+.red-alert-bar.show {
+    transform: translateY(0);
+}
+
+.red-alert-bar .alert-icon {
+    font-size: 28px;
+    animation: alertPulse 1s infinite;
+}
+
+.red-alert-bar .alert-message {
+    flex: 1;
+    text-align: center;
+}
+
+@keyframes alertPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* ========== УВЕДОМЛЕНИЯ ========== */
+.toast {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background: var(--color-primary);
+    color: white;
+    padding: 14px 22px;
+    border-radius: 40px;
+    box-shadow: 0 4px 20px rgba(0, 160, 255, 0.3);
+    font-size: 15px;
+    z-index: 2000;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.4s ease;
+    border: 1px solid var(--color-primary-light);
+}
+
+.toast.toast-show {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* ========== АНИМАЦИИ СТАТУСОВ ========== */
@@ -543,212 +692,53 @@ body.red-alert {
     100% { box-shadow: inset 0 0 50px rgba(244, 67, 54, 0); }
 }
 
-/* ========== ПАНЕЛЬ ГЛОБАЛЬНОЙ ТРЕВОГИ ========== */
-.red-alert-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background-color: #d32f2f;
-    color: white;
-    padding: 0 20px;
-    font-size: 18px;
-    font-weight: bold;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    transform: translateY(-100%);
-    transition: transform 0.3s ease;
-    border-bottom: 2px solid #ffcccc;
-    line-height: 60px;
+/* ========== ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ ========== */
+.hidden {
+    display: none !important;
 }
 
-.red-alert-bar.show {
-    transform: translateY(0);
+.margin-top {
+    margin-top: 20px;
 }
 
-.red-alert-bar .alert-icon {
-    font-size: 28px;
-    animation: alertPulse 1s infinite;
+.margin-right-auto {
+    margin-right: auto;
 }
 
-@keyframes alertPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
-
-.red-alert-bar .alert-message {
-    flex: 1;
-    text-align: center;
-}
-
-/* ========== УВЕДОМЛЕНИЯ ========== */
-.toast {
-    position: fixed;
-    bottom: 25px;
-    right: 25px;
-    background: var(--color-primary);
-    color: white;
-    padding: 14px 22px;
-    border-radius: 40px;
-    box-shadow: 0 4px 20px rgba(0, 160, 255, 0.3);
-    font-size: 15px;
-    z-index: 2000;
-    opacity: 0;
-    transform: translateY(20px);
-    transition: all 0.4s ease;
-    border: 1px solid var(--color-primary-light);
-}
-
-.toast.toast-show {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* ========== ПАНЕЛЬ УСТРОЙСТВ ========== */
-#devicePanel {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(calc(-100% - 220px), -50%);
-    width: 400px;
-    background: var(--color-surface);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    z-index: 1999;
-    display: none;
-    flex-direction: column;
-    max-height: 80vh;
-    overflow: hidden;
-    padding: 10px;
-    margin: 0;
-    gap: 0;
-    flex-wrap: nowrap;
-    align-items: stretch;
-}
-
-#devicePanel.show {
-    display: flex;
-}
-
-/* Заголовок панели */
-#devicePanel h3 {
-    flex-shrink: 0;
-    margin: 0 0 10px 0;
-    color: var(--color-text);
-    font-size: 16px;
-}
-
-/* Контейнер списка устройств */
-#deviceList {
-    flex: 1;
-    overflow-y: auto;
+.list-reset {
     list-style: none;
     padding: 0;
     margin: 0;
-    border-top: 1px solid var(--color-border); /* опционально */
 }
 
-/* Элементы списка */
-#deviceList li {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    font-size: 14px;
+/* ========== СТИЛИЗАЦИЯ СКРОЛЛБАРОВ ========== */
+/* Для браузеров на движках WebKit */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
 }
 
-#deviceList li:last-child {
-    border-bottom: none;
+::-webkit-scrollbar-track {
+    background: var(--color-surface);
+    border-radius: 4px;
 }
 
-/* ========== ВСПОМОГАТЕЛЬНОЕ ========== */
-.chart-overlay {
-    position: absolute;
-    left: 0;
-    top: 0;
-    pointer-events: auto;
-    background: transparent;
-    z-index: 2;
-}
-
-.chart-content-spacer {
-    display: inline-block;
-    height: 220px;
-    background: transparent;
-}
-
-.hidden {
-  display: none !important;
-}
-
-/* ========== КЛАССЫ ДЛЯ ГРАФИКОВ (ИЗ CHARTS.JS) ========== */
-.chart-wrapper {
-    display: flex;
-    flex-direction: row;
-    gap: 15px;
-    align-items: flex-start;
-    margin-bottom: 20px;
-}
-
-.chart-value-card {
-    width: 180px;
-    height: 200px;
-    padding: 15px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    flex-shrink: 0;
-    box-shadow: var(--shadow);
-    border-radius: var(--radius);
-    background-color: var(--color-surface);
-    color: var(--color-text);
+::-webkit-scrollbar-thumb {
+    background: var(--color-primary-dark);
+    border-radius: 4px;
     border: 1px solid var(--color-border);
 }
 
-.chart-value-title {
-    font-weight: bold;
-    font-size: 16px;
-    margin-bottom: 8px;
-    color: var(--color-text);
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary);
 }
 
-.chart-value-number {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--color-primary-light);
+::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
-.chart-graph-container {
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-width: calc(100vw - 350px);
-    overflow: hidden;
-}
-
-.chart-scroll-wrapper {
-    overflow-x: auto;
-    overflow-y: hidden;
-    width: 100%;
-    max-width: 100%;
-    padding-bottom: 6px;
-    cursor: grab;
-    background-color: var(--color-bg);
-    border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    border: 1px solid var(--color-border);
-}
-
-.chart-scroll-wrapper:active {
-    cursor: grabbing;
+/* Для Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary-dark) var(--color-surface);
 }

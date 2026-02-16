@@ -1,6 +1,7 @@
 import { config, setConfig, csrfToken, PERMISSIONS, COLOR_CHOICES } from './constants.js';
 import { forceLogout, showToast, updateSensorPanel, updateDevicePanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
+import { drawCurrent } from './charts.js';
 
 /* ========== КОНСТАНТЫ ========== */
 // Максимальное количество датчиков, которое можно добавить (ограничение)
@@ -46,6 +47,7 @@ function updateVarSettings(sCfg) {
       var: v,                       // Имя переменной
       label: v,                     // Метка для графика (по умолчанию имя)
       color: defaultColor,          // Цвет
+      rawColor: '#999999',          // Цвет без обработки
       unit: '',                     // Единица измерения (пусто)
       lowLimit: null,               // Нижний предел (синяя зона)
       warnLimit: null,              // Предел предупреждения (жёлтая зона)

@@ -20,7 +20,6 @@ const chartState = new Map();
 // Отрисовка всех графиков для текущего выбранного датчика
 export function drawCurrent() {
   const container = document.getElementById('chartsContainer');
-  const RAW_COLOR = '#999999';
 
   if (!currentSensor || !container) {
     if (container) container.innerHTML = "";
@@ -58,6 +57,7 @@ export function drawCurrent() {
 
     let times = sensorTimes[dataKey] || null;
     const vs = varSettings.find(v => v.var === varName) || {};
+    const rawColor = vs.rawColor || '#999999';
     const baseLabel = vs.label || varName;
     const unit = vs.unit || '';
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
@@ -268,7 +268,7 @@ export function drawCurrent() {
       }
 
       drawChart(dataCanvas.id, showRaw ? rawValues : null, showProcessed ? processedValues : null, times, {
-        rawColor: RAW_COLOR,
+        rawColor: rawColor,
         processedColor: color,
         ylabel: titleText
       });

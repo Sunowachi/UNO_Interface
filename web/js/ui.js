@@ -585,6 +585,7 @@ export function buildVarSettingsUI(sCfg) {
     const varSpan = document.createElement('span');
     varSpan.textContent = varName;
     varSpan.className = 'var-name-label';
+    varSpan.title = 'Имя переменной (из данных датчика)';
 
     // Поле ввода названия графика (label)
     const labelInput = document.createElement('input');
@@ -592,8 +593,9 @@ export function buildVarSettingsUI(sCfg) {
     labelInput.placeholder = 'Название графика';
     labelInput.value = (found && found.label) ? found.label : varName; // Если есть сохранённое, иначе имя переменной
     labelInput.className = 'var-label-input input-full';
+    labelInput.title = 'Отображаемое название на графике';
 
-    // Выпадающий список для выбора цвета
+    // Выпадающий список для выбора цвета обработанных данных
     const colorSelect = document.createElement('select');
     colorSelect.className = 'var-color-select select-full';
     COLOR_CHOICES.forEach(choice => {
@@ -606,6 +608,20 @@ export function buildVarSettingsUI(sCfg) {
     // Цвет по умолчанию: из списка по индексу (циклически)
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
     colorSelect.value = (found && found.color) ? found.color : defaultColor;
+    colorSelect.title = 'Цвет обработанных данных';
+
+    // Список для цвета сырых данных
+    const rawColorSelect = document.createElement('select');
+    rawColorSelect.className = 'var-rawcolor-select select-full';
+    rawColorSelect.title = 'Цвет сырых данных';
+    COLOR_CHOICES.forEach(choice => {
+      const opt = document.createElement('option');
+      opt.value = choice.value;
+      opt.textContent = choice.name;
+      rawColorSelect.appendChild(opt);
+    });
+    rawColorSelect.value = (found && found.rawColor) ? found.rawColor : '#999999';
+    rawColorSelect.title = 'Цвет сырых данных (RAW)';
 
     // Выпадающий список единиц измерения
     const unitSelect = document.createElement('select');
@@ -628,6 +644,7 @@ export function buildVarSettingsUI(sCfg) {
       unitSelect.appendChild(optgroup);
     }
     unitSelect.value = (found && found.unit) ? found.unit : ''; // Устанавливаем текущую единицу
+    unitSelect.title = 'Единица измерения';
 
     // Поле ввода нижнего предела (синяя зона)
     const lowInput = document.createElement('input');
@@ -637,6 +654,7 @@ export function buildVarSettingsUI(sCfg) {
     lowInput.className = 'var-low-input input-full';
     lowInput.style.width = '90px';
     lowInput.value = (found && found.lowLimit != null) ? found.lowLimit : '';
+    lowInput.title = 'Нижний порог (синяя подсветка, значение минимального порога)';
 
     // Поле ввода предела предупреждения (жёлтая зона)
     const warnInput = document.createElement('input');
@@ -646,6 +664,7 @@ export function buildVarSettingsUI(sCfg) {
     warnInput.className = 'var-warn-input input-full';
     warnInput.style.width = '90px';
     warnInput.value = (found && found.warnLimit != null) ? found.warnLimit : '';
+    warnInput.title = 'Порог предупреждения (жёлтая подсветка, значение больше или равно)';
 
     // Поле ввода предела тревоги (красная зона)
     const alarmInput = document.createElement('input');
@@ -655,6 +674,7 @@ export function buildVarSettingsUI(sCfg) {
     alarmInput.className = 'var-alarm-input input-full';
     alarmInput.style.width = '90px';
     alarmInput.value = (found && found.alarmLimit != null) ? found.alarmLimit : '';
+    alarmInput.title = 'Порог тревоги (красная подсветка, значение больше или равно)';
 
     // Выпадающий список режима обработки
     const processingSelect = document.createElement('select');
@@ -666,18 +686,21 @@ export function buildVarSettingsUI(sCfg) {
       processingSelect.appendChild(opt);
     });
     processingSelect.value = (found && found.processing) ? found.processing : 'none';
+    processingSelect.title = 'Режим обработки сигнала';
 
     // Чекбокс "Показывать сырые данные"
     const showRawCheckbox = document.createElement('input');
     showRawCheckbox.type = 'checkbox';
     showRawCheckbox.className = 'var-show-raw';
     showRawCheckbox.checked = (found && typeof found.showRaw === 'boolean') ? found.showRaw : true;
+    showRawCheckbox.title = 'Показывать сырые данные на графике';
 
     // Подпись к чекбоксу (RAW)
     const showRawLabel = document.createElement('label');
     showRawLabel.className = 'checkbox-label';
     showRawLabel.appendChild(showRawCheckbox);
     showRawLabel.appendChild(document.createTextNode(' RAW (сырые)'));
+    showRawLabel.title = 'Показывать сырые данные';
 
     // Чекбокс "Показывать обработанные данные"
     const showProcCheckbox = document.createElement('input');
@@ -688,17 +711,20 @@ export function buildVarSettingsUI(sCfg) {
     showProcCheckbox.checked = (found && typeof found.showProcessed === 'boolean')
       ? found.showProcessed
       : defaultShowProcessed;
+    showProcCheckbox.title = 'Показывать обработанные данные';
 
     // Подпись к чекбоксу (Обработанные)
     const showProcLabel = document.createElement('label');
     showProcLabel.className = 'checkbox-label';
     showProcLabel.appendChild(showProcCheckbox);
     showProcLabel.appendChild(document.createTextNode(' Обработанные'));
+    showProcLabel.title = 'Показывать обработанные данные';
 
     // Добавляем все созданные элементы в строку
     row.appendChild(varSpan);
     row.appendChild(labelInput);
     row.appendChild(colorSelect);
+    row.appendChild(rawColorSelect);
     row.appendChild(unitSelect);
     row.appendChild(lowInput);
     row.appendChild(warnInput);
@@ -765,7 +791,7 @@ export async function onSaveSensorClick() {
 
   // Ищем конфигурацию редактируемого датчика
   let sCfg = config.sensors.find(s => String(s.id) === String(editingId));
-  // Если не найден (странно), создаём новый объект и добавляем
+  // Если не найден, создаём новый объект и добавляем
   if (!sCfg) {
     sCfg = { id: editingId, deleted: false };
     config.sensors.push(sCfg);
@@ -831,6 +857,8 @@ export async function onSaveSensorClick() {
       // Находим все элементы внутри строки
       const labelInput = row.querySelector('.var-label-input');
       const colorSelect = row.querySelector('.var-color-select');
+      const rawColorSelect = row.querySelector('.var-rawcolor-select');
+      const rawColor = rawColorSelect ? rawColorSelect.value : '#999999';
       const unitSelect = row.querySelector('.var-unit-select');
       const lowInput = row.querySelector('.var-low-input');
       const warnInput = row.querySelector('.var-warn-input');
@@ -864,6 +892,7 @@ export async function onSaveSensorClick() {
         var: varName,
         label: label || varName,
         color,
+        rawColor,
         unit,
         lowLimit: Number.isFinite(lowLimit) ? lowLimit : null,
         warnLimit: Number.isFinite(warnLimit) ? warnLimit : null,

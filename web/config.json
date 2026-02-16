@@ -12,7 +12,8 @@
         {
           "var": "temp",
           "label": "Температура",
-          "color": "#ff0000",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
           "unit": "°C",
           "lowLimit": 5,
           "warnLimit": 10,
@@ -24,47 +25,13 @@
         {
           "var": "hum",
           "label": "Влажность",
-          "color": "#0000ff",
+          "color": "#42A5F5",
+          "rawColor": "#B0BEC5",
           "unit": "%",
           "lowLimit": 5,
           "warnLimit": 80,
           "alarmLimit": 95,
           "processing": "median",
-          "showRaw": true,
-          "showProcessed": true
-        }
-      ]
-    },
-    {
-      "id": "testSensorB",
-      "name": "Тестовый Датчик 2",
-      "vars": [
-        "vibration",
-        "noise"
-      ],
-      "deleted": false,
-      "varSettings": [
-        {
-          "var": "vibration",
-          "label": "Вибрация",
-          "color": "#008000",
-          "unit": "mm/s",
-          "lowLimit": null,
-          "warnLimit": 4,
-          "alarmLimit": 7,
-          "processing": "moving_avg",
-          "showRaw": true,
-          "showProcessed": true
-        },
-        {
-          "var": "noise",
-          "label": "Шум",
-          "color": "#ffa500",
-          "unit": "dB",
-          "lowLimit": null,
-          "warnLimit": 60,
-          "alarmLimit": 80,
-          "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
         }
@@ -85,10 +52,11 @@
           "var": "temp",
           "label": "Температура",
           "color": "#ff0000",
+          "rawColor": "",
           "unit": "°C",
           "lowLimit": 16,
           "warnLimit": 28,
-          "alarmLimit": 30,
+          "alarmLimit": 32,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
@@ -96,7 +64,8 @@
         {
           "var": "co2",
           "label": "Содержание CO2",
-          "color": "#ffa500",
+          "color": "#ff0000",
+          "rawColor": "",
           "unit": "ppm",
           "lowLimit": null,
           "warnLimit": 1000,
@@ -108,7 +77,8 @@
         {
           "var": "noise",
           "label": "Шум",
-          "color": "#0000ff",
+          "color": "#ff0000",
+          "rawColor": "",
           "unit": "",
           "lowLimit": null,
           "warnLimit": 50,
@@ -120,7 +90,8 @@
         {
           "var": "hum",
           "label": "Влажность",
-          "color": "#ffa500",
+          "color": "#ff0000",
+          "rawColor": "",
           "unit": "%",
           "lowLimit": 25,
           "warnLimit": 40,
@@ -197,7 +168,7 @@
           "unit": "°C",
           "lowLimit": 16,
           "warnLimit": 28,
-          "alarmLimit": 30,
+          "alarmLimit": 32,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
@@ -258,7 +229,7 @@
           "unit": "",
           "lowLimit": null,
           "warnLimit": 300,
-          "alarmLimit": 500,
+          "alarmLimit": 350,
           "processing": "none",
           "showRaw": true,
           "showProcessed": false
@@ -346,6 +317,43 @@
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
+        }
+      ]
+    },
+    {
+      "id": "testSensorB",
+      "name": "testSensorB",
+      "vars": [
+        "vibration",
+        "noise"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "vibration",
+          "label": "vibration",
+          "color": "#FF5252",
+          "rawColor": "#999999",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "noise",
+          "label": "noise",
+          "color": "#42A5F5",
+          "rawColor": "#999999",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
         }
       ]
     }
