@@ -3,7 +3,10 @@
     {
       "id": "testSensorA",
       "name": "Тестовый Датчик",
-      "vars": "temp,hum",
+      "vars": [
+        "temp",
+        "hum"
+      ],
       "deleted": false,
       "varSettings": [
         {
@@ -102,11 +105,7 @@
     {
       "id": "Sensor5",
       "name": "Серверная",
-      "vars": [
-        "voltage",
-        "hum",
-        "temp"
-      ],
+      "vars": "voltage,hum,temp",
       "deleted": false,
       "varSettings": [
         {
@@ -293,7 +292,7 @@
         {
           "var": "temp",
           "label": "Температура",
-          "color": "#ff0000",
+          "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "°C",
           "lowLimit": 16,
@@ -306,7 +305,7 @@
         {
           "var": "hum",
           "label": "Влажность",
-          "color": "#ff0000",
+          "color": "#42A5F5",
           "rawColor": "#B0BEC5",
           "unit": "%",
           "lowLimit": 5,
@@ -319,7 +318,7 @@
         {
           "var": "pressure",
           "label": "Давление",
-          "color": "#ff0000",
+          "color": "#66BB6A",
           "rawColor": "#B0BEC5",
           "unit": "kPa",
           "lowLimit": 500,
@@ -348,7 +347,7 @@
           "unit": "",
           "lowLimit": 0,
           "warnLimit": 100,
-          "alarmLimit": 200,
+          "alarmLimit": 111,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
