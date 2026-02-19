@@ -18,7 +18,7 @@ import { initSession } from './session.js';
 import { init } from './api.js';
 import { drawCurrent, clearChart } from './charts.js';
 import { saveConfigWithMessage, markSensorDeleted } from './sensors.js';
-import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData } from './utils.js';
+import { getAlertClass, pickHigherAlertClass, hasPermission, fetchData, sensorExists, getEffectiveVarSettings } from './utils.js';
 import { initCustomNumberInputs } from './customNumberInput.js';
 
 // Переменная для хранения ID редактируемого датчика (null - не редактируется)
@@ -197,6 +197,14 @@ export function setupButtonHandlers() {
     });
   }
 
+  // Обновление открытого редактора при изменении конфигурации
+  window.addEventListener('config-changed', (e) => {
+    if (e.detail.editingId) {
+      // Переоткрываем модальное окно, чтобы показать актуальные настройки
+      openEditModal(e.detail.editingId);
+    }
+  });
+
   // Привязываем обработчики кликов к соответствующим кнопкам
   if (addBtn) addBtn.addEventListener('click', onAddSensorClick);
   if (saveBtn) saveBtn.addEventListener('click', onSaveSensorClick);
@@ -290,7 +298,7 @@ export function updateSensorPanel(forceRebuild = false) {
 
     const chartsContainer = document.getElementById('chartsContainer'); // Контейнер графиков
     if (chartsContainer) chartsContainer.innerHTML = ''; // Очищаем графики
-    return; // Завершаем функцию
+    return;
   }
 
   // Полная перестройка (при изменении конфигурации)
@@ -324,10 +332,24 @@ export function updateSensorPanel(forceRebuild = false) {
       li.dataset.sensorId = sCfg.id;
       li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
+      // Проверяем, есть ли ссылочные переменные
+      const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
+                           (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
+
+      if (hasReference) {
+          const refIcon = document.createElement('span');
+          refIcon.className = 'sensor-ref-icon';
+          refIcon.textContent = '🔗';
+          refIcon.title = 'Импортирует данные других датчиков';
+          li.appendChild(refIcon);
+      }
+
+      // Затем создаём nameSpan и добавляем его
       const nameSpan = document.createElement('span');
       nameSpan.className = 'sensor-name';
       nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
       nameSpan.style.flex = '1 1 auto';
+      li.appendChild(nameSpan);
 
       const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
       if (canEdit) {
@@ -412,10 +434,24 @@ export function updateSensorPanel(forceRebuild = false) {
       li.dataset.sensorId = id;
       li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
+      // Проверяем, есть ли ссылочные переменные
+      const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
+                           (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
+
+      if (hasReference) {
+          const refIcon = document.createElement('span');
+          refIcon.className = 'sensor-ref-icon';
+          refIcon.textContent = '🔗';
+          refIcon.title = 'Импортирует данные других датчиков';
+          li.appendChild(refIcon);
+      }
+
+      // Затем создаём nameSpan и добавляем его
       const nameSpan = document.createElement('span');
       nameSpan.className = 'sensor-name';
       nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
       nameSpan.style.flex = '1 1 auto';
+      li.appendChild(nameSpan);
 
       const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
       if (canEdit) {
@@ -561,42 +597,100 @@ export function closeEditModal() {
 
 // Создание пользовательского интерфейса для настройки параметров каждой переменной датчика
 export function buildVarSettingsUI(sCfg) {
-  const container = document.getElementById('varSettingsContainer'); // Контейнер для настроек
-  const sensorVarsInput = document.getElementById('sensorVars');    // Поле со списком переменных
+  const container = document.getElementById('varSettingsContainer');
+  const sensorVarsInput = document.getElementById('sensorVars');
   if (!container || !sensorVarsInput) return;
 
-  container.innerHTML = ''; // Очищаем контейнер
+  container.innerHTML = '';
 
-  // Получаем массив имён переменных из поля (разделяем по запятой, обрезаем пробелы, удаляем пустые)
   const vars = sensorVarsInput.value.split(',').map(v => v.trim()).filter(Boolean);
-  // Существующие настройки переменных из конфигурации (если есть)
   const existing = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
 
-  // Для каждой переменной создаём строку (ряд) с элементами управления
+  const getSourceDisplayName = (varName) => {
+    if (!varName.includes('_')) return '';
+    const parts = varName.split('_');
+    if (parts.length !== 2) return '';
+    const sourceId = parts[0];
+    const sourceSensor = config.sensors.find(s => String(s.id) === String(sourceId) && !s.deleted);
+    return sourceSensor ? (sourceSensor.name || sourceId) : sourceId;
+  };
+
   vars.forEach((varName, idx) => {
-    // Пытаемся найти уже сохранённые настройки для этой переменной
     const found = existing.find(v => v.var === varName) || null;
 
-    // Создаём контейнер для строки
+    const isReference = varName.includes('_') && (() => {
+      const parts = varName.split('_');
+      if (parts.length === 2) {
+        const sourceId = parts[0];
+        return config.sensors.some(s => String(s.id) === String(sourceId) && !s.deleted);
+      }
+      return false;
+    })();
+
+    const effectiveVs = isReference ? getEffectiveVarSettings(sCfg, varName) : null;
+
+    if (isReference) {
+        // Упрощённая строка для ссылочной переменной
+        const sourceName = getSourceDisplayName(varName);
+
+        const row = document.createElement('div');
+        row.className = 'var-settings-row';
+        row.dataset.var = varName;
+
+        // Метка с именем переменной
+        const varSpan = document.createElement('span');
+        varSpan.textContent = varName;
+        varSpan.className = 'var-name-label';
+        varSpan.setAttribute('autocomplete', 'off');
+        varSpan.title = 'Имя переменной (импортировано)';
+
+        // Информация об источнике
+        const sourceInfo = document.createElement('span');
+        sourceInfo.className = 'var-source-info';
+        sourceInfo.textContent = `↳ от ${sourceName}`;
+        sourceInfo.title = `Настройки унаследованы от датчика «${sourceName}»`;
+
+        // Значок ссылки
+        const refIcon = document.createElement('span');
+        refIcon.className = 'var-ref-icon';
+        refIcon.textContent = '🔗';
+        refIcon.title = 'Импортированная переменная (настройки только для просмотра)';
+
+        // Собираем строку
+        row.appendChild(varSpan);
+        row.appendChild(sourceInfo);
+        row.appendChild(refIcon);
+
+        container.appendChild(row);
+        // Не вызываем initCustomNumberInputs, так как нет числовых полей
+    } else {
+
     const row = document.createElement('div');
     row.className = 'var-settings-row';
-    row.dataset.var = varName; // Сохраняем имя переменной в data-атрибуте
+    row.dataset.var = varName;
 
     // Метка с именем переменной
     const varSpan = document.createElement('span');
     varSpan.textContent = varName;
     varSpan.className = 'var-name-label';
+    varSpan.setAttribute('autocomplete', 'off');
     varSpan.title = 'Имя переменной (из данных датчика)';
 
-    // Поле ввода названия графика (label)
+    // Поле названия графика
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.placeholder = 'Название графика';
-    labelInput.value = (found && found.label) ? found.label : varName; // Если есть сохранённое, иначе имя переменной
     labelInput.className = 'var-label-input input-full';
+    labelInput.setAttribute('autocomplete', 'off');
     labelInput.title = 'Отображаемое название на графике';
+    if (isReference) {
+      labelInput.value = effectiveVs?.label || varName;
+      labelInput.disabled = true;
+    } else {
+      labelInput.value = found?.label || varName;
+    }
 
-    // Выпадающий список для выбора цвета обработанных данных
+    // Цвет обработанных данных
     const colorSelect = document.createElement('select');
     colorSelect.className = 'var-color-select select-full';
     COLOR_CHOICES.forEach(choice => {
@@ -605,13 +699,16 @@ export function buildVarSettingsUI(sCfg) {
       opt.textContent = choice.name;
       colorSelect.appendChild(opt);
     });
-
-    // Цвет по умолчанию: из списка по индексу (циклически)
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
-    colorSelect.value = (found && found.color) ? found.color : defaultColor;
+    if (isReference) {
+      colorSelect.value = effectiveVs?.color || defaultColor;
+      colorSelect.disabled = true;
+    } else {
+      colorSelect.value = found?.color || defaultColor;
+    }
     colorSelect.title = 'Цвет обработанных данных';
 
-    // Список для цвета сырых данных
+    // Цвет сырых данных
     const rawColorSelect = document.createElement('select');
     rawColorSelect.className = 'var-rawcolor-select select-full';
     rawColorSelect.title = 'Цвет сырых данных';
@@ -621,18 +718,21 @@ export function buildVarSettingsUI(sCfg) {
       opt.textContent = choice.name;
       rawColorSelect.appendChild(opt);
     });
-    rawColorSelect.value = (found && found.rawColor) ? found.rawColor : '#B0BEC5';
-    rawColorSelect.title = 'Цвет сырых данных (RAW)';
+    const defaultRawColor = '#B0BEC5';
+    if (isReference) {
+      rawColorSelect.value = effectiveVs?.rawColor || defaultRawColor;
+      rawColorSelect.disabled = true;
+    } else {
+      rawColorSelect.value = found?.rawColor || defaultRawColor;
+    }
 
-    // Выпадающий список единиц измерения
+    // Единицы измерения
     const unitSelect = document.createElement('select');
     unitSelect.className = 'var-unit-select select-full';
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
     defaultOption.textContent = 'Ед. изм.';
     unitSelect.appendChild(defaultOption);
-
-    // Добавляем категории единиц измерения из UNIT_CATEGORIES
     for (const category in UNIT_CATEGORIES) {
       const optgroup = document.createElement('optgroup');
       optgroup.label = category;
@@ -644,40 +744,61 @@ export function buildVarSettingsUI(sCfg) {
       });
       unitSelect.appendChild(optgroup);
     }
-    unitSelect.value = (found && found.unit) ? found.unit : ''; // Устанавливаем текущую единицу
+    if (isReference) {
+      unitSelect.value = effectiveVs?.unit || '';
+      unitSelect.disabled = true;
+    } else {
+      unitSelect.value = found?.unit || '';
+    }
     unitSelect.title = 'Единица измерения';
 
-    // Поле ввода нижнего предела (синяя зона)
+    // Поля пределов
     const lowInput = document.createElement('input');
     lowInput.type = 'number';
-    lowInput.step = 'any'; // Любое число (с плавающей точкой)
+    lowInput.step = 'any';
     lowInput.placeholder = 'Синий <';
     lowInput.className = 'var-low-input input-full';
+    lowInput.setAttribute('autocomplete', 'off');
     lowInput.style.width = '90px';
-    lowInput.value = (found && found.lowLimit != null) ? found.lowLimit : '';
-    lowInput.title = 'Нижний порог (синяя подсветка, значение минимального порога)';
+    lowInput.title = 'Нижний порог (синяя подсветка)';
+    if (isReference) {
+      lowInput.value = effectiveVs?.lowLimit ?? '';
+      lowInput.disabled = true;
+    } else {
+      lowInput.value = found?.lowLimit ?? '';
+    }
 
-    // Поле ввода предела предупреждения (жёлтая зона)
     const warnInput = document.createElement('input');
     warnInput.type = 'number';
     warnInput.step = 'any';
     warnInput.placeholder = 'Жёлтый ≥';
     warnInput.className = 'var-warn-input input-full';
+    warnInput.setAttribute('autocomplete', 'off');
     warnInput.style.width = '90px';
-    warnInput.value = (found && found.warnLimit != null) ? found.warnLimit : '';
-    warnInput.title = 'Порог предупреждения (жёлтая подсветка, значение больше или равно)';
+    warnInput.title = 'Порог предупреждения';
+    if (isReference) {
+      warnInput.value = effectiveVs?.warnLimit ?? '';
+      warnInput.disabled = true;
+    } else {
+      warnInput.value = found?.warnLimit ?? '';
+    }
 
-    // Поле ввода предела тревоги (красная зона)
     const alarmInput = document.createElement('input');
     alarmInput.type = 'number';
     alarmInput.step = 'any';
     alarmInput.placeholder = 'Красный ≥';
     alarmInput.className = 'var-alarm-input input-full';
+    alarmInput.setAttribute('autocomplete', 'off');
     alarmInput.style.width = '90px';
-    alarmInput.value = (found && found.alarmLimit != null) ? found.alarmLimit : '';
-    alarmInput.title = 'Порог тревоги (красная подсветка, значение больше или равно)';
+    alarmInput.title = 'Порог тревоги';
+    if (isReference) {
+      alarmInput.value = effectiveVs?.alarmLimit ?? '';
+      alarmInput.disabled = true;
+    } else {
+      alarmInput.value = found?.alarmLimit ?? '';
+    }
 
-    // Выпадающий список режима обработки
+    // Режим обработки
     const processingSelect = document.createElement('select');
     processingSelect.className = 'var-processing-select select-full';
     PROCESSING_MODES.forEach(mode => {
@@ -686,42 +807,60 @@ export function buildVarSettingsUI(sCfg) {
       opt.textContent = mode.label;
       processingSelect.appendChild(opt);
     });
-    processingSelect.value = (found && found.processing) ? found.processing : 'none';
-    processingSelect.title = 'Режим обработки сигнала';
+    if (isReference) {
+      processingSelect.value = effectiveVs?.processing || 'none';
+      processingSelect.disabled = true;
+    } else {
+      processingSelect.value = found?.processing || 'none';
+    }
+    processingSelect.title = 'Режим обработки';
 
-    // Чекбокс "Показывать сырые данные"
+    // Чекбоксы
     const showRawCheckbox = document.createElement('input');
     showRawCheckbox.type = 'checkbox';
     showRawCheckbox.className = 'var-show-raw';
-    showRawCheckbox.checked = (found && typeof found.showRaw === 'boolean') ? found.showRaw : true;
-    showRawCheckbox.title = 'Показывать сырые данные на графике';
+    if (isReference) {
+      showRawCheckbox.checked = effectiveVs?.showRaw ?? true;
+      showRawCheckbox.disabled = true;
+    } else {
+      showRawCheckbox.checked = found?.showRaw ?? true;
+    }
+    showRawCheckbox.title = 'Показывать сырые данные';
 
-    // Подпись к чекбоксу (RAW)
     const showRawLabel = document.createElement('label');
     showRawLabel.className = 'checkbox-label';
     showRawLabel.appendChild(showRawCheckbox);
     showRawLabel.appendChild(document.createTextNode(' RAW (сырые)'));
     showRawLabel.title = 'Показывать сырые данные';
 
-    // Чекбокс "Показывать обработанные данные"
     const showProcCheckbox = document.createElement('input');
     showProcCheckbox.type = 'checkbox';
     showProcCheckbox.className = 'var-show-processed';
-    // По умолчанию показывать обработанные, если выбран не "none" режим
     const defaultShowProcessed = processingSelect.value !== 'none';
-    showProcCheckbox.checked = (found && typeof found.showProcessed === 'boolean')
-      ? found.showProcessed
-      : defaultShowProcessed;
+    if (isReference) {
+      showProcCheckbox.checked = effectiveVs?.showProcessed ?? defaultShowProcessed;
+      showProcCheckbox.disabled = true;
+    } else {
+      showProcCheckbox.checked = found?.showProcessed ?? defaultShowProcessed;
+    }
     showProcCheckbox.title = 'Показывать обработанные данные';
 
-    // Подпись к чекбоксу (Обработанные)
     const showProcLabel = document.createElement('label');
     showProcLabel.className = 'checkbox-label';
     showProcLabel.appendChild(showProcCheckbox);
     showProcLabel.appendChild(document.createTextNode(' Обработанные'));
     showProcLabel.title = 'Показывать обработанные данные';
 
-    // Добавляем все созданные элементы в строку
+    // Значок ссылки
+    if (isReference) {
+      const refIcon = document.createElement('span');
+      refIcon.className = 'var-ref-icon';
+      refIcon.textContent = '🔗';
+      refIcon.title = 'Настройки унаследованы от исходного датчика';
+      row.appendChild(refIcon);
+    }
+
+    // Добавляем все элементы в строку
     row.appendChild(varSpan);
     row.appendChild(labelInput);
     row.appendChild(colorSelect);
@@ -734,9 +873,9 @@ export function buildVarSettingsUI(sCfg) {
     row.appendChild(showRawLabel);
     row.appendChild(showProcLabel);
 
-    // Добавляем строку в контейнер
     container.appendChild(row);
     initCustomNumberInputs(container);
+  };
   });
 }
 
@@ -846,65 +985,98 @@ export async function onSaveSensorClick() {
     alert('Недопустимые символы в списке переменных');
     return;
   }
-  sCfg.vars = rawVars; // Сохраняем как есть (позже может быть преобразована)
+
+  // Валидация ссылочных переменных
+  const varList = rawVars.split(',').map(v => v.trim()).filter(Boolean);
+  for (const v of varList) {
+      if (v.includes('_')) {
+          const parts = v.split('_');
+          if (parts.length !== 2) {
+              alert(`Некорректный формат ссылки: "${v}". Используйте ID_переменная.`);
+              return;
+          }
+          const refSensorId = parts[0];
+          if (!sensorExists(refSensorId)) {
+              alert(`Датчик "${refSensorId}" не найден. Создайте его или исправьте ссылку.`);
+              return;
+          }
+      }
+  }
+
+  sCfg.vars = rawVars.split(',').map(v => v.trim()).filter(Boolean); // массив
 
   // Собираем настройки для каждой переменной из UI
   const container = document.getElementById('varSettingsContainer');
   if (container) {
-    const rows = container.querySelectorAll('.var-settings-row'); // Все строки
-    const settings = []; // Массив для новых настроек
+    const rows = container.querySelectorAll('.var-settings-row');
+    const settings = [];
 
     rows.forEach(row => {
-      const varName = row.dataset.var; // Имя переменной из data-атрибута
+      const varName = row.dataset.var;
       if (!varName) return;
 
-      // Находим все элементы внутри строки
-      const labelInput = row.querySelector('.var-label-input');
-      const colorSelect = row.querySelector('.var-color-select');
-      const rawColorSelect = row.querySelector('.var-rawcolor-select');
-      const rawColor = rawColorSelect ? rawColorSelect.value : '#B0BEC5';
-      const unitSelect = row.querySelector('.var-unit-select');
-      const lowInput = row.querySelector('.var-low-input');
-      const warnInput = row.querySelector('.var-warn-input');
-      const alarmInput = row.querySelector('.var-alarm-input');
-      const processingSelect = row.querySelector('.var-processing-select');
-      const showRawCheckbox = row.querySelector('.var-show-raw');
-      const showProcCheckbox = row.querySelector('.var-show-processed');
+      const isReference = varName.includes('_') && (() => {
+        const parts = varName.split('_');
+        if (parts.length === 2) {
+          const sourceId = parts[0];
+          return config.sensors.some(s => String(s.id) === String(sourceId) && !s.deleted);
+        }
+        return false;
+      })();
 
-      // Извлекаем значения (если элемент отсутствует, подставляем значения по умолчанию)
-      const label = labelInput ? labelInput.value.trim() : varName;
-      const color = colorSelect ? (colorSelect.value || '#ff0000') : '#ff0000';
-      const unit = unitSelect ? unitSelect.value.trim() : '';
+      if (isReference) {
+        const labelInput = row.querySelector('.var-label-input');
+        const label = labelInput ? labelInput.value.trim() : varName;
+        settings.push({ var: varName});
+      } else {
+        // Находим все элементы внутри строки
+        const labelInput = row.querySelector('.var-label-input');
+        const colorSelect = row.querySelector('.var-color-select');
+        const rawColorSelect = row.querySelector('.var-rawcolor-select');
+        const rawColor = rawColorSelect ? rawColorSelect.value : '#B0BEC5';
+        const unitSelect = row.querySelector('.var-unit-select');
+        const lowInput = row.querySelector('.var-low-input');
+        const warnInput = row.querySelector('.var-warn-input');
+        const alarmInput = row.querySelector('.var-alarm-input');
+        const processingSelect = row.querySelector('.var-processing-select');
+        const showRawCheckbox = row.querySelector('.var-show-raw');
+        const showProcCheckbox = row.querySelector('.var-show-processed');
 
-      const lowStr = lowInput ? lowInput.value.trim() : '';
-      const warnStr = warnInput ? warnInput.value.trim() : '';
-      const alarmStr = alarmInput ? alarmInput.value.trim() : '';
+        // Извлекаем значения (если элемент отсутствует, подставляем значения по умолчанию)
+        const label = labelInput ? labelInput.value.trim() : varName;
+        const color = colorSelect ? (colorSelect.value || '#ff0000') : '#ff0000';
+        const unit = unitSelect ? unitSelect.value.trim() : '';
 
-      // Преобразуем в числа, если строка не пустая; иначе null
-      const lowLimit = lowStr === '' ? null : Number(lowStr);
-      const warnLimit = warnStr === '' ? null : Number(warnStr);
-      const alarmLimit = alarmStr === '' ? null : Number(alarmStr);
+        const lowStr = lowInput ? lowInput.value.trim() : '';
+        const warnStr = warnInput ? warnInput.value.trim() : '';
+        const alarmStr = alarmInput ? alarmInput.value.trim() : '';
 
-      const processing = processingSelect ? (processingSelect.value || 'none') : 'none';
-      const showRaw = showRawCheckbox ? showRawCheckbox.checked : true;
-      const showProcessed = showProcCheckbox
-        ? showProcCheckbox.checked
-        : (processing !== 'none'); // По умолчанию показывать обработанные, если режим не "none"
+        // Преобразуем в числа, если строка не пустая; иначе null
+        const lowLimit = lowStr === '' ? null : Number(lowStr);
+        const warnLimit = warnStr === '' ? null : Number(warnStr);
+        const alarmLimit = alarmStr === '' ? null : Number(alarmStr);
 
-      // Формируем объект настроек для переменной
-      settings.push({
-        var: varName,
-        label: label || varName,
-        color,
-        rawColor,
-        unit,
-        lowLimit: Number.isFinite(lowLimit) ? lowLimit : null,
-        warnLimit: Number.isFinite(warnLimit) ? warnLimit : null,
-        alarmLimit: Number.isFinite(alarmLimit) ? alarmLimit : null,
-        processing,
-        showRaw,
-        showProcessed
-      });
+        const processing = processingSelect ? (processingSelect.value || 'none') : 'none';
+        const showRaw = showRawCheckbox ? showRawCheckbox.checked : true;
+        const showProcessed = showProcCheckbox
+            ? showProcCheckbox.checked
+            : (processing !== 'none'); // По умолчанию показывать обработанные, если режим не "none"
+
+        // Формируем объект настроек для переменной
+        settings.push({
+            var: varName,
+            label: label || varName,
+            color,
+            rawColor,
+            unit,
+            lowLimit: Number.isFinite(lowLimit) ? lowLimit : null,
+            warnLimit: Number.isFinite(warnLimit) ? warnLimit : null,
+            alarmLimit: Number.isFinite(alarmLimit) ? alarmLimit : null,
+            processing,
+            showRaw,
+            showProcessed
+        });
+      }
     });
     sCfg.varSettings = settings; // Сохраняем в конфигурацию
   }

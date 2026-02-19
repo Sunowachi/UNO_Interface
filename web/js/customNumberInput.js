@@ -1,23 +1,20 @@
 export function initCustomNumberInputs(container = document) {
-    // Ищем все числовые поля, которые ещё не обработаны
     const inputs = container.querySelectorAll('input[type="number"]:not([data-custom-number])');
     inputs.forEach(input => {
-        // Помечаем, чтобы повторно не обрабатывать
         input.setAttribute('data-custom-number', 'true');
 
-        // Создаём обёртку
         const wrapper = document.createElement('div');
         wrapper.className = 'custom-number-wrapper';
 
-        // Вставляем обёртку перед полем, затем перемещаем поле внутрь
         input.parentNode.insertBefore(wrapper, input);
         wrapper.appendChild(input);
 
-        // Контейнер для кнопок
+        // Если поле отключено, не создаём кнопки
+        if (input.disabled) return;
+
         const btnContainer = document.createElement('div');
         btnContainer.className = 'custom-number-buttons';
 
-        // Кнопка увеличения
         const incBtn = document.createElement('button');
         incBtn.type = 'button';
         incBtn.className = 'custom-number-inc';
@@ -27,7 +24,6 @@ export function initCustomNumberInputs(container = document) {
             stepValue(input, 1);
         });
 
-        // Кнопка уменьшения
         const decBtn = document.createElement('button');
         decBtn.type = 'button';
         decBtn.className = 'custom-number-dec';
@@ -53,6 +49,5 @@ function stepValue(input, direction) {
     if (newVal < min) newVal = min;
     if (newVal > max) newVal = max;
     input.value = newVal;
-    // Генерируем событие change для возможных обработчиков
     input.dispatchEvent(new Event('change', { bubbles: true }));
 }

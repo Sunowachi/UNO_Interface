@@ -10,7 +10,7 @@ import {
   CHART_MAX_CONTENT_PX
 } from './constants.js';
 import { applyProcessing } from './dsp.js';
-import { getAlertClass, getSelectedTimeRangeMs, formatTimeHHMMSS } from './utils.js';
+import { getAlertClass, getSelectedTimeRangeMs, formatTimeHHMMSS, getEffectiveVarSettings } from './utils.js';
 
 // Карта для хранения состояния графиков (не используется в текущей версии, но зарезервирована)
 const chartState = new Map();
@@ -47,21 +47,53 @@ export function drawCurrent() {
     const keyLowerColon = `${sCfg.id}:${varName.toLowerCase()}`;
     let dataKey = null;
 
+    // Поиск данных
     if (allSensors[keyColon]) dataKey = keyColon;
     else if (allSensors[keyLowerColon]) dataKey = keyLowerColon;
-
+    else {
+      const parts = varName.split('_');
+      if (parts.length === 2) {
+        const refSensorId = parts[0];
+        const refVarName = parts[1];
+        const refKey = `${refSensorId}:${refVarName}`;
+        const refKeyLower = `${refSensorId}:${refVarName.toLowerCase()}`;
+        if (allSensors[refKey]) dataKey = refKey;
+        else if (allSensors[refKeyLower]) dataKey = refKeyLower;
+      }
+    }
     if (!dataKey) continue;
 
     const sData = allSensors[dataKey];
     if (!sData || !Array.isArray(sData.values) || sData.values.length === 0) continue;
 
     let times = sensorTimes[dataKey] || null;
-    const vs = varSettings.find(v => v.var === varName) || {};
+    const vs = getEffectiveVarSettings(sCfg, varName);
     const rawColor = vs.rawColor || '#999999';
     const baseLabel = vs.label || varName;
     const unit = vs.unit || '';
     const defaultColor = COLOR_CHOICES[idx % COLOR_CHOICES.length].value;
     const color = vs.color || defaultColor;
+
+    // Определяем, является ли переменная ссылкой на другой датчик
+    const isReference = varName.includes('_') && (() => {
+        const parts = varName.split('_');
+        if (parts.length === 2) {
+            const sourceId = parts[0];
+            return config.sensors.some(s => String(s.id) === String(sourceId) && !s.deleted);
+        }
+        return false;
+    })();
+
+    let sourceDisplayName = '';
+    if (isReference) {
+        const parts = varName.split('_');
+        const sourceId = parts[0];
+        const sourceSensor = config.sensors.find(s => String(s.id) === String(sourceId) && !s.deleted);
+        sourceDisplayName = sourceSensor ? (sourceSensor.name || sourceId) : sourceId;
+    }
+
+    // Для отображения в карточке: название переменной (без источника)
+    const displayLabel = baseLabel;
 
     let rawValues = sData.values.slice();
     const processingMode = vs.processing || 'none';
@@ -80,6 +112,7 @@ export function drawCurrent() {
 
     const titleText = unit ? `${baseLabel} (${unit})` : baseLabel;
 
+    // Обрезка по диапазону
     if (rangeMs > 0 && Array.isArray(times) && times.length === rawValues.length) {
       const minAllowedTime = now - rangeMs;
       let startIdx = 0;
@@ -111,9 +144,17 @@ export function drawCurrent() {
       valueCard = document.createElement('div');
       valueCard.className = 'card chart-value-card';
 
+      // Добавляем элемент источника, если это ссылка
+      if (isReference) {
+        const sourceDiv = document.createElement('div');
+        sourceDiv.className = 'chart-source-name';
+        sourceDiv.textContent = `${sourceDisplayName}`;
+        valueCard.appendChild(sourceDiv);
+      }
+
       const valueTitle = document.createElement('div');
       valueTitle.className = 'chart-value-title';
-      valueTitle.textContent = baseLabel;
+      valueTitle.textContent = displayLabel;
 
       const valueText = document.createElement('div');
       valueText.className = 'chart-value-number';
@@ -204,9 +245,23 @@ export function drawCurrent() {
     } else {
       // ======== ОБНОВЛЕНИЕ СУЩЕСТВУЮЩЕЙ ОБЁРТКИ ========
       valueCard = wrapper.querySelector('.card.chart-value-card');
+
+      // Управление элементом источника
+      let sourceDiv = valueCard.querySelector('.chart-source-name');
+      if (isReference) {
+        if (!sourceDiv) {
+          sourceDiv = document.createElement('div');
+          sourceDiv.className = 'chart-source-name';
+          valueCard.insertBefore(sourceDiv, valueCard.firstChild);
+        }
+        sourceDiv.textContent = `${sourceDisplayName}`;
+      } else {
+        if (sourceDiv) sourceDiv.remove();
+      }
+
       if (valueCard) {
         const valueTitle = valueCard.querySelector('.chart-value-title');
-        if (valueTitle) valueTitle.textContent = baseLabel;
+        if (valueTitle) valueTitle.textContent = displayLabel;
         const valueText = valueCard.querySelector('.chart-value-number');
         if (valueText) {
           valueText.textContent = Number.isFinite(lastVal)

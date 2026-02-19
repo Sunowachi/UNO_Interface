@@ -1,4 +1,4 @@
-import { config, setConfig, csrfToken, PERMISSIONS, COLOR_CHOICES } from './constants.js';
+import { config, setConfig, csrfToken, PERMISSIONS, COLOR_CHOICES, editingId } from './constants.js';
 import { forceLogout, showToast, updateSensorPanel, updateDevicePanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 import { drawCurrent } from './charts.js';
@@ -156,6 +156,11 @@ export async function pollConfig(force = false) {
       setConfig(parsed);
       updateSensorPanel(true);
       drawCurrent();
+
+      // Если открыто модальное окно редактирования, уведомляем об изменениях
+      if (editingId !== null) {
+        window.dispatchEvent(new CustomEvent('config-changed', { detail: { editingId } }));
+      }
     }
   } catch (e) {
     console.warn('[pollConfig] ошибка:', e);

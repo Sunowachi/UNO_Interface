@@ -7,7 +7,8 @@ import {
   currentUser,
   ROLE_PERMISSIONS,
   PERMISSIONS,
-  csrfToken
+  csrfToken,
+  config
 } from './constants.js';
 import { lockSession } from './session.js';
 import { syncNewSensors } from './sensors.js';
@@ -80,19 +81,64 @@ export function getSelectedTimeRangeMs() {
   return totalMinutes * 60_000;
 }
 
+// Проверка существования датчика по ID
+export function sensorExists(sensorId) {
+    return config.sensors.some(s => String(s.id) === String(sensorId) && !s.deleted);
+}
+
+// Получить эффективные настройки переменной (с учётом ссылок на другие датчики)
+export function getEffectiveVarSettings(sCfg, varName) {
+    // Локальные настройки в текущем датчике
+    const local = sCfg.varSettings?.find(v => v.var === varName);
+
+    // Проверяем, является ли переменная ссылкой на другой датчик
+    if (varName.includes('_')) {
+        const parts = varName.split('_');
+        if (parts.length === 2) {
+            const sourceId = parts[0];
+            const sourceVar = parts[1];
+            const sourceSensor = config.sensors.find(s => String(s.id) === String(sourceId) && !s.deleted);
+            if (sourceSensor) {
+                const sourceSettings = sourceSensor.varSettings?.find(v => v.var === sourceVar);
+                if (sourceSettings) {
+                    // Возвращаем настройки исходного датчика, но с возможностью переопределить label из локальных
+                    return {
+                        ...sourceSettings,
+                        var: varName,
+                        label: local?.label || sourceSettings.label || sourceVar,
+                    };
+                }
+            }
+        }
+    }
+    // Если не ссылка или исходный датчик не найден, возвращаем локальные (или пустой объект)
+    return local || {};
+}
+
 /* ========== ОБРАБОТКА ПРЕДУПРЕЖДЕНИЙ ========== */
 
 // Определение класса предупреждения (blink-* ) на основе настроек переменной и текущего значения
 export function getAlertClass(vs, value) {
-  // Если значение не является конечным числом или нет настроек, возвращаем null
   if (!Number.isFinite(value) || !vs) return null;
-  // Приводим пределы к числам
-  const low = Number(vs.lowLimit), warn = Number(vs.warnLimit), alarm = Number(vs.alarmLimit);
-  // Проверяем по порядку приоритета: сначала красный (alarm), потом жёлтый (warn), потом синий (low)
-  if (Number.isFinite(alarm) && value >= alarm) return 'blink-red';
-  if (Number.isFinite(warn) && value >= warn) return 'blink-yellow';
-  if (Number.isFinite(low) && value < low) return 'blink-blue';
-  // Если ни одно условие не выполнено, возвращаем null
+
+  const low = vs.lowLimit;
+  const warn = vs.warnLimit;
+  const alarm = vs.alarmLimit;
+
+  // Проверяем, что пределы явно заданы (не null, не undefined, не пустая строка)
+  const hasLow = low !== null && low !== undefined && low !== '';
+  const hasWarn = warn !== null && warn !== undefined && warn !== '';
+  const hasAlarm = alarm !== null && alarm !== undefined && alarm !== '';
+
+  // Преобразуем в числа только если они есть
+  const lowNum = hasLow ? Number(low) : null;
+  const warnNum = hasWarn ? Number(warn) : null;
+  const alarmNum = hasAlarm ? Number(alarm) : null;
+
+  if (hasAlarm && Number.isFinite(alarmNum) && value >= alarmNum) return 'blink-red';
+  if (hasWarn && Number.isFinite(warnNum) && value >= warnNum) return 'blink-yellow';
+  if (hasLow && Number.isFinite(lowNum) && value < lowNum) return 'blink-blue';
+
   return null;
 }
 

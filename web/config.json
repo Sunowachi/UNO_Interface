@@ -16,8 +16,8 @@
           "rawColor": "#B0BEC5",
           "unit": "°C",
           "lowLimit": 5,
-          "warnLimit": 10,
-          "alarmLimit": 30,
+          "warnLimit": 28,
+          "alarmLimit": 32,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
@@ -105,7 +105,11 @@
     {
       "id": "Sensor5",
       "name": "Серверная",
-      "vars": "voltage,hum,temp",
+      "vars": [
+        "voltage",
+        "hum",
+        "temp"
+      ],
       "deleted": false,
       "varSettings": [
         {
@@ -136,16 +140,16 @@
         },
         {
           "var": "temp",
-          "label": "temp",
+          "label": "Темпуратупа",
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": 10,
           "warnLimit": 32,
-          "alarmLimit": 40,
+          "alarmLimit": 400,
           "processing": "moving_avg",
           "showRaw": true,
-          "showProcessed": true
+          "showProcessed": false
         }
       ]
     },
@@ -240,7 +244,7 @@
         },
         {
           "var": "temp",
-          "label": "temp",
+          "label": "Температура",
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "",
@@ -341,7 +345,7 @@
       "varSettings": [
         {
           "var": "vibration",
-          "label": "vibration",
+          "label": "Вибрация",
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "",
@@ -354,7 +358,7 @@
         },
         {
           "var": "noise",
-          "label": "noise",
+          "label": "Шум",
           "color": "#42A5F5",
           "rawColor": "#B0BEC5",
           "unit": "",
@@ -364,6 +368,40 @@
           "processing": "median",
           "showRaw": true,
           "showProcessed": true
+        }
+      ]
+    },
+    {
+      "id": "1",
+      "name": "Температуры",
+      "vars": [
+        "Sensor4_temp",
+        "Sensor3_temp",
+        "Sensor1_temp"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "Sensor4_temp"
+        },
+        {
+          "var": "Sensor3_temp"
+        },
+        {
+          "var": "Sensor1_temp"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "Датчик 2",
+      "vars": [
+        "Sensor1_temp"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "Sensor1_temp"
         }
       ]
     }

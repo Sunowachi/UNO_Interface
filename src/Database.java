@@ -189,50 +189,6 @@ public class Database {
         }
     }
 
-    // Тестовый аккаунт разработчика (УДАЛИТЬ ПОСЛЕ РАЗРАБОТКИ)
-    static void Dev_User() {
-
-        if (findUser("Dev_User") != null) return;
-        String pass = "1";
-        String hsh = Security.hashPassword(pass);
-        Connection us = borrow();
-
-        try (PreparedStatement prst = us.prepareStatement(
-                "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
-            prst.setString(1, "Dev_User");
-            prst.setString(2, hsh);
-            prst.setString(3, "developer");
-            prst.executeUpdate();   // Выполняем вставку
-        } catch (Exception e) {
-            throw new RuntimeException("Не удалось создать аккаунт пользователя с правами разработчика: ", e);
-        } finally {
-            release(us);
-        }
-
-    }
-
-    // Тестовый Аккаунт работника (УДАЛИТЬ ПОСЛЕ РАЗРАБОТКИ)
-    static void User() {
-
-        if (findUser("User") != null) return;
-        String pass = "1";
-        String hsh = Security.hashPassword(pass);
-        Connection us = borrow();
-
-        try (PreparedStatement prst = us.prepareStatement(
-                "INSERT INTO users(username,password_hash,role) VALUES (?,?,?)")) {
-            prst.setString(1, "User");
-            prst.setString(2, hsh);
-            prst.setString(3, "worker");
-            prst.executeUpdate();
-        } catch (Exception e) {
-            throw new RuntimeException("Не удалось создать аккаунт пользователя с правами рабочего: ", e);
-        } finally {
-            release(us);
-        }
-
-    }
-
     // Создание учётной записи разработчика по умолчанию (если её нет)
     static void ensureDefaultDeveloper() {
         // Если пользователь "developer" уже существует, ничего не делаем
