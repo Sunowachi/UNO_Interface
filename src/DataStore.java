@@ -233,38 +233,6 @@ public class DataStore {
 
     /* ========== COMTRADE ========== */
 
-    // Получение списка точек
-    public static List<Point> getPoints(String sensorId, String varName, long fromTs, long toTs) {
-        String key = sensorId + ":" + varName;
-        List<Point> result = new ArrayList<>();
-
-        // Данные из исторического кэша
-        List<Point> hist = historicalCache.get(key);
-        if (hist != null) {
-            for (Point p : hist) {
-                if (p.ts >= fromTs && p.ts <= toTs) {
-                    result.add(p);
-                }
-            }
-        }
-
-        // Данные из оперативного кэша (более свежие)
-        SensorCache c = cache.get(key);
-        if (c != null) {
-            synchronized (c) {
-                for (Point p : c.points) {
-                    if (p.ts >= fromTs && p.ts <= toTs) {
-                        result.add(p);
-                    }
-                }
-            }
-        }
-
-        // Сортируем по времени
-        result.sort(Comparator.comparingLong(p -> p.ts));
-        return result;
-    }
-
     // Получение данных из Базы Данных
     public static List<Point> getPointsFromDb(String sensorId, String varName, long fromTs, long toTs) {
         List<Point> result = new ArrayList<>();
@@ -283,13 +251,13 @@ public class DataStore {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace(); // логируйте ошибку как вам удобно
+            // Логируем ошибку через Audit вместо printStackTrace
+            Audit.log(sensorId, "DB_QUERY_FAIL", e.getMessage());
         } finally {
             Database.release(c);
         }
         return result;
     }
-
     /* ========== ОПЕРАЦИИ С ДАННЫМИ ========== */
 
     // Запись значения в кэш и постановка в очередь на запись в БД

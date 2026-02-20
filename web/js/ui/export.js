@@ -101,9 +101,10 @@ async function handleDownload() {
         return;
     }
 
-    const type = exportTypeSelect.value; // 'comtrade'
+    const version = exportTypeSelect.value; // '1999' или '2013'
 
-    const url = `/export/comtrade?sensor=${encodeURIComponent(sensorId)}&var=${encodeURIComponent(varName)}&from=${fromMs}&to=${toMs}`;
+    // Формируем URL с параметром version
+    const url = `/export/comtrade?sensor=${encodeURIComponent(sensorId)}&var=${encodeURIComponent(varName)}&from=${fromMs}&to=${toMs}&version=${version}`;
 
     try {
         const response = await fetch(url, { credentials: 'include' });
@@ -121,8 +122,9 @@ async function handleDownload() {
         const blob = await response.blob();
         const downloadUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `export_${sensorId}_${varName}.zip`;
+        // Устанавливаем расширение в зависимости от версии
+        const extension = version === '2013' ? '.cff' : '.zip';
+        a.download = `${sensorId}_${varName}${extension}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

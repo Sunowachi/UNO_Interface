@@ -95,7 +95,7 @@
           "unit": "%",
           "lowLimit": 25,
           "warnLimit": 40,
-          "alarmLimit": 60,
+          "alarmLimit": 70,
           "processing": "median",
           "showRaw": true,
           "showProcessed": true
@@ -133,14 +133,14 @@
           "unit": "",
           "lowLimit": null,
           "warnLimit": 40,
-          "alarmLimit": 60,
+          "alarmLimit": 70,
           "processing": "median",
           "showRaw": true,
           "showProcessed": true
         },
         {
           "var": "temp",
-          "label": "Темпуратупа",
+          "label": "Температура",
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "",

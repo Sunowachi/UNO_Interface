@@ -251,13 +251,11 @@ public class Web {
 
     // Обработчик COMTRADE - экспорт файла в этом формате
     static void handleExportComtrade(HttpExchange ex) throws IOException {
-        // Только GET
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Проверка аутентификации
         Security.Session s = Security.getSession(ex);
         if (s == null) {
             HttpUtil.sendError(ex, 401, "unauthorized");
@@ -265,13 +263,13 @@ public class Web {
         }
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
-        // Парсинг параметров запроса
         String query = ex.getRequestURI().getQuery();
         Map<String, String> params = parseQuery(query);
         String sensorId = params.get("sensor");
         String varName = params.get("var");
         String fromStr = params.get("from");
         String toStr = params.get("to");
+        String version = params.get("version"); // "1999" или "2013"
 
         if (sensorId == null || varName == null || fromStr == null || toStr == null) {
             HttpUtil.sendError(ex, 400, "missing parameters: sensor, var, from, to");
@@ -287,46 +285,42 @@ public class Web {
             return;
         }
 
-        // Проверка, что from <= to и разумный диапазон (например, не больше 7 дней)
         if (fromTs > toTs || toTs - fromTs > 7L * 24 * 60 * 60 * 1000) {
             HttpUtil.sendError(ex, 400, "invalid time range (max 7 days)");
             return;
         }
 
-        // Получение данных
         List<DataStore.Point> points = DataStore.getPointsFromDb(sensorId, varName, fromTs, toTs);
         if (points.isEmpty()) {
             HttpUtil.sendError(ex, 404, "no data found");
             return;
         }
-
-        // Вычисление средней частоты дискретизации (по среднему интервалу)
-        double sampleRate = 1.0; // по умолчанию
-        if (points.size() > 1) {
-            long totalInterval = points.get(points.size() - 1).ts - points.get(0).ts;
-            if (totalInterval > 0) {
-                double avgIntervalSec = totalInterval / 1000.0 / (points.size() - 1);
-                sampleRate = 1.0 / avgIntervalSec;
-            }
-        }
-
-        // Генерация COMTRADE архива
-        byte[] zipData;
-        try {
-            zipData = ComtradeExporter.generateZip(sensorId, varName, points, fromTs, toTs, sampleRate);
-        } catch (IOException e) {
-            HttpUtil.sendError(ex, 500, "export failed");
+        if (points.size() < 2) {
+            HttpUtil.sendError(ex, 400, "need at least two data points for COMTRADE export");
             return;
         }
 
-        // Отправка ZIP-файла
+        byte[] fileData;
+        String contentType;
+        String extension;
+
+        if ("2013".equals(version)) {
+            fileData = ComtradeExporter.generateCff2013(sensorId, varName, points, fromTs, toTs);
+            contentType = "application/octet-stream";
+            extension = ".cff";
+        } else { // по умолчанию 1999
+            fileData = ComtradeExporter.generateZip1999(sensorId, varName, points, fromTs, toTs);
+            contentType = "application/zip";
+            extension = ".zip";
+        }
+
         HttpUtil.applySecurityHeaders(ex);
-        ex.getResponseHeaders().set("Content-Type", "application/zip");
+        ex.getResponseHeaders().set("Content-Type", contentType);
         ex.getResponseHeaders().set("Content-Disposition",
-                "attachment; filename=\"" + ComtradeExporter.sanitizeFileName(sensorId + "_" + varName + ".zip") + "\"");
-        ex.sendResponseHeaders(200, zipData.length);
+                "attachment; filename=\"" + sensorId + "_" + varName + extension + "\"");
+        ex.sendResponseHeaders(200, fileData.length);
         try (OutputStream os = ex.getResponseBody()) {
-            os.write(zipData);
+            os.write(fileData);
         }
     }
 
