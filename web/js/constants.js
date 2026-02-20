@@ -308,3 +308,7 @@ export function setConfig(value) {
 export function setCurrentSensor(value) {
   currentSensor = value;
 }
+
+export function setEditingId(value) {
+  editingId = value;
+}

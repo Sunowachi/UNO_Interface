@@ -1,8 +1,12 @@
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.concurrent.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Web {
     // Порт, на котором будет запущен сервер
@@ -43,6 +47,7 @@ public class Web {
         server.createContext("/auth/me", Web::handleAuthMe);            // Информация о текущем пользователе
         server.createContext("/auth/ping", Web::handleAuthPing);        // Проверка валидности сессии
         server.createContext("/", Web::handleStatic);                   // Раздача статических файлов (HTML, JS, CSS)
+        server.createContext("/export/comtrade", Web::handleExportComtrade); // Экспорт файла COMTRADE
 
         // Назначение пула потоков для обработки входящих запросов (100 потоков)
         server.setExecutor(Executors.newFixedThreadPool(100));
@@ -242,6 +247,100 @@ public class Web {
             // Любое исключение на этапе обработки -> 500 Internal Server Error
             HttpUtil.sendError(ex, 500, "internal_error");
         }
+    }
+
+    // Обработчик COMTRADE - экспорт файла в этом формате
+    static void handleExportComtrade(HttpExchange ex) throws IOException {
+        // Только GET
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        // Проверка аутентификации
+        Security.Session s = Security.getSession(ex);
+        if (s == null) {
+            HttpUtil.sendError(ex, 401, "unauthorized");
+            return;
+        }
+        if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
+
+        // Парсинг параметров запроса
+        String query = ex.getRequestURI().getQuery();
+        Map<String, String> params = parseQuery(query);
+        String sensorId = params.get("sensor");
+        String varName = params.get("var");
+        String fromStr = params.get("from");
+        String toStr = params.get("to");
+
+        if (sensorId == null || varName == null || fromStr == null || toStr == null) {
+            HttpUtil.sendError(ex, 400, "missing parameters: sensor, var, from, to");
+            return;
+        }
+
+        long fromTs, toTs;
+        try {
+            fromTs = Long.parseLong(fromStr);
+            toTs = Long.parseLong(toStr);
+        } catch (NumberFormatException e) {
+            HttpUtil.sendError(ex, 400, "invalid timestamp");
+            return;
+        }
+
+        // Проверка, что from <= to и разумный диапазон (например, не больше 7 дней)
+        if (fromTs > toTs || toTs - fromTs > 7L * 24 * 60 * 60 * 1000) {
+            HttpUtil.sendError(ex, 400, "invalid time range (max 7 days)");
+            return;
+        }
+
+        // Получение данных
+        List<DataStore.Point> points = DataStore.getPointsFromDb(sensorId, varName, fromTs, toTs);
+        if (points.isEmpty()) {
+            HttpUtil.sendError(ex, 404, "no data found");
+            return;
+        }
+
+        // Вычисление средней частоты дискретизации (по среднему интервалу)
+        double sampleRate = 1.0; // по умолчанию
+        if (points.size() > 1) {
+            long totalInterval = points.get(points.size() - 1).ts - points.get(0).ts;
+            if (totalInterval > 0) {
+                double avgIntervalSec = totalInterval / 1000.0 / (points.size() - 1);
+                sampleRate = 1.0 / avgIntervalSec;
+            }
+        }
+
+        // Генерация COMTRADE архива
+        byte[] zipData;
+        try {
+            zipData = ComtradeExporter.generateZip(sensorId, varName, points, fromTs, toTs, sampleRate);
+        } catch (IOException e) {
+            HttpUtil.sendError(ex, 500, "export failed");
+            return;
+        }
+
+        // Отправка ZIP-файла
+        HttpUtil.applySecurityHeaders(ex);
+        ex.getResponseHeaders().set("Content-Type", "application/zip");
+        ex.getResponseHeaders().set("Content-Disposition",
+                "attachment; filename=\"" + ComtradeExporter.sanitizeFileName(sensorId + "_" + varName + ".zip") + "\"");
+        ex.sendResponseHeaders(200, zipData.length);
+        try (OutputStream os = ex.getResponseBody()) {
+            os.write(zipData);
+        }
+    }
+
+    // Вспомогательный метод для разбора query-строки
+    private static Map<String, String> parseQuery(String query) {
+        Map<String, String> map = new HashMap<>();
+        if (query == null) return map;
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) {
+                map.put(pair.substring(0, eq), pair.substring(eq + 1));
+            }
+        }
+        return map;
     }
 
     // ================= ПРОКСИ-ОБРАБОТЧИКИ =================

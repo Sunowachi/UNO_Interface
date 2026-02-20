@@ -1,53 +1,15 @@
 import {
-  timeRange,
-  ALERT_PRIORITY,
-  allSensors,
-  sensorTimes,
-  setAllSensors,
-  currentUser,
-  ROLE_PERMISSIONS,
-  PERMISSIONS,
-  csrfToken,
-  config
-} from './constants.js';
-import { lockSession } from './session.js';
-import { syncNewSensors } from './sensors.js';
-import { updateSensorPanel, updateDevicePanel } from './ui.js';
-import { drawCurrent } from './charts.js';
-
-/* ========== КОНСТАНТЫ ========== */
-// Максимальное количество точек на график (ограничение для производительности)
-const MAX_POINTS = 5000;
-// Шаг времени по умолчанию (1 секунда) - возможно, используется где-то ещё, но в этом файле не применяется
-const DEFAULT_STEP_MS = 1000;
-
-/* ========== ПРОВЕРКИ ПРАВ ДОСТУПА И ВАЛИДАЦИИ ========== */
-
-// Проверка наличия разрешения у текущего пользователя
-export function hasPermission(permission) {
-  // Если permission не передано или у текущего пользователя нет роли, возвращаем false
-  if (!permission || !currentUser?.role) return false;
-  // Получаем набор прав для роли пользователя
-  const perms = ROLE_PERMISSIONS[currentUser.role];
-  // Если для роли нет прав, возвращаем false
-  if (!perms) return false;
-  // Если у пользователя есть полные права разработчика (DEV_ALL), разрешаем всё
-  if (perms.has(PERMISSIONS.DEV_ALL)) return true;
-  // Иначе проверяем наличие конкретного разрешения
-  return perms.has(permission);
-}
-
-// Валидация имени переменной (должно быть строкой из букв, цифр и _, длиной 1-32 символа)
-function isValidVarName(v) {
-  return typeof v === 'string' && /^[a-zA-Z0-9_]{1,32}$/.test(v);
-}
-
-// Валидация ID датчика (должно быть строкой длиной 1-64 символа)
-function isValidSensorId(id) {
-  return typeof id === 'string' && id.length > 0 && id.length <= 64;
-}
-
-/* ========== РАБОТА С ДАННЫМИ ========== */
+    timeRange,
+    allSensors,
+    sensorTimes,
+    setAllSensors,
+    config,
+    csrfToken
+} from '../constants.js';
+import { lockSession } from '../session.js';
+import { syncNewSensors } from '../sensors/configSync.js';
+import { updateSensorPanel, updateDevicePanel } from '../ui/index.js';
+import { drawCurrent } from '../charts.js';
 
 // Создание карты переменных по ID датчика (используется для группировки)
 export function buildIpVarMap() {
@@ -67,6 +29,16 @@ export function buildIpVarMap() {
     map[sensorId].add(varName);
   }
   return map;
+}
+
+// Валидация ID датчика (должно быть строкой длиной 1-64 символа)
+function isValidSensorId(id) {
+  return typeof id === 'string' && id.length > 0 && id.length <= 64;
+}
+
+// Валидация имени переменной (должно быть строкой из букв, цифр и _, длиной 1-32 символа)
+function isValidVarName(v) {
+  return typeof v === 'string' && /^[a-zA-Z0-9_]{1,32}$/.test(v);
 }
 
 // Вычисление временного диапазона в миллисекундах на основе объекта timeRange
@@ -114,45 +86,6 @@ export function getEffectiveVarSettings(sCfg, varName) {
     // Если не ссылка или исходный датчик не найден, возвращаем локальные (или пустой объект)
     return local || {};
 }
-
-/* ========== ОБРАБОТКА ПРЕДУПРЕЖДЕНИЙ ========== */
-
-// Определение класса предупреждения (blink-* ) на основе настроек переменной и текущего значения
-export function getAlertClass(vs, value) {
-  if (!Number.isFinite(value) || !vs) return null;
-
-  const low = vs.lowLimit;
-  const warn = vs.warnLimit;
-  const alarm = vs.alarmLimit;
-
-  // Проверяем, что пределы явно заданы (не null, не undefined, не пустая строка)
-  const hasLow = low !== null && low !== undefined && low !== '';
-  const hasWarn = warn !== null && warn !== undefined && warn !== '';
-  const hasAlarm = alarm !== null && alarm !== undefined && alarm !== '';
-
-  // Преобразуем в числа только если они есть
-  const lowNum = hasLow ? Number(low) : null;
-  const warnNum = hasWarn ? Number(warn) : null;
-  const alarmNum = hasAlarm ? Number(alarm) : null;
-
-  if (hasAlarm && Number.isFinite(alarmNum) && value >= alarmNum) return 'blink-red';
-  if (hasWarn && Number.isFinite(warnNum) && value >= warnNum) return 'blink-yellow';
-  if (hasLow && Number.isFinite(lowNum) && value < lowNum) return 'blink-blue';
-
-  return null;
-}
-
-// Выбор более приоритетного класса предупреждения из двух
-export function pickHigherAlertClass(currentClass, newClass) {
-  // Если новый класс отсутствует, оставляем текущий
-  if (!newClass) return currentClass;
-  // Если текущий отсутствует, берём новый
-  if (!currentClass) return newClass;
-  // Сравниваем приоритеты из ALERT_PRIORITY (числовые значения)
-  return ALERT_PRIORITY[newClass] > ALERT_PRIORITY[currentClass] ? newClass : currentClass;
-}
-
-/* ========== ЗАГРУЗКА ДАННЫХ ========== */
 
 // Загрузка данных с сервера с учетом выбранного временного диапазона (основная функция получения данных)
 export async function fetchData() {
@@ -270,17 +203,4 @@ export async function fetchData() {
   } catch (e) {
     console.error('Ошибка fetchData:', e);
   }
-}
-
-/* ========== ФОРМАТИРОВАНИЕ ========== */
-
-// Форматирование времени в формате HH:MM:SS из миллисекунд
-export function formatTimeHHMMSS(ms, useUTC = false) {
-  const d = new Date(ms); // Создаём объект Date из миллисекунд
-  // Если useUTC = true, берём UTC-часы/минуты/секунды, иначе локальные
-  const h = useUTC ? d.getUTCHours() : d.getHours();
-  const m = useUTC ? d.getUTCMinutes() : d.getMinutes();
-  const s = useUTC ? d.getUTCSeconds() : d.getSeconds();
-  // Приводим каждое значение к строке, добавляем ведущий ноль до двух символов и объединяем через двоеточие
-  return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
 }

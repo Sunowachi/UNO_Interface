@@ -1,19 +1,53 @@
-import {
-  allSensors,
-  sensorTimes,
-  config,
-  currentSensor,
-  COLOR_CHOICES,
-  CHART_POINT_PX,
-  CHART_MIN_CANVAS_PX,
-  CHART_MAX_CANVAS_PX,
-  CHART_MAX_CONTENT_PX
-} from './constants.js';
+import { allSensors, sensorTimes, config, currentSensor, COLOR_CHOICES, CHART_POINT_PX, CHART_MIN_CANVAS_PX, CHART_MAX_CANVAS_PX, CHART_MAX_CONTENT_PX } from './constants.js';
 import { applyProcessing } from './dsp.js';
-import { getAlertClass, getSelectedTimeRangeMs, formatTimeHHMMSS, getEffectiveVarSettings } from './utils.js';
+import { getAlertClass, getSelectedTimeRangeMs, formatTimeHHMMSS, getEffectiveVarSettings } from './utils/index.js';
 
 // Карта для хранения состояния графиков (не используется в текущей версии, но зарезервирована)
 const chartState = new Map();
+
+/* ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ЛЕГЕНДЫ ========== */
+function updateLegend(container, showRaw, rawVals, rawColor, showProcessed, procVals, procColor, label, unit) {
+    let legendDiv = container.querySelector('.chart-legend');
+    if (!legendDiv) {
+        legendDiv = document.createElement('div');
+        legendDiv.className = 'chart-legend';
+        container.appendChild(legendDiv);
+    }
+    legendDiv.innerHTML = '';
+
+    const hasRaw = showRaw && Array.isArray(rawVals) && rawVals.length > 0;
+    const hasProc = showProcessed && Array.isArray(procVals) && procVals.length > 0;
+
+    if (hasRaw) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+
+        const colorSpan = document.createElement('span');
+        colorSpan.className = 'legend-color';
+        colorSpan.style.backgroundColor = rawColor;
+
+        const text = document.createTextNode(' RAW');
+
+        item.appendChild(colorSpan);
+        item.appendChild(text);
+        legendDiv.appendChild(item);
+    }
+    if (hasProc) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+
+        const colorSpan = document.createElement('span');
+        colorSpan.className = 'legend-color';
+        colorSpan.style.backgroundColor = procColor;
+
+        const processedLabel = unit ? `${label} (${unit})` : label;
+        const text = document.createTextNode(' ' + processedLabel);
+
+        item.appendChild(colorSpan);
+        item.appendChild(text);
+        legendDiv.appendChild(item);
+    }
+}
 
 /* ========== ОСНОВНАЯ ФУНКЦИЯ ОТРИСОВКИ ГРАФИКОВ ========== */
 
@@ -198,7 +232,8 @@ export function drawCurrent() {
       axisDataRow.appendChild(axisContainer);
       axisDataRow.appendChild(scrollWrapper);
       chartContainer.appendChild(axisDataRow);
-
+      // после того как chartContainer полностью собран, вызываем легенду
+      updateLegend(chartContainer, showRaw, rawValues, rawColor, showProcessed, processedValues, color, displayLabel, unit);
       // Обработчики прокрутки и перетаскивания
       dataCanvas.addEventListener('wheel', (e) => {
         const dx = (Math.abs(e.deltaX) > 0) ? e.deltaX : e.deltaY;
@@ -278,6 +313,11 @@ export function drawCurrent() {
       if (!dataCanvas && scrollWrapper) {
         dataCanvas = scrollWrapper.querySelector('canvas');
       }
+    }
+
+    const chartContainer = wrapper.querySelector('.chart-graph-container');
+    if (chartContainer) {
+        updateLegend(chartContainer, showRaw, rawValues, rawColor, showProcessed, processedValues, color, displayLabel, unit);
     }
 
     if (dataCanvas && axisCanvas && scrollWrapper) {

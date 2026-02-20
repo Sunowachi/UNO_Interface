@@ -1,7 +1,8 @@
-import { openLoginModal, hideApp, showApp, closeLoginModal, applyPermissions } from './ui.js';
+import { openLoginModal, hideApp, showApp, closeLoginModal } from './ui/index.js';
+import { applyPermissions } from './utils/permissions.js';
 import { setCurrentUser, currentUser, setCsrfToken, csrfToken } from './constants.js';
 import { clearIntervals } from './api.js';
-import { stopConfigPolling } from './sensors.js';
+import { stopConfigPolling } from './sensors/index.js';
 
 // Время бездействия в миллисекундах до блокировки сессии (10 минут)
 let IDLE_TIMEOUT = 10 * 60 * 1000; // значение по умолчанию, будет переопределено сервером

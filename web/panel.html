@@ -103,6 +103,40 @@
     </div>
 </div>
 
+<div id="exportModalBackdrop" class="modal-backdrop">
+    <div class="modal modal-export">
+        <h3>Экспорт данных</h3>
+        <div class="modal-content-scroll">
+            <label>
+                Тип экспорта:
+                <select id="exportType" class="input-full">
+                    <option value="comtrade">COMTRADE</option>
+                </select>
+            </label>
+
+            <div class="export-time-range">
+                <label>
+                    От:
+                    <input type="datetime-local" id="exportFrom" class="input-full">
+                </label>
+                <label>
+                    До:
+                    <input type="datetime-local" id="exportTo" class="input-full">
+                </label>
+            </div>
+
+            <div id="exportVariablesContainer">
+
+            </div>
+            <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить датчик/переменную</button>
+        </div>
+        <div class="modal-footer">
+            <button id="cancelExportBtn" class="btn">Отмена</button>
+            <button id="downloadExportBtn" class="btn btn-primary">Скачать</button>
+        </div>
+    </div>
+</div>
+
 <!-- Окно авторизации -->
 <div id="loginModal" class="login-backdrop">
     <div class="login-box">

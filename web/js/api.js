@@ -1,21 +1,8 @@
-import {
-  config,
-  currentSensor,
-  setServerStart,
-  setAllSensors,
-  setCurrentSensor
-} from './constants.js';
-import {
-  updateSensorPanel,
-  updateDevicePanel,
-  setupButtonHandlers,
-  setupTimeRangeControls,
-  updateTimer,
-  forceLogout
-} from './ui.js';
+import { config, currentSensor, setServerStart, setAllSensors, setCurrentSensor } from './constants.js';
+import { updateSensorPanel, updateDevicePanel, setupButtonHandlers, setupTimeRangeControls, updateTimer, forceLogout } from './ui/index.js';
 import { drawCurrent } from './charts.js';
-import { fetchData } from './utils.js';
-import { syncConfigInitial, loadConfig, syncNewSensors, startConfigPolling } from './sensors.js';
+import { fetchData } from './utils/dataUtils.js';
+import { syncConfigInitial, loadConfig, syncNewSensors, startConfigPolling } from './sensors/index.js';
 import { lockSession } from './session.js';
 
 /* ========== СОСТОЯНИЕ ПРИЛОЖЕНИЯ ========== */

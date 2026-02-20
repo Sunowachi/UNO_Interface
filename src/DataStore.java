@@ -2,6 +2,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -228,6 +229,65 @@ public class DataStore {
 
         // Обновляем время последнего POST для датчика
         lastPostTs.put(sensorId, now);
+    }
+
+    /* ========== COMTRADE ========== */
+
+    // Получение списка точек
+    public static List<Point> getPoints(String sensorId, String varName, long fromTs, long toTs) {
+        String key = sensorId + ":" + varName;
+        List<Point> result = new ArrayList<>();
+
+        // Данные из исторического кэша
+        List<Point> hist = historicalCache.get(key);
+        if (hist != null) {
+            for (Point p : hist) {
+                if (p.ts >= fromTs && p.ts <= toTs) {
+                    result.add(p);
+                }
+            }
+        }
+
+        // Данные из оперативного кэша (более свежие)
+        SensorCache c = cache.get(key);
+        if (c != null) {
+            synchronized (c) {
+                for (Point p : c.points) {
+                    if (p.ts >= fromTs && p.ts <= toTs) {
+                        result.add(p);
+                    }
+                }
+            }
+        }
+
+        // Сортируем по времени
+        result.sort(Comparator.comparingLong(p -> p.ts));
+        return result;
+    }
+
+    // Получение данных из Базы Данных
+    public static List<Point> getPointsFromDb(String sensorId, String varName, long fromTs, long toTs) {
+        List<Point> result = new ArrayList<>();
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT ts, value FROM history WHERE sensor_id=? AND var_name=? AND ts BETWEEN ? AND ? ORDER BY ts")) {
+                ps.setString(1, sensorId);
+                ps.setString(2, varName);
+                ps.setLong(3, fromTs);
+                ps.setLong(4, toTs);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    result.add(new Point(rs.getLong(1), rs.getDouble(2)));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace(); // логируйте ошибку как вам удобно
+        } finally {
+            Database.release(c);
+        }
+        return result;
     }
 
     /* ========== ОПЕРАЦИИ С ДАННЫМИ ========== */

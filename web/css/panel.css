@@ -273,6 +273,189 @@ canvas {
     background: transparent;
 }
 
+/* Легенда графика */
+.chart-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 8px;
+    padding: 4px 12px;
+    background: var(--color-surface);
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.3);
+}
+
+.chart-legend:empty {
+    display: none;
+}
+
+/* ========== МЕНЮ ЭКСПОРТА ========== */
+
+.modal-export {
+    width: 800px;
+}
+
+/* Контейнер для полей "От" и "До" */
+.export-time-range {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.export-time-range label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+}
+
+.export-time-range input[type="datetime-local"] {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.95rem;
+}
+
+.export-time-range input[type="datetime-local"]:focus {
+    outline: none;
+    border-color: var(--color-primary-light);
+    box-shadow: 0 0 0 3px rgba(64, 176, 255, 0.3);
+}
+
+/* Контейнер для динамических строк датчик/переменная */
+#exportVariablesContainer {
+    margin: 20px 0;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* Строка добавления датчика и переменной */
+.export-var-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    align-items: center;
+    background: var(--color-surface-hover);
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+}
+
+.export-var-row input {
+    flex: 1;
+    min-width: 0;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--color-text);
+    font-size: 0.9rem;
+}
+
+.export-var-row input:focus {
+    border-color: var(--color-primary-light);
+    box-shadow: 0 0 0 2px rgba(64, 176, 255, 0.2);
+    outline: none;
+}
+
+.remove-var-row {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-var-row:hover {
+    background: var(--color-primary-dark);
+    color: white;
+    border-color: var(--color-primary-light);
+}
+
+/* Кнопка добавления новой строки */
+#addExportVarRow {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    background: var(--color-surface);
+    border: 1px dashed var(--color-primary-light);
+    border-radius: 30px;
+    color: var(--color-primary-light);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+#addExportVarRow:hover {
+    background: var(--color-primary-dark);
+    color: white;
+    border-style: solid;
+}
+
+/* Футер модального окна с кнопками */
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 25px;
+    padding-top: 15px;
+    border-top: 1px solid var(--color-border);
+}
+
+/* Кнопки в футере панели датчиков (уже есть, но улучшим) */
+.panel-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 15px 10px 10px;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.panel-footer .btn {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 0.9rem;
+}
+
+.export-time-range input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);        /* инвертирует цвет иконки (делает светлую на тёмном фоне) */
+    cursor: pointer;
+}
+
 /* ========== КАРТОЧКИ И ЭЛЕМЕНТЫ С ДАННЫМИ ========== */
 .card {
     background: var(--color-surface);
