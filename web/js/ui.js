@@ -121,6 +121,8 @@ async function login(e) {
     await initSession();
     // Инициализируем основное приложение (загружаем конфигурацию, данные датчиков)
     await init();
+    // После успешной инициализации перезагружаем страницу для получения полного HTML
+    window.location.reload();
   } catch (err) {
     // Если произошла ошибка при инициализации, выводим её в консоль
     console.error('Ошибка инициализации после логина:', err);
@@ -336,21 +338,6 @@ export function updateSensorPanel(forceRebuild = false) {
       const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
                            (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
 
-      if (hasReference) {
-          const refIcon = document.createElement('span');
-          refIcon.className = 'sensor-ref-icon';
-          refIcon.textContent = '🔗';
-          refIcon.title = 'Импортирует данные других датчиков';
-          li.appendChild(refIcon);
-      }
-
-      // Затем создаём nameSpan и добавляем его
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'sensor-name';
-      nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
-      nameSpan.style.flex = '1 1 auto';
-      li.appendChild(nameSpan);
-
       const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
       if (canEdit) {
         const editBtn = document.createElement('button');
@@ -363,6 +350,20 @@ export function updateSensorPanel(forceRebuild = false) {
         });
         li.appendChild(editBtn);
       }
+      if (hasReference) {
+          const refIcon = document.createElement('span');
+          refIcon.className = 'sensor-ref-icon';
+          refIcon.textContent = '🔗';
+          refIcon.title = 'Импортирует данные других датчиков';
+          li.appendChild(refIcon);
+      }
+
+      // Создаём nameSpan и добавляем его
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'sensor-name';
+      nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
+      nameSpan.style.flex = '1 1 auto';
+      li.appendChild(nameSpan);
 
       li.addEventListener('click', () => selectSensor(sCfg.id));
 
@@ -373,7 +374,6 @@ export function updateSensorPanel(forceRebuild = false) {
       li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
       if (sensorAlertClass) li.classList.add(sensorAlertClass);
 
-      li.appendChild(nameSpan);
       list.appendChild(li);
     });
 
@@ -438,6 +438,19 @@ export function updateSensorPanel(forceRebuild = false) {
       const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
                            (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
 
+      const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+      if (canEdit) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
+        editBtn.title = 'Редактировать датчик';
+        editBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openEditModal(sCfg.id);
+        });
+        li.appendChild(editBtn);
+      }
+
       if (hasReference) {
           const refIcon = document.createElement('span');
           refIcon.className = 'sensor-ref-icon';
@@ -453,19 +466,6 @@ export function updateSensorPanel(forceRebuild = false) {
       nameSpan.style.flex = '1 1 auto';
       li.appendChild(nameSpan);
 
-      const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
-      if (canEdit) {
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '✏️';
-        editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
-        editBtn.title = 'Редактировать датчик';
-        editBtn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          openEditModal(sCfg.id);
-        });
-        li.appendChild(editBtn);
-      }
-
       li.addEventListener('click', () => selectSensor(sCfg.id));
 
       if (String(sCfg.id) === String(currentSensor)) {
@@ -475,7 +475,6 @@ export function updateSensorPanel(forceRebuild = false) {
       li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
       if (sensorAlertClass) li.classList.add(sensorAlertClass);
 
-      li.appendChild(nameSpan);
       list.appendChild(li);
     }
   });
@@ -579,6 +578,15 @@ export function openEditModal(id) {
     }
   }
 
+  // Добавляем подсказку под полем ввода переменных
+  if (sensorVarsInput && !document.getElementById('sensorVarsHint')) {
+    const hint = document.createElement('small');
+    hint.id = 'sensorVarsHint';
+    hint.style.cssText = 'color: var(--color-text-secondary); display: block; margin-top: 4px;';
+    hint.textContent = 'Для импорта данных из другого датчика используйте формат ID_переменная (например, Sensor1_temp)';
+    sensorVarsInput.parentNode.insertBefore(hint, sensorVarsInput.nextSibling);
+  }
+
   // Строим интерфейс для настройки каждой переменной (поля для цветов, пределов и т.д.)
   buildVarSettingsUI(sCfg);
   // Показываем модальное окно (делаем фон видимым)
@@ -593,6 +601,10 @@ export function closeEditModal() {
   // Скрываем панель устройств
   const devicePanel = document.getElementById('devicePanel');
   if (devicePanel) devicePanel.classList.remove('show');
+
+  // Удаляем подсказку при закрытии окна
+  const hint = document.getElementById('sensorVarsHint');
+  if (hint) hint.remove();
 }
 
 // Создание пользовательского интерфейса для настройки параметров каждой переменной датчика

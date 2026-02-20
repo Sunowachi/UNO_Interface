@@ -532,7 +532,8 @@ public class Security {
         // Отправляем JSON с именем пользователя, ролью и CSRF-токеном
         HttpUtil.sendJson(ex, "{\"username\":\"" + s.username +
                 "\",\"role\":\"" + s.role +
-                "\",\"csrf\":\"" + s.csrf + "\"}");
+                "\",\"csrf\":\"" + s.csrf +
+                "\",\"idleTimeout\":" + SESSION_TIMEOUT_MS + "}");
     }
 
     // Обработка ping-запроса для поддержания сессии (POST /auth/ping)

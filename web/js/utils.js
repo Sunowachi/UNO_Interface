@@ -165,7 +165,6 @@ export async function fetchData() {
   try {
     // Получаем выбранный диапазон в миллисекундах
     const rangeMs = getSelectedTimeRangeMs();
-    console.log('[fetchData] запрос /init?rangeMs=' + rangeMs);
     // Выполняем GET-запрос к серверу с параметром rangeMs
     const res = await fetch('/init?rangeMs=' + encodeURIComponent(String(rangeMs)), {
       method: 'GET',

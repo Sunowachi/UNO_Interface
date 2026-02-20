@@ -2,6 +2,7 @@ import { config, setConfig, csrfToken, PERMISSIONS, COLOR_CHOICES, editingId } f
 import { forceLogout, showToast, updateSensorPanel, updateDevicePanel } from './ui.js';
 import { buildIpVarMap, hasPermission } from './utils.js';
 import { drawCurrent } from './charts.js';
+import { lockSession } from './session.js';
 
 /* ========== КОНСТАНТЫ ========== */
 // Максимальное количество датчиков, которое можно добавить (ограничение)
@@ -14,7 +15,7 @@ let saveCount = 0;
 function isSaving() {
   return saveCount > 0;
 }
-// Множество ID датчиков, которые были недавно удалены (чтобы не создавать их автоматически)
+// Множество ID датчиков, которые были недавно удалены
 const recentlyDeleted = new Set();
 const RECENTLY_DELETED_TIMEOUT = 3000; // 3 секунды
 
@@ -105,7 +106,6 @@ function isValidVarName(v) {
 export async function pollConfig(force = false) {
   if (!force && isPolling) return;
   if (!force && isSaving()) {
-    console.log('[pollConfig] пропущен, идёт сохранение');
     return;
   }
   isPolling = true;
@@ -115,7 +115,11 @@ export async function pollConfig(force = false) {
       headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
     });
 
-    if (res.status === 401 || res.status === 403) return;
+    if (res.status === 401 || res.status === 403) {
+      console.warn('[pollConfig] сессия недействительна!');
+      lockSession()
+      return;
+    }
     if (!res.ok) throw new Error('HTTP error: ' + res.status);
 
     const text = await res.text();
@@ -132,7 +136,6 @@ export async function pollConfig(force = false) {
     // Проверяем, нет ли в новой конфигурации датчиков, которые были недавно удалены
     const hasRecentlyDeleted = parsed.sensors.some(s => recentlyDeleted.has(String(s.id)));
     if (hasRecentlyDeleted) {
-      console.log('[pollConfig] обнаружен недавно удалённый датчик, игнорируем обновление');
       return;
     }
 
@@ -152,7 +155,6 @@ export async function pollConfig(force = false) {
     const newJson = JSON.stringify(normalizedParsed);
 
     if (currentJson !== newJson) {
-      console.log('[pollConfig] конфигурация изменилась, обновляем');
       setConfig(parsed);
       updateSensorPanel(true);
       drawCurrent();
@@ -188,13 +190,13 @@ export async function loadConfig() {
   try {
     // Выполняем GET-запрос к /config/load
     const res = await fetch('/config/load', {
-      credentials: 'include',                      // Передаём куки
+      credentials: 'include', // Передаём куки
       headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {} // CSRF-токен, если есть
     });
 
     // Если статус 401 или 403 (неавторизован или доступ запрещён)
     if (res.status === 401 || res.status === 403) {
-      forceLogout(); // Принудительно выходим
+      lockSession()
       return;
     }
 
@@ -375,7 +377,7 @@ export async function saveConfigSilent() {
 
     // Если статус 401 или 403, выходим из системы
     if (res.status === 401 || res.status === 403) {
-      forceLogout();
+      lockSession()
       return;
     }
 
@@ -408,7 +410,7 @@ export async function saveConfigWithMessage() {
     // Если статус 401 или 403
     if (res.status === 401 || res.status === 403) {
       alert('❌ Сессия истекла. Войдите снова.');
-      forceLogout();
+      lockSession()
       return;
     }
 

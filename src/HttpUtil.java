@@ -336,23 +336,53 @@ public class HttpUtil {
     static void handleStatic(HttpExchange ex) throws IOException {
         // Разрешён только GET
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1); // 405 Method Not Allowed
+            ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Корневая директория для статики (папка "web" в текущем рабочем каталоге)
+        // Корневая директория для статики (папка "web")
         Path root = Path.of("web").toAbsolutePath().normalize();
         // Путь из URL (начинается с /)
         String reqPath = ex.getRequestURI().getPath();
 
         // Защита от path traversal (обход каталогов через ..)
         if (reqPath.contains("..")) {
-            ex.sendResponseHeaders(403, -1); // 403 Forbidden
+            ex.sendResponseHeaders(403, -1);
             return;
         }
 
-        // Полный путь к запрошенному файлу, убираем первый символ '/'
-        Path path = root.resolve(reqPath.substring(1)).normalize();
+        if ("/favicon.ico".equals(reqPath)) {
+            Path rootProject = Path.of(".").toAbsolutePath().normalize();
+            Path favPath = rootProject.resolve("favicon.ico");
+            if (Files.exists(favPath) && !Files.isHidden(favPath) && Files.size(favPath) <= 1_000_000) {
+                byte[] data = Files.readAllBytes(favPath);
+                applySecurityHeaders(ex);
+                ex.getResponseHeaders().set("Content-Type", "image/x-icon");
+                ex.getResponseHeaders().set("Cache-Control", "public, max-age=3600");
+                ex.sendResponseHeaders(200, data.length);
+                try (OutputStream os = ex.getResponseBody()) {
+                    os.write(data);
+                }
+                return;
+            } else {
+                // если файла нет в корне, возвращаем 204
+                ex.getResponseHeaders().set("Content-Type", "image/x-icon");
+                ex.sendResponseHeaders(204, -1);
+                return;
+            }
+        }
+
+        // Если запрашивают корень или panel.html, применяем фильтрацию
+        boolean isMainPage = "/".equals(reqPath) || "/panel.html".equals(reqPath);
+
+        // Полный путь к запрошенному файлу, убираем первый символ '/' для не-главных страниц
+        Path path;
+        if (isMainPage) {
+            path = root.resolve("panel.html");
+        } else {
+            path = root.resolve(reqPath.substring(1)).normalize();
+        }
+
         // Проверка, что путь не выходит за пределы корневой папки
         if (!path.startsWith(root)) {
             ex.sendResponseHeaders(403, -1);
@@ -381,17 +411,28 @@ public class HttpUtil {
         // Проверка размера файла (не более 1 МБ)
         long size = Files.size(path);
         if (size > 1_000_000) {
-            ex.sendResponseHeaders(413, -1); // 413 Payload Too Large
+            ex.sendResponseHeaders(413, -1);
             return;
         }
 
         // Чтение всего файла в память
         byte[] data = Files.readAllBytes(path);
+
+        // Для главной страницы проверяем аутентификацию и, если нужно, чистим HTML
+        if (isMainPage) {
+            boolean auth = isAuthenticated(ex);
+            if (!auth) {
+                String html = new String(data, StandardCharsets.UTF_8);
+                html = stripUnauthorizedContent(html);
+                data = html.getBytes(StandardCharsets.UTF_8);
+            }
+        }
+
         // Добавление заголовков безопасности
         applySecurityHeaders(ex);
         // Установка MIME-типа
         ex.getResponseHeaders().set("Content-Type", getMimeType(name));
-        // Кэширование: HTML не кэшируется, остальное – 1 час
+        // HTML не кэшируется
         ex.getResponseHeaders().set("Cache-Control",
                 name.endsWith(".html") ? "no-store" : "public, max-age=3600");
 
@@ -400,6 +441,54 @@ public class HttpUtil {
         try (OutputStream os = ex.getResponseBody()) {
             os.write(data);
         }
+    }
+
+    // Проверка, авторизован ли пользователь (есть ли валидная сессия)
+    private static boolean isAuthenticated(HttpExchange ex) {
+        Security.Session s = Security.getSession(ex);
+        return s != null && !s.expired();
+    }
+
+    // Удаляет элемент с указанным id (вместе со всем содержимым) из HTML-строки
+    private static String removeElementById(String html, String id) {
+        // Ищем открывающий тег с данным id
+        String openTagPattern = "<div\\s+[^>]*id=\"" + id + "\"[^>]*>";
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(openTagPattern, java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher m = p.matcher(html);
+        if (!m.find()) {
+            return html; // элемент не найден
+        }
+        int start = m.start(); // начало открывающего тега
+
+        // Ищем закрывающий тег, учитывая вложенность
+        int level = 1;
+        int pos = m.end(); // позиция после открывающего тега
+        while (pos < html.length() && level > 0) {
+            int nextOpen = html.indexOf("<div", pos);
+            int nextClose = html.indexOf("</div", pos);
+            if (nextClose == -1) break; // нет закрывающего тега – выход
+            if (nextOpen != -1 && nextOpen < nextClose) {
+                // Встретился вложенный открывающий тег
+                level++;
+                pos = nextOpen + 4; // продолжаем после "<div"
+            } else {
+                // Встретился закрывающий тег
+                level--;
+                pos = nextClose + 5; // продолжаем после "</div"
+            }
+        }
+        int end = pos; // позиция после закрывающего тега
+        // Удаляем найденный участок
+        return html.substring(0, start) + html.substring(end);
+    }
+
+    // Удаление из HTML всех элементов с ограниченным доступом
+    private static String stripUnauthorizedContent(String html) {
+        html = removeElementById(html, "appRoot");
+        html = removeElementById(html, "editModalBackdrop");
+        html = removeElementById(html, "cancelConfirmBackdrop");
+        html = removeElementById(html, "devicePanel");
+        return html;
     }
 
     // Проверка, что имя файла имеет разрешённое расширение

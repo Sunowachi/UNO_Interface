@@ -391,19 +391,6 @@
           "var": "Sensor1_temp"
         }
       ]
-    },
-    {
-      "id": "2",
-      "name": "Датчик 2",
-      "vars": [
-        "Sensor1_temp"
-      ],
-      "deleted": false,
-      "varSettings": [
-        {
-          "var": "Sensor1_temp"
-        }
-      ]
     }
   ]
 }

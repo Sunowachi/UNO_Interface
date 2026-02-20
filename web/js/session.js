@@ -3,8 +3,8 @@ import { setCurrentUser, currentUser, setCsrfToken, csrfToken } from './constant
 import { clearIntervals } from './api.js';
 import { stopConfigPolling } from './sensors.js';
 
-// Константа: время бездействия в миллисекундах до блокировки сессии (10 минут)
-const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 минут
+// Время бездействия в миллисекундах до блокировки сессии (10 минут)
+let IDLE_TIMEOUT = 10 * 60 * 1000; // значение по умолчанию, будет переопределено сервером
 // Переменная для хранения идентификатора таймера бездействия
 let idleTimer = null;
 // Временная метка последней активности пользователя
@@ -80,7 +80,6 @@ export async function lockSession() {
   setCurrentUser(null);
   // Очищаем CSRF-токен
   setCsrfToken(null);
-  updateAddButtonVisibility();
   // Скрываем основное приложение
   hideApp();
   // Открываем модальное окно входа
@@ -142,10 +141,16 @@ function setupActivityListeners() {
 
   // Отслеживаем изменение видимости страницы (переключение вкладок)
   document.addEventListener('visibilitychange', () => {
-    // Если страница стала видимой (пользователь вернулся), сбрасываем таймер
-    if (!document.hidden) resetIdleTimer();
+    // Если страница стала видимой (пользователь вернулся)
+    if (!document.hidden) {
+      const idleTime = Date.now() - lastActivity;
+      // Если время бездействия превышает лимит – блокируем сессию
+      if (idleTime >= IDLE_TIMEOUT) {
+        lockSession();
+      }
+    }
   });
-}
+ }
 
 /* ========== ИНИЦИАЛИЗАЦИЯ СЕССИИ ========== */
 
@@ -170,6 +175,10 @@ export async function initSession() {
     // Устанавливаем данные пользователя (имя, роль, CSRF)
     setCurrentUser({ username: data.username, role: data.role, csrf: data.csrf });
 
+    if (data.idleTimeout && typeof data.idleTimeout === 'number') {
+      IDLE_TIMEOUT = data.idleTimeout;
+    }
+
     // Применяем права доступа к интерфейсу на основе роли пользователя
     applyPermissions(data.role);
     // Устанавливаем обработчики событий активности
@@ -189,7 +198,8 @@ export async function initSession() {
     // Обработка ошибок при инициализации
     // Если ошибка связана с авторизацией (401 или 403)
     if (err.status === 401 || err.status === 403) {
-      sessionLocked = false; // Сбрасываем флаг блокировки (чтобы можно было повторить попытку)
+      clearIntervals();           // останавливаем все интервалы обновления данных
+      stopConfigPolling();        // останавливаем опрос конфигурации
       // Очищаем данные пользователя
       setCurrentUser(null);
       setCsrfToken(null);

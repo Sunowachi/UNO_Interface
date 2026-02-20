@@ -16,6 +16,7 @@ import {
 import { drawCurrent } from './charts.js';
 import { fetchData } from './utils.js';
 import { syncConfigInitial, loadConfig, syncNewSensors, startConfigPolling } from './sensors.js';
+import { lockSession } from './session.js';
 
 /* ========== СОСТОЯНИЕ ПРИЛОЖЕНИЯ ========== */
 
@@ -70,7 +71,6 @@ export async function init() {
   try {
     // Останавливаем все работающие интервалы (на случай, если они были)
     clearIntervals();
-    console.log('init: запрос /init');
 
     // Выполняем GET-запрос к серверу для получения начальных данных
     const res = await fetch('/init', { credentials: 'include' });
@@ -82,8 +82,7 @@ export async function init() {
       // Сбрасываем флаги
       uiInitialized = false;
       initRunning = false;
-      // Принудительно выходим из системы (перенаправляем на экран входа)
-      forceLogout();
+      lockSession()
       return;
     }
 
