@@ -1,16 +1,19 @@
 import { setCurrentUser, csrfToken } from '../constants.js';
 import { hideApp } from './app.js';
-import { initSession } from '../session.js';
+import { initSession, lockSession } from '../session.js';
 import { init } from '../api.js';
 
 let loginModal = document.getElementById('loginModal');
 
 export function openLoginModal() {
+  if (loginModal) loginModal.classList.add('show');
+  const btn = document.getElementById('logoutBtn');
+    if (btn) btn.hidden = true;
     if (loginModal) loginModal.classList.add('show');
 }
 
 export function closeLoginModal() {
-    if (loginModal) loginModal.classList.remove('show');
+  if (loginModal) loginModal.classList.remove('show');
 }
 
 // Показать сообщение об ошибке в модальном окне входа
@@ -48,7 +51,7 @@ export async function login(e) {
   // Получаем ответ сервера в формате JSON
   const data = await res.json();
 
-  // Если статус ответа не OK (код не 2xx)
+  // Если статус ответа не OK (код не 200)
   if (!res.ok) {
     hideApp();                // Скрываем приложение (на случай, если оно было показано)
     openLoginModal();         // Открываем модальное окно входа
@@ -97,7 +100,7 @@ export async function forceLogout() {
     // Отправляем POST-запрос на выход (удаление сессии на сервере)
     await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
   } catch {} // Игнорируем ошибки сети (если сервер недоступен)
-
+  lockSession();
   setCurrentUser(null); // Очищаем текущего пользователя в приложении
   hideApp();            // Скрываем основное приложение
   openLoginModal();     // Открываем окно входа

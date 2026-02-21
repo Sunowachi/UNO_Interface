@@ -81,10 +81,25 @@ export async function lockSession() {
   setCurrentUser(null);
   // Очищаем CSRF-токен
   setCsrfToken(null);
+  hideLogoutButton();
   // Скрываем основное приложение
   hideApp();
   // Открываем модальное окно входа
   openLoginModal();
+}
+
+/* ========== КНОПКА ВЫХОДА ИЗ АККАУНТА ========== */
+
+// Показать кнопку выхода
+function showLogoutButton() {
+    const btn = document.getElementById('logoutBtn');
+    if (btn) btn.hidden = false;
+}
+
+// Скрыть кнопку выхода
+function hideLogoutButton() {
+    const btn = document.getElementById('logoutBtn');
+    if (btn) btn.hidden = true;
 }
 
 /* ========== ПРОВЕРКА АКТИВНОСТИ СЕССИИ ========== */
@@ -175,6 +190,7 @@ export async function initSession() {
     setCsrfToken(data.csrf);
     // Устанавливаем данные пользователя (имя, роль, CSRF)
     setCurrentUser({ username: data.username, role: data.role, csrf: data.csrf });
+    showLogoutButton();
 
     if (data.idleTimeout && typeof data.idleTimeout === 'number') {
       IDLE_TIMEOUT = data.idleTimeout;
@@ -190,7 +206,6 @@ export async function initSession() {
     startIdleWatch();
     // Запускаем периодическую проверку сессии
     startPing();
-
     // Закрываем модальное окно входа (если оно было открыто)
     closeLoginModal();
     // Показываем основное приложение
@@ -201,6 +216,7 @@ export async function initSession() {
     if (err.status === 401 || err.status === 403) {
       clearIntervals();           // останавливаем все интервалы обновления данных
       stopConfigPolling();        // останавливаем опрос конфигурации
+      lockSession();
       // Очищаем данные пользователя
       setCurrentUser(null);
       setCsrfToken(null);

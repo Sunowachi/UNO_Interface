@@ -1,4 +1,4 @@
-import { login } from './login.js';
+import { login, forceLogout } from './login.js';
 import { config, editingId } from '../constants.js';
 import {
     onAddSensorClick,
@@ -31,6 +31,14 @@ export function setupButtonHandlers() {
   const cancelBackBtn = document.getElementById('cancelConfirmBackBtn');
   // Поле ввода переменных датчика (список переменных через запятую)
   const sensorVarsInput = document.getElementById('sensorVars');
+  // Кнопка выхода
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await forceLogout();
+    });
+  }
 
   // Обработчик изменения поля ввода переменных (срабатывает при вводе текста)
   if (sensorVarsInput) {

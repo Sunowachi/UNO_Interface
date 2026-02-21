@@ -10,7 +10,13 @@
 <!-- Основное приложение (скрыто до авторизации) -->
 <div id="appRoot" hidden>
     <div id="mainLayout">
-        <h1>Показания датчиков</h1>
+        <div class="top-bar">
+            <div class="title-group">
+                <h1>Показания датчиков</h1>
+                <button id="logoutBtn" class="btn btn-secondary logout-btn" title="Выйти из аккаунта" hidden>Выйти</button>
+            </div>
+
+        </div>
         <p id="timer"><b>Время работы:</b> 0 сек</p>
 
         <div class="row">

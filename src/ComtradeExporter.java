@@ -88,7 +88,7 @@ public class ComtradeExporter {
 
         // --- Configuration ---
         writer.write("--- Configuration ---\n");
-        writer.write("StationName," + sensorId + ",2013\n");
+        writer.write("StationName," + sensorId + ",2013,<CR/LF>\n");
         writer.write("1,0\n");
         // 13 полей для аналогового канала в 2013 (включая primary/secondary)
         writer.write("1," + varName + ",,,V,1.0,0.0,0.0,0.0,0.0,1.0,0.0,A\n");

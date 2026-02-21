@@ -146,7 +146,7 @@
           "unit": "",
           "lowLimit": 10,
           "warnLimit": 32,
-          "alarmLimit": 400,
+          "alarmLimit": 32,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": false
@@ -231,10 +231,10 @@
       "varSettings": [
         {
           "var": "voltage",
-          "label": "voltage",
+          "label": "Напряжение",
           "color": "#FFEE58",
           "rawColor": "#B0BEC5",
-          "unit": "",
+          "unit": "V",
           "lowLimit": null,
           "warnLimit": 300,
           "alarmLimit": 350,

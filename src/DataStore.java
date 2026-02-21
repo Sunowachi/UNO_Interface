@@ -251,7 +251,7 @@ public class DataStore {
                 }
             }
         } catch (SQLException e) {
-            // Логируем ошибку через Audit вместо printStackTrace
+            // Логируем ошибку через Audit
             Audit.log(sensorId, "DB_QUERY_FAIL", e.getMessage());
         } finally {
             Database.release(c);

@@ -23,7 +23,7 @@ export async function pollConfig(force = false) {
 
     if (res.status === 401 || res.status === 403) {
       console.warn('[pollConfig] сессия недействительна!');
-      lockSession()
+      lockSession();
       return;
     }
     if (!res.ok) throw new Error('HTTP error: ' + res.status);

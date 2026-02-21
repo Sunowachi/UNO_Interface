@@ -58,7 +58,6 @@ export async function init() {
   try {
     // Останавливаем все работающие интервалы (на случай, если они были)
     clearIntervals();
-
     // Выполняем GET-запрос к серверу для получения начальных данных
     const res = await fetch('/init', { credentials: 'include' });
 
@@ -69,7 +68,7 @@ export async function init() {
       // Сбрасываем флаги
       uiInitialized = false;
       initRunning = false;
-      lockSession()
+      lockSession();
       return;
     }
 
