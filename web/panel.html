@@ -132,14 +132,31 @@
                 </label>
             </div>
 
-            <div id="exportVariablesContainer">
+            <!-- Контейнер для динамических строк (будет заполняться через JS) -->
+            <div id="exportVariablesContainer"></div>
 
+            <!-- Кнопки управления строками -->
+            <div class="export-buttons-row">
+                <button id="populateFromDevicesBtn" class="btn btn-small btn-secondary" type="button">📋 Загрузить из устройств</button>
+                <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить датчик/переменную</button>
             </div>
-            <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить датчик/переменную</button>
         </div>
         <div class="modal-footer">
             <button id="cancelExportBtn" class="btn">Отмена</button>
             <button id="downloadExportBtn" class="btn btn-primary">Скачать</button>
+        </div>
+        <!-- Модальное окно выбора датчиков для экспорта -->
+        <div id="exportSelectorBackdrop" class="modal-backdrop">
+            <div class="modal modal-selector">
+                <h3>Выберите данные для экспорта</h3>
+                <div class="modal-content-scroll">
+                    <div id="exportSelectorList" class="selector-list"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancelSelectorBtn" class="btn">Отмена</button>
+                    <button id="addSelectedBtn" class="btn btn-primary">Добавить выбранные</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

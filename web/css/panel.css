@@ -493,6 +493,58 @@ canvas {
     cursor: pointer;
 }
 
+.export-buttons-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Модальное окно выбора экспорта */
+.modal-selector {
+    width: 500px;
+    max-width: 90%;
+}
+
+.selector-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.selector-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+}
+
+.selector-item:hover {
+    background-color: var(--color-surface-hover);
+}
+
+.selector-item input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.selector-item label {
+    cursor: pointer;
+    flex: 1;
+    color: var(--color-text);
+}
+
+.selector-item .sensor-id {
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.selector-item .var-name {
+    color: var(--color-text-secondary);
+}
+
 /* ========== КАРТОЧКИ И ЭЛЕМЕНТЫ С ДАННЫМИ ========== */
 .card {
     background: var(--color-surface);
