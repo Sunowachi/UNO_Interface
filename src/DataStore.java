@@ -252,7 +252,7 @@ public class DataStore {
             }
         } catch (SQLException e) {
             // Логируем ошибку через Audit
-            Audit.log(sensorId, "DB_QUERY_FAIL", e.getMessage());
+            Audit.error(sensorId, "DB_QUERY_FAIL", e.getMessage(), "-");
         } finally {
             Database.release(c);
         }
@@ -273,7 +273,7 @@ public class DataStore {
         if (!added) {
             // Если очередь переполнена, увеличиваем счётчик отброшенных и логируем
             droppedPoints.incrementAndGet();
-            Audit.log("system", "DB_QUEUE_OVERFLOW", "sensor=" + sensor);
+            Audit.error("system", "DB_QUEUE_OVERFLOW", "Queue full, dropping point for sensor=" + sensor, "-");
         }
         return added;
     }

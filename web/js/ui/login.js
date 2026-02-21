@@ -5,103 +5,147 @@ import { init } from '../api.js';
 
 let loginModal = document.getElementById('loginModal');
 
+// Функция для определения мобильного устройства
+function isMobileDevice() {
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth < 768;
+    const hasHighDpr = window.devicePixelRatio > 1.5;
+    return hasTouch && (isSmallScreen || hasHighDpr);
+}
+
+// Функция для отправки запроса с заголовком
+async function loginWithMobileCheck(credentials) {
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+    };
+
+    if (isMobileDevice()) {
+        headers['X-Client-Mobile'] = 'true';
+    }
+
+    return fetch('/auth/login', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(credentials),
+        credentials: 'include'
+    });
+}
+
 export function openLoginModal() {
-  if (loginModal) loginModal.classList.add('show');
-  const btn = document.getElementById('logoutBtn');
-    if (btn) btn.hidden = true;
     if (loginModal) loginModal.classList.add('show');
+    const errorEl = document.getElementById("loginError");
+    if (errorEl) errorEl.textContent = '';
 }
 
 export function closeLoginModal() {
-  if (loginModal) loginModal.classList.remove('show');
+    if (loginModal) loginModal.classList.remove('show');
 }
 
-// Показать сообщение об ошибке в модальном окне входа
 function showLoginError(message) {
-  const errorEl = document.getElementById("loginError"); // Находим элемент для ошибки
-  if (errorEl) {
-    errorEl.textContent = message;       // Устанавливаем текст ошибки
-    errorEl.style.color = '#ff0000';      // Красный цвет текста
-    errorEl.style.marginTop = '10px';     // Отступ сверху для визуального разделения
-  }
-}
-
-// Асинхронная функция обработки входа пользователя
-export async function login(e) {
-  // Если передан объект события, предотвращаем стандартное поведение формы (перезагрузку страницы)
-  e?.preventDefault();
-  // Сбрасываем текущего пользователя (на время входа)
-  setCurrentUser(null);
-
-  // Получаем значения полей логина и пароля из DOM
-  const username = document.getElementById("loginUser").value;
-  const password = document.getElementById("loginPass").value;
-
-  // Выполняем POST-запрос к серверу для аутентификации
-  const res = await fetch('/auth/login', {
-    method: 'POST',                          // Метод запроса
-    headers: {
-      'Content-Type': 'application/json',    // Отправляем данные в формате JSON
-      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}) // Если есть CSRF-токен, добавляем его в заголовки
-    },
-    body: JSON.stringify({ username, password }), // Тело запроса: логин и пароль в JSON
-    credentials: 'include'                    // Включаем куки (для сессии)
-  });
-
-  // Получаем ответ сервера в формате JSON
-  const data = await res.json();
-
-  // Если статус ответа не OK (код не 200)
-  if (!res.ok) {
-    hideApp();                // Скрываем приложение (на случай, если оно было показано)
-    openLoginModal();         // Открываем модальное окно входа
-
-    // Если сервер вернул ошибку "blocked" (блокировка из-за множества попыток)
-    if (data.error === 'blocked') {
-      showLoginError('Слишком много попыток. Попробуйте позже.');
+    const errorEl = document.getElementById('loginError');
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.color = '';
+        errorEl.style.marginTop = '';
     } else {
-      // Иначе показываем общую ошибку неверного логина/пароля
-      showLoginError('Неверный логин или пароль');
+        console.error('[login] loginError element not found, message:', message);
     }
-    return; // Прерываем выполнение функции
-  }
-
-  // Проверяем поле status в ответе (ожидается "ok")
-  if (data.status !== "ok") {
-    alert("Ошибка входа");
-    return;
-  }
-
-  // Очищаем сообщение об ошибке в форме входа
-  const errorEl = document.getElementById("loginError");
-  if (errorEl) errorEl.textContent = '';
-
-  closeLoginModal(); // Закрываем модальное окно входа
-
-  try {
-    // Инициализируем сессию (загружаем данные пользователя, права и т.д.)
-    await initSession();
-    // Инициализируем основное приложение (загружаем конфигурацию, данные датчиков)
-    await init();
-    // После успешной инициализации перезагружаем страницу для получения полного HTML
-    window.location.reload();
-  } catch (err) {
-    // Если произошла ошибка при инициализации, выводим её в консоль
-    console.error('Ошибка инициализации после логина:', err);
-    hideApp();                // Скрываем приложение
-    openLoginModal();         // Открываем окно входа снова
-    showLoginError('Ошибка инициализации приложения'); // Показываем ошибку
-  }
 }
 
-// Принудительный выход из системы (logout)
+export async function login(e) {
+    e?.preventDefault();
+    setCurrentUser(null);
+    showLoginError('');
+
+    const username = document.getElementById("loginUser").value.trim();
+    const password = document.getElementById("loginPass").value;
+
+    if (!username || !password) {
+        showLoginError('Введите логин и пароль');
+        return;
+    }
+
+    let response;
+    try {
+        // Используем функцию с проверкой мобильности
+        response = await loginWithMobileCheck({ username, password });
+    } catch (networkError) {
+        console.error('Network error during login:', networkError);
+        showLoginError('Сетевая ошибка. Проверьте соединение с сервером.');
+        hideApp();
+        openLoginModal();
+        return;
+    }
+
+    // Получаем текст ответа
+    let responseText;
+    try {
+        responseText = await response.text();
+    } catch (e) {
+        console.error('Failed to read response text:', e);
+        showLoginError('Ошибка чтения ответа от сервера');
+        hideApp();
+        openLoginModal();
+        return;
+    }
+
+    // Пытаемся распарсить JSON, если это возможно
+    let data = {};
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.warn('Response is not valid JSON despite content-type:', responseText);
+        }
+    }
+
+    if (!response.ok) {
+        hideApp();
+        openLoginModal();
+
+        let errorMessage = 'Ошибка сервера';
+        if (response.status === 401 || response.status === 403) {
+            if (data.error === 'blocked') {
+                errorMessage = 'Слишком много попыток. Попробуйте позже.';
+            } else {
+                errorMessage = 'Неверный логин или пароль';
+            }
+        } else {
+            const details = data.error || data.message || responseText;
+            if (details && details !== '') {
+                errorMessage = `Ошибка сервера (${response.status}): ${details}`;
+            } else {
+                errorMessage = `Ошибка сервера (${response.status})`;
+            }
+        }
+        showLoginError(errorMessage);
+        return;
+    }
+
+    // Успешный вход
+    showLoginError('');
+    closeLoginModal();
+
+    try {
+        await initSession();
+        await init();
+        window.location.reload();
+    } catch (err) {
+        console.error('Error during post-login initialization:', err);
+        hideApp();
+        openLoginModal();
+        showLoginError('Ошибка инициализации приложения');
+    }
+}
+
 export async function forceLogout() {
-  try {
-    // Отправляем POST-запрос на выход (удаление сессии на сервере)
-    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
-  } catch {} // Игнорируем ошибки сети (если сервер недоступен)
-  lockSession();
-  setCurrentUser(null); // Очищаем текущего пользователя в приложении
-  hideApp();            // Скрываем основное приложение
-  openLoginModal();     // Открываем окно входа
+    try {
+        await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {}
+    lockSession();
+    setCurrentUser(null);
+    hideApp();
+    openLoginModal();
 }

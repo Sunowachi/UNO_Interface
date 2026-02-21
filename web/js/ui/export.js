@@ -1,6 +1,6 @@
 import { showToast } from './toast.js';
 import { hasPermission } from '../utils/permissions.js';
-import { PERMISSIONS, allSensors } from '../constants.js';
+import { PERMISSIONS, allSensors, config } from '../constants.js'; // добавили config
 import { lockSession } from '../session.js';
 
 export function initExportModal() {
@@ -22,10 +22,9 @@ export function initExportModal() {
     }
 
     if (populateBtn) {
-        populateBtn.addEventListener('click', showSelectionDialog); // изменено
+        populateBtn.addEventListener('click', showSelectionDialog);
     }
 
-    // Кнопки в окне выбора
     const cancelSelectorBtn = document.getElementById('cancelSelectorBtn');
     const addSelectedBtn = document.getElementById('addSelectedBtn');
 
@@ -51,7 +50,7 @@ function showSelectionDialog() {
     const listContainer = document.getElementById('exportSelectorList');
     if (!selectorModal || !listContainer) return;
 
-    // Собираем уникальные пары
+    // Собираем уникальные пары (sensorId, varName) из allSensors
     const pairs = [];
     for (const key of Object.keys(allSensors)) {
         const idx = key.indexOf(':');
@@ -67,34 +66,56 @@ function showSelectionDialog() {
         return;
     }
 
-    // Сортируем по sensorId и varName
-    pairs.sort((a, b) => {
-        if (a.sensorId === b.sensorId) {
-            return a.varName.localeCompare(b.varName);
+    // Обогащаем пары отображаемыми именами из config
+    const enriched = pairs.map(p => {
+        // Найти датчик в config
+        const sensorCfg = config.sensors.find(s => String(s.id) === String(p.sensorId) && !s.deleted);
+        const displaySensor = sensorCfg?.name || p.sensorId; // если name есть, используем его
+        // Найти настройки переменной
+        let displayVar = p.varName;
+        if (sensorCfg && Array.isArray(sensorCfg.varSettings)) {
+            const varSetting = sensorCfg.varSettings.find(vs => vs.var === p.varName);
+            if (varSetting && varSetting.label) {
+                displayVar = varSetting.label;
+            }
         }
-        return a.sensorId.localeCompare(b.sensorId);
+        return {
+            sensorId: p.sensorId,
+            varName: p.varName,
+            displaySensor,
+            displayVar
+        };
+    });
+
+    // Сортируем по отображаемым именам датчика, затем переменной
+    enriched.sort((a, b) => {
+        if (a.displaySensor === b.displaySensor) {
+            return a.displayVar.localeCompare(b.displayVar);
+        }
+        return a.displaySensor.localeCompare(b.displaySensor);
     });
 
     // Генерируем HTML
     listContainer.innerHTML = '';
-    pairs.forEach(pair => {
-        const item = document.createElement('div');
-        item.className = 'selector-item';
-        item.innerHTML = `
-            <input type="checkbox" class="selector-checkbox" data-sensor="${pair.sensorId}" data-var="${pair.varName}">
-            <label>
-                <span class="sensor-id">${pair.sensorId}</span>:
-                <span class="var-name">${pair.varName}</span>
+    enriched.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'selector-item';
+        // В data-атрибутах храним оригинальные ID
+        div.innerHTML = `
+            <input type="checkbox" class="selector-checkbox" data-sensor="${item.sensorId}" data-var="${item.varName}">
+            <label title="sensorId: ${item.sensorId}\nvarName: ${item.varName}">
+                <span class="sensor-id">${item.displaySensor}</span>:
+                <span class="var-name">${item.displayVar}</span>
             </label>
         `;
-        // Клик по item (кроме чекбокса) переключает чекбокс
-        item.addEventListener('click', (e) => {
+        // Клик по элементу (кроме чекбокса) переключает чекбокс
+        div.addEventListener('click', (e) => {
             if (e.target.tagName !== 'INPUT') {
-                const cb = item.querySelector('.selector-checkbox');
+                const cb = div.querySelector('.selector-checkbox');
                 cb.checked = !cb.checked;
             }
         });
-        listContainer.appendChild(item);
+        listContainer.appendChild(div);
     });
 
     selectorModal.classList.add('show');
@@ -111,7 +132,7 @@ function addSelectedItems() {
     const container = document.getElementById('exportVariablesContainer');
     if (!container) return;
 
-    // Для каждого выбранного добавляем строку, если её ещё нет
+    // Существующие пары (чтобы не дублировать)
     const existingPairs = new Set();
     document.querySelectorAll('#exportVariablesContainer .export-var-row').forEach(row => {
         const sensor = row.querySelector('.export-sensor-id').value.trim();
@@ -150,6 +171,7 @@ function addVariableRowWithValues(sensorId, varName) {
     row.querySelector('.remove-var-row').addEventListener('click', () => row.remove());
 }
 
+// Остальные функции (setDefaultDates, addVariableRow, openExportModal, closeExportModal, handleDownload) остаются без изменений
 function setDefaultDates() {
     const fromInput = document.getElementById('exportFrom');
     const toInput = document.getElementById('exportTo');

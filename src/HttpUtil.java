@@ -33,7 +33,7 @@ public class HttpUtil {
         // Проверка, не был ли уже отправлен ответ (заголовок Content-Type уже установлен)
         if (ex.getResponseHeaders().containsKey("Content-Type")) {
             // Логируем попытку двойного ответа
-            Audit.log("-", "DOUBLE_RESPONSE_ATTEMPT", ex.getRemoteAddress().toString());
+            Audit.warn("-", "DOUBLE_RESPONSE_ATTEMPT", "Attempt to send duplicate response", ex.getRemoteAddress().toString());
             return;
         }
 
@@ -73,7 +73,7 @@ public class HttpUtil {
             }
         } catch (IOException e) {
             // В случае ошибки отправки – запись в аудит
-            Audit.log("-", "SEND_ERROR_FAIL", e.getMessage());
+            Audit.error("-", "SEND_ERROR_FAIL", e.getMessage(), ex.getRemoteAddress().toString());
         }
     }
 
@@ -568,23 +568,32 @@ public class HttpUtil {
 
     // Сохранение конфигурации (POST /config/save)
     static void saveConfig(HttpExchange ex) throws IOException {
-        // Чтение сырого JSON из тела запроса (с ограничением MAX_CONFIG_SIZE)
         String json = readRawJson(ex, MAX_CONFIG_SIZE);
+        String ip = ex.getRemoteAddress().getAddress().getHostAddress(); // IP для аудита
+
         if (json == null) {
             sendError(ex, 400, "invalid_json");
+            Security.Session s = Security.getSession(ex);
+            String user = (s != null) ? s.username : "-";
+            Audit.warn(user, "CONFIG_SAVE_FAIL", "Invalid JSON received", ip);
             return;
         }
 
-        // Создание временного файла
         Path tmp = Files.createTempFile("config", ".json");
-        // Запись JSON во временный файл
         Files.writeString(tmp, json, StandardCharsets.UTF_8);
-
-        // Атомарное перемещение временного файла на место основного (замена существующего)
         Files.move(tmp, CONFIG_FILE.toPath(),
                 StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        // Отправка подтверждения
         sendJson(ex, "{\"status\":\"OK\"}");
+
+        Security.Session s = Security.getSession(ex);
+        if (s != null) {
+            // Используем метод info с 4 параметрами (user, action, details, ip) или с 5 (sessionId)?
+            // Предположим, что есть метод info(user, action, details, ip) без sessionId.
+            // Если есть метод с sessionId, то нужно передавать s.csrf как sessionId.
+            Audit.info(s.username, "CONFIG_SAVE", "Configuration saved successfully", ip);
+            // Альтернативно, если есть метод с sessionId:
+            // Audit.info(s.username, "CONFIG_SAVE", "Configuration saved successfully", ip, s.csrf);
+        }
     }
 
     // ================= ОБРАБОТКА ПАРАМЕТРОВ ЗАПРОСА =================

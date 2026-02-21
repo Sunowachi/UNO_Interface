@@ -158,7 +158,7 @@ public class Web {
                 DataStore.handleSensorPost(body, sensorId);
             } catch (Exception e) {
                 // В случае ошибки – запись в аудит
-                Audit.log(sensorId, "SENSOR_POST_FAIL", "-");
+                Audit.error(sensorId, "SENSOR_POST_FAIL", e.getMessage(), "-");
             }
         });
     }
@@ -187,64 +187,55 @@ public class Web {
     // Обработчик POST /sensor/register – регистрация нового датчика
     static void handleSensorRegister(HttpExchange ex) throws IOException {
         try {
-            // Только POST
             if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
                 ex.sendResponseHeaders(405, -1);
                 return;
             }
 
-            // Проверка Content-Type
             String ct = ex.getRequestHeaders().getFirst("Content-Type");
             if (ct == null || !ct.startsWith("application/json")) {
                 HttpUtil.sendError(ex, 415, "unsupported_media_type");
                 return;
             }
 
-            // Парсинг JSON-тела запроса в Map
             var json = HttpUtil.parseJson(ex);
-            // Извлечение полей sensorId и key
             String sensorId = json.get("sensorId");
             String key = json.get("key");
 
-            // Удаление пробелов в начале и конце
             if (sensorId != null) sensorId = sensorId.trim();
             if (key != null) key = key.trim();
 
-            // Проверка наличия обязательных полей
             if (sensorId == null || key == null) {
                 HttpUtil.sendError(ex, 400, "bad_request");
                 return;
             }
 
-            // Валидация формата ID датчика: буквы, цифры, _, -, длина от 3 до 64
+            // Получаем IP до проверок, чтобы использовать в аудите
+            String ip = ex.getRemoteAddress().getAddress().getHostAddress();
+
             if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
                 HttpUtil.sendError(ex, 400, "invalid_sensor_id");
+                Audit.warn(sensorId, "SENSOR_REGISTER_VALIDATION_FAIL", "Invalid sensor ID format", ip);
                 return;
             }
 
-            // Проверка регистрационного ключа (должен совпадать с предустановленным)
             if (!Security.checkSensorRegisterKey(key)) {
                 HttpUtil.sendError(ex, 403, "forbidden");
+                Audit.warn(sensorId, "SENSOR_REGISTER_KEY_FAIL", "Invalid registration key", ip);
                 return;
             }
 
-            // Получение IP-адреса клиента (отправившего запрос)
-            String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-            // Регистрация датчика: генерация и сохранение токена, привязка IP
             String token = Security.registerSensor(sensorId, ip);
 
-            // Если датчик уже зарегистрирован – вернуть 409 Conflict
             if (token == null) {
                 HttpUtil.sendError(ex, 409, "already_registered");
+                Audit.warn(sensorId, "SENSOR_REGISTER_FAIL", "Sensor already registered", ip);
                 return;
             }
 
-            // Запись в журнал аудита о регистрации
-            Audit.log(sensorId, "SENSOR_REGISTER", ip);
-            // Отправка клиенту сгенерированного токена в JSON
+            Audit.info(sensorId, "SENSOR_REGISTER", "Sensor registered successfully", ip);
             HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
         } catch (Exception e) {
-            // Любое исключение на этапе обработки -> 500 Internal Server Error
             HttpUtil.sendError(ex, 500, "internal_error");
         }
     }
@@ -293,6 +284,7 @@ public class Web {
         List<DataStore.Point> points = DataStore.getPointsFromDb(sensorId, varName, fromTs, toTs);
         if (points.isEmpty()) {
             HttpUtil.sendError(ex, 404, "no data found");
+            Audit.warn(sensorId, "COMTRADE_EXPORT_FAIL", "No data found for " + varName, s.username);
             return;
         }
         if (points.size() < 2) {
@@ -319,6 +311,7 @@ public class Web {
         ex.getResponseHeaders().set("Content-Disposition",
                 "attachment; filename=\"" + sensorId + "_" + varName + extension + "\"");
         ex.sendResponseHeaders(200, fileData.length);
+        Audit.info(sensorId, "COMTRADE_EXPORT", "Exported " + varName + " from " + fromTs + " to " + toTs, s.username);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(fileData);
         }

@@ -106,7 +106,7 @@ public class Security {
             // Проверяем, совпадает ли IP с тем, что был при регистрации
             if (!Objects.equals(ip, regIp)) {
                 // Если не совпадает – пишем в аудит и отклоняем
-                Audit.log(id, "SENSOR_IP_MISMATCH", ip);
+                Audit.warn(id, "SENSOR_IP_MISMATCH", "IP mismatch: expected " + regIp + ", got " + ip, ip);
                 return false;
             }
 
@@ -126,7 +126,7 @@ public class Security {
             return true; // всё успешно
         } catch (Exception e) {
             // В случае исключения – запись в аудит и возврат false
-            Audit.log(id, "SENSOR_AUTH_FAIL", remote.toString());
+            Audit.warn(id, "SENSOR_AUTH_FAIL", "Token validation failed", remote.toString());
             return false;
         } finally {
             // Возвращаем соединение обратно в пул
@@ -185,12 +185,13 @@ public class Security {
                 ps.executeUpdate();              // выполняем вставку
             }
 
+            Audit.info(sensorId, "SENSOR_REGISTER", "Sensor registered successfully", ip);
             return token; // возвращаем незахэшированный токен клиенту
         } catch (SQLException e) {
             // Если нарушено уникальное ограничение (SQLSTATE 23505) – значит датчик уже существует
             if ("23505".equals(e.getSQLState())) return null;
             // В остальных случаях пишем в аудит
-            Audit.log(sensorId, "SENSOR_REGISTER_FAIL", ip);
+            Audit.warn(sensorId, "SENSOR_REGISTER_FAIL", "Sensor already exists", ip);
             return null;
         } finally {
             Database.release(c); // возвращаем соединение
@@ -251,14 +252,14 @@ public class Security {
         if (s == null) {
             // Если сессия не найдена, логируем факт (обрезаем sid для безопасности)
             String sidPreview = sid.length() > 8 ? sid.substring(0, 8) : sid;
-            Audit.log("-", "SESSION_MISS", ex.getRemoteAddress().toString() + " sid=" + sidPreview);
+            Audit.info("-", "SESSION_MISS", "Session ID not found: " + sidPreview, ex.getRemoteAddress().toString());
             return null;
         }
 
         // Проверяем, не истекла ли сессия (повторно, на случай если просрочилась после cleanup)
         if (s.expired()) {
             sessions.remove(sid); // удаляем истекшую
-            Audit.log(s.username, "SESSION_EXPIRED", ex.getRemoteAddress().toString());
+            Audit.info(s.username, "SESSION_EXPIRED", "Session timed out", ex.getRemoteAddress().toString());
             return null;
         }
 
@@ -290,10 +291,33 @@ public class Security {
         if (!ROLE_PERMS.getOrDefault(s.role, Set.of()).contains(p)) {
             // Если права нет – 403 Forbidden и запись в аудит
             HttpUtil.sendError(ex, 403, "forbidden");
-            Audit.log(s.username, "ACCESS_DENIED", ex.getRemoteAddress().getAddress().getHostAddress());
+            Audit.warn(s.username, "ACCESS_DENIED", "Insufficient permissions for " + p, ex.getRemoteAddress().getAddress().getHostAddress());
             return false;
         }
         return true;
+    }
+
+    private static boolean isMobileRequest(HttpExchange ex) {
+        // Проверяем User-Agent
+        String ua = ex.getRequestHeaders().getFirst("User-Agent");
+        if (ua != null) {
+            String uaLower = ua.toLowerCase();
+            if (uaLower.contains("mobile") || uaLower.contains("android") ||
+                    uaLower.contains("iphone") || uaLower.contains("ipad") ||
+                    uaLower.contains("ipod") || uaLower.contains("blackberry") ||
+                    uaLower.contains("windows phone") || uaLower.contains("opera mini") ||
+                    uaLower.contains("iemobile")) {
+                return true;
+            }
+        }
+
+        // Проверяем специальный заголовок, устанавливаемый JavaScript
+        String mobileHeader = ex.getRequestHeaders().getFirst("X-Client-Mobile");
+        if ("true".equalsIgnoreCase(mobileHeader)) {
+            return true;
+        }
+
+        return false;
     }
 
     // ================= УПРАВЛЕНИЕ ПАРОЛЯМИ =================
@@ -446,62 +470,58 @@ public class Security {
 
     // Обработка входа пользователя (POST /auth/login)
     static void handleLogin(HttpExchange ex) throws IOException {
-        // Проверка метода: разрешён только POST
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1); // 405 Method Not Allowed
+            ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        cleanupSessions(); // удаляем просроченные сессии перед созданием новой
-        // Проверка лимита на количество сессий
+        cleanupSessions();
         if (sessions.size() >= MAX_SESSIONS) {
-            HttpUtil.sendError(ex, 503, "too_many_sessions"); // 503 Service Unavailable
+            HttpUtil.sendError(ex, 503, "too_many_sessions");
             return;
         }
 
-        // Парсинг JSON-тела запроса (ожидается username и password)
+        // Получаем IP сразу
+        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
+
+        // Проверка на мобильное устройство (без user'а)
+        if (isMobileRequest(ex)) {
+            HttpUtil.sendError(ex, 403, "Доступ с мобильных устройств запрещён по политике безопасности");
+            Audit.warn("-", "MOBILE_ACCESS_DENIED", "Access from mobile device blocked", ip);
+            return;
+        }
+
         var data = HttpUtil.parseJson(ex);
         String user = data.get("username");
         String pass = data.get("password");
 
-        // Если нет логина или пароля – 400 Bad Request
         if (user == null || pass == null) {
             HttpUtil.sendError(ex, 400, "bad_request");
             return;
         }
 
-        // Получение IP клиента
-        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
-        // Проверка блокировки (если слишком много неудачных попыток)
         if (isBlocked(user, ip)) {
             HttpUtil.sendError(ex, 403, "blocked");
+            Audit.warn(user, "LOGIN_BLOCKED", "Too many failed attempts", ip);
             return;
         }
 
-        // Поиск пользователя в БД (возвращает объект с username, role, passwordHash)
         var dbUser = Database.findUser(user);
-        // Если пользователь не найден или пароль не совпадает
         if (dbUser == null || !checkPassword(pass, dbUser.passwordHash)) {
-            recordFailedLogin(user, ip); // записываем неудачную попытку
-            Audit.log(user, "LOGIN_FAIL", ip); // пишем в аудит
-            HttpUtil.sendError(ex, 401, "invalid_login"); // 401 Unauthorized
+            recordFailedLogin(user, ip);
+            Audit.warn(user, "LOGIN_FAIL", "Invalid password", ip);
+            HttpUtil.sendError(ex, 401, "invalid_login");
             return;
         }
 
-        // Успешный вход: очищаем неудачные попытки для этого пользователя/IP
         clearFailedLogins(user, ip);
-        // Генерируем новый идентификатор сессии
         String sid = UUID.randomUUID().toString();
-        // Сохраняем сессию в памяти
         sessions.put(sid, new Session(user, dbUser.role));
-        // Устанавливаем cookie SESSION в ответе
         HttpUtil.setCookie(ex, "SESSION", sid);
 
-        // Отправляем JSON с подтверждением, именем пользователя и ролью
         HttpUtil.sendJson(ex, "{\"status\":\"ok\",\"username\":\"" + user +
                 "\",\"role\":\"" + dbUser.role + "\"}");
-        // Логируем успешный вход
-        Audit.log(user, "LOGIN_SUCCESS", ip);
+        Audit.info(user, "LOGIN_SUCCESS", ip, sid);
     }
 
     // Обработка выхода пользователя (POST /auth/logout)

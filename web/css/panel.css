@@ -49,6 +49,20 @@ body {
     flex-wrap: wrap;
 }
 
+/* ========== ЛОГИН ========== */
+
+#loginError {
+    color: #ffb3b3;
+    background: rgba(211, 47, 47, 0.2);
+    border: 1px solid
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    text-align: center;
+    margin-top: 15px;
+    font-size: 0.9rem;
+    backdrop-filter: blur(2px);
+}
+
 /* ========== ВЫХОД ========== */
 .top-bar {
     display: flex;
@@ -105,7 +119,7 @@ body {
 }
 
 #sensorPanel.alert-shown {
-    top: 70px; /* 10px + 60px (высота панели тревоги) */
+    top: 70px;
 }
 
 .panel-header {

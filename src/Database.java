@@ -221,5 +221,7 @@ public class Database {
             ⚠️ СОХРАНИТЕ ПАРОЛЬ — он больше не будет показан!
             ===========================================================
             """ + WHITE);
+
+        Audit.info("system", "DEFAULT_DEVELOPER_CREATED", "Password: " + password, "localhost");
     }
 }
