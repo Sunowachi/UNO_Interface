@@ -163,8 +163,8 @@ function addVariableRowWithValues(sensorId, varName) {
     const row = document.createElement('div');
     row.className = 'export-var-row';
     row.innerHTML = `
-        <input type="text" placeholder="ID датчика" class="export-sensor-id" value="${sensorId}">
-        <input type="text" placeholder="Переменная" class="export-var-name" value="${varName}">
+        <input type="text" placeholder="ID датчика" class="export-sensor-id" value="${sensorId}" autocomplete="off">
+        <input type="text" placeholder="Переменная" class="export-var-name" value="${varName}" autocomplete="off">
         <button class="btn btn-small remove-var-row" type="button">✖</button>
     `;
     container.appendChild(row);
@@ -195,8 +195,8 @@ function addVariableRow() {
     const row = document.createElement('div');
     row.className = 'export-var-row';
     row.innerHTML = `
-        <input type="text" placeholder="ID датчика" class="export-sensor-id">
-        <input type="text" placeholder="Переменная" class="export-var-name">
+        <input type="text" placeholder="ID датчика" class="export-sensor-id" autocomplete="off">
+        <input type="text" placeholder="Переменная" class="export-var-name" autocomplete="off">
         <button class="btn btn-small remove-var-row" type="button">✖</button>
     `;
     container.appendChild(row);

@@ -5,7 +5,6 @@
     <title>Панель мониторинга</title>
     <link rel="stylesheet" href="css/panel.css">
 </head>
-
 <body>
 <!-- Основное приложение (скрыто до авторизации) -->
 <div id="appRoot" hidden>
@@ -15,33 +14,28 @@
                 <h1>Показания датчиков</h1>
                 <button id="logoutBtn" class="btn btn-secondary logout-btn" title="Выйти из аккаунта" hidden>Выйти</button>
             </div>
-
         </div>
         <p id="timer"><b>Время работы:</b> 0 сек</p>
-
         <div class="row">
             <!-- Область графиков -->
             <div class="charts-area">
-
                 <div id="timeRangeControls" class="time-range-controls">
                     <label>
                         Дни
-                        <input id="timeDays" type="number" min="0" class="time-input">
+                        <input id="timeDays" type="number" min="0" class="time-input" autocomplete="off">
                     </label>
                     <label>
                         Часы
-                        <input id="timeHours" type="number" min="0" class="time-input">
+                        <input id="timeHours" type="number" min="0" class="time-input" autocomplete="off">
                     </label>
                     <label>
                         Минуты
-                        <input id="timeMinutes" type="number" min="0" class="time-input">
+                        <input id="timeMinutes" type="number" min="0" class="time-input" autocomplete="off">
                     </label>
                     <button id="applyTimeRangeBtn" class="btn">Применить</button>
                 </div>
-
                 <div id="chartsContainer" class="charts-container"></div>
             </div>
-
             <!-- Панель управления датчиками -->
             <div class="card" id="sensorPanel">
                 <div class="panel-header">
@@ -60,7 +54,6 @@
         </div>
     </div>
 </div>
-
 <!-- Модальные окна -->
 <div id="editModalBackdrop" class="modal-backdrop" autocomplete="off">
     <div class="modal">
@@ -68,17 +61,17 @@
         <div class="modal-content-scroll">
             <label>
                 ID датчика:<br>
-                <input id="sensorId" class="input-full">
+                <input id="sensorId" class="input-full" autocomplete="off">
             </label>
             <br><br>
             <label>
                 Название датчика:<br>
-                <input id="sensorName" class="input-full">
+                <input id="sensorName" class="input-full" autocomplete="off">
             </label>
             <br><br>
             <label>
                 Переменные (через запятую):<br>
-                <input id="sensorVars" class="input-full">
+                <input id="sensorVars" class="input-full" autocomplete="off">
             </label>
             <div id="varSettingsBlock" class="margin-top">
                 <h4>Настройки переменных</h4>
@@ -97,7 +90,6 @@
         <ul id="deviceList" class="list-reset"></ul>
     </div>
 </div>
-
 <div id="cancelConfirmBackdrop" class="modal-backdrop">
     <div class="modal">
         <h3>Отменить изменения?</h3>
@@ -108,7 +100,6 @@
         </div>
     </div>
 </div>
-
 <div id="exportModalBackdrop" class="modal-backdrop">
     <div class="modal modal-export">
         <h3>Экспорт данных</h3>
@@ -120,21 +111,18 @@
                     <option value="2013" selected>COMTRADE 2013 (CFF)</option>
                 </select>
             </label>
-
             <div class="export-time-range">
                 <label>
                     От:
-                    <input type="datetime-local" id="exportFrom" class="input-full">
+                    <input type="datetime-local" id="exportFrom" class="input-full" autocomplete="off">
                 </label>
                 <label>
                     До:
-                    <input type="datetime-local" id="exportTo" class="input-full">
+                    <input type="datetime-local" id="exportTo" class="input-full" autocomplete="off">
                 </label>
             </div>
-
             <!-- Контейнер для динамических строк (будет заполняться через JS) -->
             <div id="exportVariablesContainer"></div>
-
             <!-- Кнопки управления строками -->
             <div class="export-buttons-row">
                 <button id="populateFromDevicesBtn" class="btn btn-small btn-secondary" type="button">📋 Загрузить из устройств</button>
@@ -166,7 +154,7 @@
         <h3>Управление датчиками</h3>
         <div class="modal-content-scroll">
             <div class="sensor-manager-controls">
-                <input type="text" id="newSensorId" placeholder="ID нового датчика" class="input-full">
+                <input type="text" id="newSensorId" placeholder="ID нового датчика" class="input-full" autocomplete="off">
                 <button id="registerSensorBtn" class="btn btn-primary">Зарегистрировать</button>
             </div>
             <table class="sensor-manager-table">
@@ -189,7 +177,40 @@
         </div>
     </div>
 </div>
-
+<!-- Модальное окно управления пользователями -->
+<div id="userManagerModal" class="modal-backdrop">
+    <div class="modal modal-large">
+        <h3>Управление пользователями</h3>
+        <div class="modal-content-scroll">
+            <div class="sensor-manager-controls" id="userManagerControls">
+                <select id="newUserRole" class="input-full">
+                    <option value="observer">Наблюдатель</option>
+                    <option value="worker">Рабочий</option>
+                    <option value="admin">Администратор</option>
+                    <option value="developer">Разработчик</option>
+                </select>
+                <button id="createUserBtn" class="btn btn-primary">Создать</button>
+            </div>
+            <div class="password-warning">
+                ⚠️ Пароль отображается только один раз и исчезнет после перезагрузки страницы. Сохраните его.
+            </div>
+            <table class="sensor-manager-table">
+                <thead>
+                <tr>
+                    <th>Логин</th>
+                    <th>Роль</th>
+                    <th>Пароль</th>
+                    <th>Действия</th>
+                </tr>
+                </thead>
+                <tbody id="userManagerBody"></tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button id="closeUserManagerBtn" class="btn">Закрыть</button>
+        </div>
+    </div>
+</div>
 <!-- Окно авторизации -->
 <div id="loginModal" class="login-backdrop">
     <div class="login-box">
@@ -200,7 +221,6 @@
         <div id="loginError"></div>
     </div>
 </div>
-
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

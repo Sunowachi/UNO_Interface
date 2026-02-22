@@ -6,7 +6,7 @@ import { hideApp } from './ui/app.js';
 import { openLoginModal } from './ui/login.js';
 import { initCustomNumberInputs } from './inputArrows.js';
 import { initExportModal } from './ui/export.js';
-import { initSensorManager } from './ui/sensorManager.js';
+import { initSensorManager, initUserManager } from './ui/sensorManager.js';
 
 // Добавляем обработчик события, которое срабатывает после полной загрузки HTML-документа
 document.addEventListener('DOMContentLoaded', async () => {
@@ -26,4 +26,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   initCustomNumberInputs();
 
   initSensorManager();
+  initUserManager();
 });

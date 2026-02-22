@@ -67,6 +67,7 @@ export function updateAddButtonVisibility() {
     const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
     const canView = hasPermission(PERMISSIONS.VIEW_DATA);
     const canManage = hasPermission(PERMISSIONS.MANAGE_SENSORS);
+    const canManageUsers = hasPermission(PERMISSIONS.MANAGE_USERS);
 
     let addBtn = document.getElementById('addSensorBtn');
     let exportBtn = document.getElementById('exportDataBtn');
@@ -113,6 +114,23 @@ export function updateAddButtonVisibility() {
         }
     } else {
         const oldBtn = document.getElementById('manageSensorsBtn');
+        if (oldBtn) oldBtn.remove();
+    }
+
+    if (canManageUsers) {
+        let manageUsersBtn = document.getElementById('manageUsersBtn');
+        if (!manageUsersBtn) {
+            manageUsersBtn = document.createElement('button');
+            manageUsersBtn.id = 'manageUsersBtn';
+            manageUsersBtn.className = 'btn btn-full';
+            manageUsersBtn.innerHTML = '👥 Управление пользователями';
+            manageUsersBtn.addEventListener('click', () => {
+                import('./sensorManager.js').then(m => m.openUserManager());
+            });
+            footer.appendChild(manageUsersBtn);
+        }
+    } else {
+        const oldBtn = document.getElementById('manageUsersBtn');
         if (oldBtn) oldBtn.remove();
     }
 }

@@ -55,6 +55,9 @@ public class Web {
         server.createContext("/admin/sensor/register", Web::handleAdminSensorRegister);
         server.createContext("/admin/sensor/toggle-delete", Web::handleAdminSensorToggleDelete);
         server.createContext("/admin/sensor/delete-permanent", Web::handleAdminSensorDeletePermanent);
+        server.createContext("/admin/users", Web::handleAdminUsers);
+        server.createContext("/admin/user/create", Web::handleAdminUserCreate);
+        server.createContext("/admin/user/delete", Web::handleAdminUserDelete);
 
         // Назначение пула потоков для обработки входящих запросов (100 потоков)
         server.setExecutor(Executors.newFixedThreadPool(100));
@@ -510,6 +513,104 @@ public class Web {
             }
         }
         return map;
+    }
+
+    // ================= УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ =================
+
+    static void handleAdminUsers(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_USERS)) return;
+
+        ex.getResponseHeaders().set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        ex.getResponseHeaders().set("Pragma", "no-cache");
+        ex.getResponseHeaders().set("Expires", "0");
+
+        List<Map<String, Object>> users = Database.listUsers();
+        HttpUtil.sendJson(ex, HttpUtil.toJson(users));
+    }
+
+    static void handleAdminUserCreate(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_USERS)) return;
+        if (!Security.checkCsrf(ex, s)) return;
+
+        Map<String, String> data = HttpUtil.parseJson(ex);
+        String username = data.get("username");
+        String role = data.get("role");
+        if (username == null || role == null) {
+            HttpUtil.sendError(ex, 400, "missing_params");
+            return;
+        }
+        if (!username.matches("[a-zA-Z0-9_]{3,64}")) {
+            HttpUtil.sendError(ex, 400, "invalid_username");
+            return;
+        }
+        if (!List.of("developer", "admin", "observer", "worker").contains(role)) {
+            HttpUtil.sendError(ex, 400, "invalid_role");
+            return;
+        }
+
+        // Запрещаем администратору создавать разработчика
+        if ("developer".equals(role) && !"developer".equals(s.role)) {
+            HttpUtil.sendError(ex, 403, "only_developer_can_create_developer");
+            return;
+        }
+
+        String password = Database.createUser(username, role);
+        if (password == null) {
+            HttpUtil.sendError(ex, 409, "user_already_exists");
+            return;
+        }
+
+        Map<String, String> resp = new HashMap<>();
+        resp.put("username", username);
+        resp.put("password", password);
+        HttpUtil.sendJson(ex, HttpUtil.toJson(resp));
+    }
+
+    static void handleAdminUserDelete(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_USERS)) return;
+        if (!Security.checkCsrf(ex, s)) return;
+
+        Map<String, String> data = HttpUtil.parseJson(ex);
+        String username = data.get("username");
+        if (username == null) {
+            HttpUtil.sendError(ex, 400, "missing_username");
+            return;
+        }
+
+        // Запрещаем удаление самого себя
+        if (username.equals(s.username)) {
+            HttpUtil.sendError(ex, 403, "cannot_delete_self");
+            return;
+        }
+
+        // Запрещаем администратору удалять разработчика
+        Database.User userToDelete = Database.findUser(username);
+        if (userToDelete != null && "developer".equals(userToDelete.role) && !"developer".equals(s.role)) {
+            HttpUtil.sendError(ex, 403, "cannot_delete_developer");
+            return;
+        }
+
+        boolean ok = Database.deleteUser(username);
+        if (!ok) {
+            HttpUtil.sendError(ex, 404, "user_not_found");
+            return;
+        }
+        HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
     // ================= ПРОКСИ-ОБРАБОТЧИКИ =================

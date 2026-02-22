@@ -171,7 +171,143 @@ body {
     background-color: #b71c1c;
 }
 
+/* ========== ПАНЕЛЬ ПОЛЬЗОВАТЕЛЕЙ ========== */
+
+/* Модальное окно */
+#userManagerModal .modal {
+    width: 800px;
+    max-width: 95%;
+}
+
+/* Заголовок */
+#userManagerModal h3 {
+    margin: 0 0 20px 0;
+    color: var(--color-primary-light);
+    font-weight: 600;
+}
+
+/* Блок управления созданием пользователя */
+#userManagerModal .sensor-manager-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: var(--color-surface-hover);
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+}
+
+/* Поле ввода логина и выпадающий список */
+#userManagerModal .sensor-manager-controls .input-full,
+#userManagerModal .sensor-manager-controls select {
+    width: 300px;
+    flex: none;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 30px;
+    padding: 10px 16px;
+    color: var(--color-text);
+    font-size: 14px;
+    transition: var(--transition);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 40px;
+}
+
+/* Выпадающий список */
+#userManagerModal .sensor-manager-controls select {
+    width: 200px;
+}
+
+#userManagerModal .sensor-manager-controls .input-full:focus,
+#userManagerModal .sensor-manager-controls select:focus {
+    outline: none;
+    border-color: var(--color-primary-light);
+    box-shadow: 0 0 0 3px rgba(64, 176, 255, 0.3);
+}
+
+/* Кнопка создания */
+#userManagerModal .sensor-manager-controls .btn-primary {
+    flex: 0 0 auto;
+    padding: 10px 24px;
+    border-radius: 30px;
+    font-weight: 500;
+}
+
+/* Таблица пользователей */
+#userManagerModal .sensor-manager-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+#userManagerBody tr:hover {
+    background-color: var(--color-surface-hover);
+    transition: var(--transition);
+}
+
+#userManagerBody td {
+    padding: 14px 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* Ячейка с ролью – выделяем цветом */
+#userManagerBody td:nth-child(2) {
+    font-weight: 500;
+    color: var(--color-primary-light);
+}
+
+/* Кнопки действий в таблице */
+#userManagerBody .btn-small {
+    padding: 6px 16px;
+    font-size: 13px;
+    border-radius: 30px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    transition: var(--transition);
+}
+
+#userManagerBody .btn-small:hover {
+    background: var(--color-primary-dark);
+    color: white;
+    border-color: var(--color-primary-light);
+}
+
+/* Кнопка удаления */
+#userManagerBody .btn-danger {
+    background: #d32f2f;
+    border-color: #b71c1c;
+    color: white;
+}
+
+#userManagerBody .btn-danger:hover {
+    background: #b71c1c;
+}
+
+/* Футер модального окна */
+#userManagerModal .modal-footer {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--color-border);
+}
+
+.password-warning {
+    background: rgba(255, 151, 51, 0.1);
+    border-left: 3px solid var(--color-accent);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+}
+
 /* ========== ПАНЕЛЬ ДАТЧИКОВ ========== */
+
 #sensorPanel {
     position: fixed;
     top: 10px;
@@ -562,6 +698,8 @@ canvas {
     display: flex;
     gap: 8px;
     justify-content: space-between;
+    flex-shrink: 0;
+    flex-direction: column;
     padding: 15px 10px 10px;
     border-top: 1px solid var(--color-border);
     background: var(--color-surface);

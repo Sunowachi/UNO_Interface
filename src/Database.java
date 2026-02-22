@@ -389,4 +389,93 @@ public class Database {
             release(c);
         }
     }
+
+    // ================= ОПЕРАЦИИ С ПОЛЬЗОВАТЕЛЯМИ =================
+
+    /**
+     * Возвращает список всех пользователей (логин и роль).
+     */
+    public static List<Map<String, Object>> listUsers() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Connection c = borrow();
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT username, role FROM users ORDER BY username")) {
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("username", rs.getString(1));
+                row.put("role", rs.getString(2));
+                result.add(row);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка получения списка пользователей", e);
+        } finally {
+            release(c);
+        }
+        return result;
+    }
+
+    /**
+     * Создаёт нового пользователя с указанным логином и ролью.
+     * Генерирует случайный пароль, хэширует его и сохраняет в БД.
+     * @return сгенерированный открытый пароль или null при ошибке (например, пользователь уже существует).
+     */
+    public static String createUser(String username, String role) {
+        if (username == null || username.length() > 64 || !username.matches("[a-zA-Z0-9_]+")) return null;
+        if (role == null || !List.of("developer", "admin", "observer", "worker").contains(role)) return null;
+
+        Connection c = null;
+        try {
+            c = borrow();
+            // Проверка уникальности
+            try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM users WHERE username=?")) {
+                ps.setString(1, username);
+                if (ps.executeQuery().next()) return null;
+            }
+
+            String password = UUID.randomUUID().toString().replace("-", "");
+            String hash = Security.hashPassword(password);
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO users(username, password_hash, role) VALUES (?,?,?)")) {
+                ps.setString(1, username);
+                ps.setString(2, hash);
+                ps.setString(3, role);
+                ps.executeUpdate();
+            }
+
+            Audit.info("admin", "USER_CREATED", "User " + username + " created with role " + role, "system");
+            return password;
+        } catch (SQLException e) {
+            if ("23505".equals(e.getSQLState())) return null; // unique violation
+            Audit.warn("admin", "USER_CREATE_FAIL", e.getMessage(), "system");
+            return null;
+        } finally {
+            release(c);
+        }
+    }
+
+    /**
+     * Удаляет пользователя из БД.
+     */
+    public static boolean deleteUser(String username) {
+        Connection c = null;
+        try {
+            c = borrow();
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM users WHERE username=?")) {
+                ps.setString(1, username);
+                int rows = ps.executeUpdate();
+                if (rows > 0) {
+                    Audit.info("admin", "USER_DELETED", "User " + username + " deleted", "system");
+                    return true;
+                }
+                return false;
+            }
+        } catch (SQLException e) {
+            Audit.warn("admin", "USER_DELETE_FAIL", e.getMessage(), "system");
+            return false;
+        } finally {
+            release(c);
+        }
+    }
 }

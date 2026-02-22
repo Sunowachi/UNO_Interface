@@ -104,14 +104,14 @@ public class Security {
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
 
     // Перечисление возможных прав доступа
-    enum Permission { VIEW_DATA, EDIT_CONFIG, MANAGE_SENSORS }
+    enum Permission { VIEW_DATA, EDIT_CONFIG, MANAGE_SENSORS, MANAGE_USERS }
 
     // Карта ролей и соответствующих им прав (неизменяемая)
     static final Map<String, Set<Permission>> ROLE_PERMS = Map.of(
-            "developer", EnumSet.allOf(Permission.class),           // разработчик имеет все права
-            "admin", EnumSet.of(Permission.VIEW_DATA, Permission.EDIT_CONFIG, Permission.MANAGE_SENSORS), // админ: просмотр и редактирование
-            "observer", EnumSet.of(Permission.VIEW_DATA),           // наблюдатель: только просмотр
-            "worker", EnumSet.of(Permission.VIEW_DATA)              // рабочий: только просмотр
+            "developer", EnumSet.allOf(Permission.class),
+            "admin", EnumSet.of(Permission.VIEW_DATA, Permission.EDIT_CONFIG, Permission.MANAGE_SENSORS, Permission.MANAGE_USERS),
+            "observer", EnumSet.of(Permission.VIEW_DATA),
+            "worker", EnumSet.of(Permission.VIEW_DATA)
     );
 
     // ================= ОБРАБОТКА ДАТЧИКОВ =================

@@ -218,7 +218,8 @@ export const PERMISSIONS = Object.freeze({
   EXPORT_DATA:     'export_data',     // Экспорт данных
   ADMIN_DB:        'admin_db',        // Администрирование базы данных
   DEV_ALL:         'dev_all',         // Полные права разработчика (включает всё)
-  MANAGE_SENSORS:  'manage_sensors'   // Управление регистрацией токенов датчиков
+  MANAGE_SENSORS:  'manage_sensors',   // Управление регистрацией токенов датчиков
+  MANAGE_USERS:    'manage_users'
 });
 
 // Роли пользователей (строковые идентификаторы)
@@ -240,7 +241,8 @@ export const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.SAVE_CONFIG,
     PERMISSIONS.EXPORT_DATA,
     PERMISSIONS.ADMIN_DB,
-    PERMISSIONS.MANAGE_SENSORS
+    PERMISSIONS.MANAGE_SENSORS,
+    PERMISSIONS.MANAGE_USERS
   ]),
   [ROLES.WORKER]: new Set([PERMISSIONS.VIEW_DATA, PERMISSIONS.VIEW_CHARTS]),
   [ROLES.OBSERVER]: new Set([PERMISSIONS.VIEW_DATA])
