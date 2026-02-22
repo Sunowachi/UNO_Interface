@@ -1,4 +1,8 @@
+import java.io.File;
+import java.nio.file.Files;
+import java.security.MessageDigest;
 import java.sql.*;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -162,6 +166,20 @@ public class Database {
             )
         """);
 
+        // Таблица для хранения тревог
+        st.execute("""
+            CREATE TABLE IF NOT EXISTS alerts(
+                id BIGSERIAL PRIMARY KEY,
+                ts BIGINT NOT NULL,
+                sensor_id TEXT NOT NULL,
+                var_name TEXT NOT NULL,
+                value DOUBLE PRECISION NOT NULL,
+                users TEXT NOT NULL,
+                snapshot TEXT NOT NULL,
+                config_hash TEXT NOT NULL
+            )
+        """);
+
         // Индексы для ускорения запросов
         st.execute("CREATE INDEX IF NOT EXISTS idx_history_ts ON history(ts)");                 // По времени
         st.execute("CREATE INDEX IF NOT EXISTS idx_history_sensor_var ON history(sensor_id, var_name)"); // По датчику и переменной
@@ -223,5 +241,44 @@ public class Database {
             """ + WHITE);
 
         Audit.info("system", "DEFAULT_DEVELOPER_CREATED", "Password: " + password, "localhost");
+    }
+
+    // Запись тревоги в БД
+    public static void recordAlert(String sensorId, String varName, double value, String users, String snapshot) {
+        Connection c = null;
+        try {
+            c = borrow();
+            String configHash = getConfigHash();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO alerts(ts, sensor_id, var_name, value, users, snapshot, config_hash) VALUES (?,?,?,?,?,?,?)")) {
+                ps.setLong(1, System.currentTimeMillis());
+                ps.setString(2, sensorId);
+                ps.setString(3, varName);
+                ps.setDouble(4, value);
+                ps.setString(5, users);
+                ps.setString(6, snapshot);
+                ps.setString(7, configHash);
+                ps.executeUpdate();
+            }
+        } catch (SQLException e) {
+            Audit.error("system", "ALERT_RECORD_FAIL", e.getMessage(), "-");
+        } finally {
+            release(c);
+        }
+    }
+
+    // Вычисление хэша конфигурационного файла
+    private static String getConfigHash() {
+        try {
+            File f = new File("web/config.json");
+            if (!f.exists()) return "";
+            byte[] data = Files.readAllBytes(f.toPath());
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(data);
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (Exception e) {
+            Audit.error("system", "CONFIG_HASH_FAIL", e.getMessage(), "-");
+            return "";
+        }
     }
 }

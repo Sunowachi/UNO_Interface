@@ -3,13 +3,54 @@ import {
     allSensors,
     currentSensor,
     setCurrentSensor,
-    PERMISSIONS
+    PERMISSIONS,
+    csrfToken
 } from '../constants.js';
 import { getAlertClass, pickHigherAlertClass } from '../utils/alert.js';
 import { hasPermission } from '../utils/permissions.js';
 import { updateRedAlert } from './redAlert.js';
 import { openEditModal, onAddSensorClick } from './editModal.js';
 import { drawCurrent } from '../charts.js';
+
+// Хранилище предыдущих классов тревоги для каждой переменной
+const previousVarAlertState = new Map(); // ключ "sensorId:varName"
+
+// Отправка тревоги на сервер
+async function sendAlert(sensorId, varName, value) {
+    if (!csrfToken) return;
+    // Собираем snapshot всех переменных этого датчика из конфигурации
+    const snapshot = {};
+    const sensorCfg = config.sensors.find(s => String(s.id) === String(sensorId));
+    if (sensorCfg && Array.isArray(sensorCfg.vars)) {
+        for (const v of sensorCfg.vars) {
+            const values = allSensors[`${sensorId}:${v}`]?.values;
+            snapshot[v] = values && values.length > 0 ? values[values.length - 1] : null;
+        }
+    }
+    // Кодируем snapshot в Base64, чтобы избежать проблем с парсингом JSON на сервере
+    const snapshotBase64 = btoa(JSON.stringify(snapshot));
+    try {
+        const response = await fetch('/api/alert', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({
+                sensorId,
+                varName,
+                value,
+                snapshotBase64
+            }),
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            console.error('Ошибка отправки тревоги, статус:', response.status);
+        }
+    } catch (e) {
+        console.error('Ошибка отправки тревоги:', e);
+    }
+}
 
 // Функция выбора датчика по его ID
 export function selectSensor(id) {
@@ -97,6 +138,12 @@ export function updateSensorPanel(forceRebuild = false) {
           const lastVal = sData.values[sData.values.length - 1];
           const vs = varSettings.find(x => x.var === v) || {};
           const varAlert = getAlertClass(vs, lastVal);
+          const key = `${sCfg.id}:${v}`;
+          const prevAlert = previousVarAlertState.get(key);
+          if (varAlert === 'blink-red' && prevAlert !== 'blink-red') {
+            sendAlert(sCfg.id, v, lastVal);
+          }
+          previousVarAlertState.set(key, varAlert);
           sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
         }
       }
@@ -182,6 +229,12 @@ export function updateSensorPanel(forceRebuild = false) {
         const lastVal = sData.values[sData.values.length - 1];
         const vs = varSettings.find(x => x.var === v) || {};
         const varAlert = getAlertClass(vs, lastVal);
+        const key = `${sCfg.id}:${v}`;
+        const prevAlert = previousVarAlertState.get(key);
+        if (varAlert === 'blink-red' && prevAlert !== 'blink-red') {
+          sendAlert(sCfg.id, v, lastVal);
+        }
+        previousVarAlertState.set(key, varAlert);
         sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
       }
     }

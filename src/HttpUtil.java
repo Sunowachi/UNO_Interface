@@ -3,6 +3,10 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class HttpUtil {
 
@@ -12,6 +16,8 @@ public class HttpUtil {
     static final int MAX_JSON_SIZE = 4096;
     // Максимальный размер конфигурационного файла (16 КБ)
     static final int MAX_CONFIG_SIZE = 16 * 1024;
+    // Директория для хранения архивных копий конфигурации
+    private static final Path CONFIG_ARCHIVE_DIR = Path.of("config_archive");
     // Флаг принудительного использования Secure-флага для cookie (если true, то всегда Secure)
     static final boolean FORCE_SECURE_COOKIE = false;
 
@@ -579,6 +585,14 @@ public class HttpUtil {
             return;
         }
 
+        // Архивируем текущую конфигурацию перед заменой
+        try {
+            archiveOldConfig();
+        } catch (Exception e) {
+            // Логируем ошибку, но не прерываем сохранение
+            Audit.error("system", "CONFIG_ARCHIVE_FAIL", e.getMessage(), ip);
+        }
+
         Path tmp = Files.createTempFile("config", ".json");
         Files.writeString(tmp, json, StandardCharsets.UTF_8);
         Files.move(tmp, CONFIG_FILE.toPath(),
@@ -587,13 +601,42 @@ public class HttpUtil {
 
         Security.Session s = Security.getSession(ex);
         if (s != null) {
-            // Используем метод info с 4 параметрами (user, action, details, ip) или с 5 (sessionId)?
-            // Предположим, что есть метод info(user, action, details, ip) без sessionId.
-            // Если есть метод с sessionId, то нужно передавать s.csrf как sessionId.
             Audit.info(s.username, "CONFIG_SAVE", "Configuration saved successfully", ip);
-            // Альтернативно, если есть метод с sessionId:
-            // Audit.info(s.username, "CONFIG_SAVE", "Configuration saved successfully", ip, s.csrf);
         }
+    }
+
+    // Создание директории для архивов, если её нет
+    private static void ensureArchiveDir() throws IOException {
+        if (!Files.exists(CONFIG_ARCHIVE_DIR)) {
+            Files.createDirectories(CONFIG_ARCHIVE_DIR);
+        }
+    }
+
+    // Вычисление SHA-256 хэша файла в формате Base64
+    private static String computeFileHash(Path path) throws IOException {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] data = Files.readAllBytes(path);
+            byte[] hash = md.digest(data);
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    // Архивирование текущего конфигурационного файла (если он существует)
+    private static void archiveOldConfig() throws IOException {
+        Path configPath = CONFIG_FILE.toPath();
+        if (!Files.exists(configPath)) return;
+
+        ensureArchiveDir();
+        String hash = computeFileHash(configPath);
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String archiveName = "config_" + timestamp + "_" + hash + ".json";
+        Path archivePath = CONFIG_ARCHIVE_DIR.resolve(archiveName);
+
+        // Копируем файл, заменяя существующий с таким же именем (на случай повторного сохранения)
+        Files.copy(configPath, archivePath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
     }
 
     // ================= ОБРАБОТКА ПАРАМЕТРОВ ЗАПРОСА =================

@@ -466,6 +466,18 @@ public class Security {
         }
     }
 
+    // Получение списка имён всех активных (не истёкших) пользователей
+    public static List<String> getActiveUsers() {
+        cleanupSessions(); // предварительно очищаем истёкшие
+        List<String> users = new ArrayList<>();
+        for (Session s : sessions.values()) {
+            if (!s.expired()) {
+                users.add(s.username);
+            }
+        }
+        return users;
+    }
+
     // ================= ОБРАБОТЧИКИ HTTP-ЗАПРОСОВ =================
 
     // Обработка входа пользователя (POST /auth/login)

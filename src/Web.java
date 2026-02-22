@@ -3,6 +3,8 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.HashMap;
@@ -48,6 +50,7 @@ public class Web {
         server.createContext("/auth/ping", Web::handleAuthPing);        // Проверка валидности сессии
         server.createContext("/", Web::handleStatic);                   // Раздача статических файлов (HTML, JS, CSS)
         server.createContext("/export/comtrade", Web::handleExportComtrade); // Экспорт файла COMTRADE
+        server.createContext("/api/alert", Web::handleAlert);
 
         // Назначение пула потоков для обработки входящих запросов (100 потоков)
         server.setExecutor(Executors.newFixedThreadPool(100));
@@ -315,6 +318,86 @@ public class Web {
         try (OutputStream os = ex.getResponseBody()) {
             os.write(fileData);
         }
+    }
+
+    // Обработчик для сохранения тревог, отправляемых клиентом
+    static void handleAlert(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        Security.Session s = Security.getSession(ex);
+        if (s == null) {
+            HttpUtil.sendError(ex, 401, "unauthorized");
+            return;
+        }
+        if (!Security.checkCsrf(ex, s)) return;
+
+        String ct = ex.getRequestHeaders().getFirst("Content-Type");
+        if (ct == null || !ct.startsWith("application/json")) {
+            HttpUtil.sendError(ex, 415, "unsupported_media_type");
+            return;
+        }
+
+        byte[] body = ex.getRequestBody().readAllBytes();
+        if (body.length == 0 || body.length > 64 * 1024) { // 64 KB
+            HttpUtil.sendError(ex, 400, "bad_request");
+            return;
+        }
+
+        // Примитивный парсинг JSON (ожидаем объект с полями sensorId, varName, value)
+        String json = new String(body, StandardCharsets.UTF_8).trim();
+        if (!json.startsWith("{") || !json.endsWith("}")) {
+            HttpUtil.sendError(ex, 400, "bad_request");
+            return;
+        }
+        json = json.substring(1, json.length() - 1).trim();
+        Map<String, String> fields = new HashMap<>();
+        for (String pair : json.split(",")) {
+            String[] kv = pair.split(":", 2);
+            if (kv.length != 2) continue;
+            String key = kv[0].trim();
+            String val = kv[1].trim();
+            if (key.startsWith("\"") && key.endsWith("\"")) key = key.substring(1, key.length()-1);
+            if (val.startsWith("\"") && val.endsWith("\"")) val = val.substring(1, val.length()-1);
+            fields.put(key, val);
+        }
+
+        String sensorId = fields.get("sensorId");
+        String varName = fields.get("varName");
+        String valueStr = fields.get("value");
+        String snapshotBase64 = fields.get("snapshotBase64");
+
+        if (sensorId == null || varName == null || valueStr == null) {
+            HttpUtil.sendError(ex, 400, "missing fields");
+            return;
+        }
+
+        double value;
+        try {
+            value = Double.parseDouble(valueStr);
+        } catch (NumberFormatException e) {
+            HttpUtil.sendError(ex, 400, "invalid value");
+            return;
+        }
+
+        String snapshot;
+        try {
+            byte[] decoded = Base64.getDecoder().decode(snapshotBase64);
+            snapshot = new String(decoded, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            HttpUtil.sendError(ex, 400, "invalid base64");
+            return;
+        }
+
+        // Получаем список активных пользователей (их имена через запятую)
+        List<String> users = Security.getActiveUsers();
+        String usersStr = String.join(", ", users);
+
+        Database.recordAlert(sensorId, varName, value, usersStr, snapshot);
+
+        HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
     // Вспомогательный метод для разбора query-строки
