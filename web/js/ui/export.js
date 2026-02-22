@@ -1,7 +1,9 @@
 import { showToast } from './toast.js';
 import { hasPermission } from '../utils/permissions.js';
-import { PERMISSIONS, allSensors, config } from '../constants.js'; // добавили config
+import { PERMISSIONS, allSensors, config } from '../constants.js';
 import { lockSession } from '../session.js';
+
+// ==================== ИНИЦИАЛИЗАЦИЯ МОДАЛЬНОГО ОКНА ЭКСПОРТА ====================
 
 export function initExportModal() {
     const addBtn = document.getElementById('addExportVarRow');
@@ -38,13 +40,15 @@ export function initExportModal() {
     setDefaultDates();
 }
 
-// Закрыть окно выбора
+// ==================== ВЫБОР ДАТЧИКОВ ИЗ СПИСКА ====================
+
+/** Закрыть окно выбора */
 function closeSelectorModal() {
     const selectorModal = document.getElementById('exportSelectorBackdrop');
     if (selectorModal) selectorModal.classList.remove('show');
 }
 
-// Открыть окно выбора и заполнить список
+/** Открыть окно выбора и заполнить список доступными парами датчик/переменная */
 function showSelectionDialog() {
     const selectorModal = document.getElementById('exportSelectorBackdrop');
     const listContainer = document.getElementById('exportSelectorList');
@@ -66,12 +70,10 @@ function showSelectionDialog() {
         return;
     }
 
-    // Обогащаем пары отображаемыми именами из config
+    // Обогащаем пары отображаемыми именами из конфига
     const enriched = pairs.map(p => {
-        // Найти датчик в config
         const sensorCfg = config.sensors.find(s => String(s.id) === String(p.sensorId) && !s.deleted);
-        const displaySensor = sensorCfg?.name || p.sensorId; // если name есть, используем его
-        // Найти настройки переменной
+        const displaySensor = sensorCfg?.name || p.sensorId;
         let displayVar = p.varName;
         if (sensorCfg && Array.isArray(sensorCfg.varSettings)) {
             const varSetting = sensorCfg.varSettings.find(vs => vs.var === p.varName);
@@ -87,7 +89,6 @@ function showSelectionDialog() {
         };
     });
 
-    // Сортируем по отображаемым именам датчика, затем переменной
     enriched.sort((a, b) => {
         if (a.displaySensor === b.displaySensor) {
             return a.displayVar.localeCompare(b.displayVar);
@@ -95,12 +96,10 @@ function showSelectionDialog() {
         return a.displaySensor.localeCompare(b.displaySensor);
     });
 
-    // Генерируем HTML
     listContainer.innerHTML = '';
     enriched.forEach(item => {
         const div = document.createElement('div');
         div.className = 'selector-item';
-        // В data-атрибутах храним оригинальные ID
         div.innerHTML = `
             <input type="checkbox" class="selector-checkbox" data-sensor="${item.sensorId}" data-var="${item.varName}">
             <label title="sensorId: ${item.sensorId}\nvarName: ${item.varName}">
@@ -108,7 +107,6 @@ function showSelectionDialog() {
                 <span class="var-name">${item.displayVar}</span>
             </label>
         `;
-        // Клик по элементу (кроме чекбокса) переключает чекбокс
         div.addEventListener('click', (e) => {
             if (e.target.tagName !== 'INPUT') {
                 const cb = div.querySelector('.selector-checkbox');
@@ -121,7 +119,7 @@ function showSelectionDialog() {
     selectorModal.classList.add('show');
 }
 
-// Добавить выбранные элементы в основную таблицу
+/** Добавить выбранные элементы в основную таблицу */
 function addSelectedItems() {
     const checkboxes = document.querySelectorAll('#exportSelectorList .selector-checkbox:checked');
     if (checkboxes.length === 0) {
@@ -132,7 +130,6 @@ function addSelectedItems() {
     const container = document.getElementById('exportVariablesContainer');
     if (!container) return;
 
-    // Существующие пары (чтобы не дублировать)
     const existingPairs = new Set();
     document.querySelectorAll('#exportVariablesContainer .export-var-row').forEach(row => {
         const sensor = row.querySelector('.export-sensor-id').value.trim();
@@ -156,7 +153,9 @@ function addSelectedItems() {
     showToast(`Добавлено ${checkboxes.length} строк`);
 }
 
-// Вспомогательная функция для добавления строки с предзаполненными значениями
+// ==================== УПРАВЛЕНИЕ СТРОКАМИ ВВОДА ====================
+
+/** Добавить строку с предзаполненными значениями */
 function addVariableRowWithValues(sensorId, varName) {
     const container = document.getElementById('exportVariablesContainer');
     if (!container) return;
@@ -171,7 +170,7 @@ function addVariableRowWithValues(sensorId, varName) {
     row.querySelector('.remove-var-row').addEventListener('click', () => row.remove());
 }
 
-// Остальные функции (setDefaultDates, addVariableRow, openExportModal, closeExportModal, handleDownload) остаются без изменений
+/** Установить даты по умолчанию (текущее время и час назад) */
 function setDefaultDates() {
     const fromInput = document.getElementById('exportFrom');
     const toInput = document.getElementById('exportTo');
@@ -186,6 +185,7 @@ function setDefaultDates() {
     toInput.value = format(now);
 }
 
+/** Добавить пустую строку для нового датчика/переменной */
 function addVariableRow() {
     const container = document.getElementById('exportVariablesContainer');
     if (!container) {
@@ -203,6 +203,9 @@ function addVariableRow() {
     row.querySelector('.remove-var-row').addEventListener('click', () => row.remove());
 }
 
+// ==================== ОТКРЫТИЕ/ЗАКРЫТИЕ МОДАЛЬНОГО ОКНА ====================
+
+/** Открыть модальное окно экспорта */
 export function openExportModal() {
     if (!hasPermission(PERMISSIONS.VIEW_DATA)) {
         showToast('Недостаточно прав для экспорта');
@@ -220,6 +223,7 @@ export function openExportModal() {
     exportModal.classList.add('show');
 }
 
+/** Закрыть модальное окно экспорта */
 export function closeExportModal() {
     const exportModal = document.getElementById('exportModalBackdrop');
     if (exportModal) {
@@ -227,6 +231,9 @@ export function closeExportModal() {
     }
 }
 
+// ==================== ОБРАБОТКА СКАЧИВАНИЯ ====================
+
+/** Обработчик нажатия кнопки "Скачать" */
 async function handleDownload() {
     if (!hasPermission(PERMISSIONS.VIEW_DATA)) {
         showToast('Недостаточно прав');

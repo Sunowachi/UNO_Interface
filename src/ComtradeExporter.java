@@ -8,10 +8,16 @@ import java.util.TimeZone;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+/**
+ * Класс для генерации файлов в формате COMTRADE (1999 и 2013).
+ */
 public class ComtradeExporter {
 
-    // ========== COMTRADE 1999 (ZIP-архив с тремя файлами) ==========
+    // ==================== COMTRADE 1999 (ZIP-архив из трёх файлов) ====================
 
+    /**
+     * Генерирует ZIP-архив, содержащий .cfg, .dat и .hdr для версии 1999.
+     */
     public static byte[] generateZip1999(String sensorId, String varName,
                                          List<DataStore.Point> points,
                                          long startTime, long endTime) throws IOException {
@@ -34,57 +40,39 @@ public class ComtradeExporter {
         return baos.toByteArray();
     }
 
+    /** Запись конфигурационного файла (CFG) для версии 1999 */
     private static void writeCfg1999(OutputStream os, String sensorId, String varName,
                                      List<DataStore.Point> points,
                                      long startTime, long endTime) throws IOException {
         Writer writer = new OutputStreamWriter(os, StandardCharsets.US_ASCII);
         int numPoints = points.size();
 
-        // 1. Station name, device ID, revision year
         writer.write("StationName," + sensorId + ",1999\r\n");
-
-        // 2. Total channels, analog channels, digital channels
-        writer.write("1,1,0\r\n");   // один аналоговый, ноль дискретных
-
-        // 3. Analog channel description (13 полей согласно IEEE C37.111-1999)
-        //    An,ch_id,ph,ccbm,uu,a,b,skew,min,max,primary,secondary,PS
-        //    Указываем, что данные уже в первичных величинах (PS = 'A')
+        writer.write("1,1,0\r\n");   // 1 аналоговый канал, 0 дискретных
+        // Описание аналогового канала: An,ch_id,ph,ccbm,uu,a,b,skew,min,max,primary,secondary,PS
         writer.write("1," + varName + ",,,V,1.0,0.0,0.0,0.0,0.0,1.0,0.0,A\r\n");
-
-        // 4. Digital channels (нет) – пропускаем
-
-        // 5. Номинальная частота сети (50 или 60 Гц) – здесь 50
-        writer.write("50\r\n");
-
-        // 6. Количество частот дискретизации (1, т.к. переменная частота)
-        writer.write("1\r\n");
-
-        // 7. Для каждой частоты: номер последней выборки, частота (0 – переменная)
-        writer.write(numPoints + ",0\r\n");
-
-        // 8. Дата и время начала записи (в формате dd/mm/yyyy,hh:mm:ss.ssssss)
+        writer.write("50\r\n");      // Номинальная частота сети
+        writer.write("1\r\n");       // Количество частот дискретизации
+        writer.write(numPoints + ",0\r\n");  // Последняя выборка, частота (0 – переменная)
         writer.write(formatComtradeDate(startTime) + "\r\n");
-
-        // 9. Дата и время окончания записи
         writer.write(formatComtradeDate(endTime) + "\r\n");
-
-        // 10. Тип файла данных (ASCII)
         writer.write("ASCII\r\n");
-
         writer.flush();
     }
 
+    /** Запись файла данных (DAT) для версии 1999 */
     private static void writeDat1999(OutputStream os, List<DataStore.Point> points) throws IOException {
         Writer writer = new OutputStreamWriter(os, StandardCharsets.US_ASCII);
         long baseTime = points.get(0).ts * 1000; // микросекунды первой точки
         for (int i = 0; i < points.size(); i++) {
             DataStore.Point p = points.get(i);
-            long timeUs = p.ts * 1000 - baseTime; // микросекунды от начала
+            long timeUs = p.ts * 1000 - baseTime;
             writer.write(String.format(Locale.US, "%d,%d,%.3f\r\n", i + 1, timeUs, p.value));
         }
         writer.flush();
     }
 
+    /** Запись заголовочного файла (HDR) для версии 1999 */
     private static void writeHdr1999(OutputStream os, String sensorId, String varName,
                                      long startTime, long endTime, int pointsCount) throws IOException {
         Writer writer = new OutputStreamWriter(os, StandardCharsets.US_ASCII);
@@ -98,8 +86,11 @@ public class ComtradeExporter {
         writer.flush();
     }
 
-    // ========== COMTRADE 2013 (единый файл .cff) ==========
+    // ==================== COMTRADE 2013 (единый файл .cff) ====================
 
+    /**
+     * Генерирует единый файл CFF для версии 2013.
+     */
     public static byte[] generateCff2013(String sensorId, String varName,
                                          List<DataStore.Point> points,
                                          long startTime, long endTime) throws IOException {
@@ -109,20 +100,17 @@ public class ComtradeExporter {
         long baseTime = points.get(0).ts * 1000;
         long duration = (endTime - startTime) * 1000;
 
-        // Вычисляем реальные min и max
         double minVal = points.stream().mapToDouble(p -> p.value).min().orElse(0.0);
         double maxVal = points.stream().mapToDouble(p -> p.value).max().orElse(0.0);
-        // Если min и max совпадают, немного расширяем диапазон
         if (minVal == maxVal) {
             minVal -= 0.5;
             maxVal += 0.5;
         }
 
-        // --- Configuration ---
+        // --- Секция конфигурации ---
         writer.write("--- Configuration ---\r\n");
         writer.write("StationName," + sensorId + ",2013\r\n");
         writer.write("1,1,0\r\n");
-        // Формируем строку аналогового канала с реальными min/max
         writer.write(String.format(Locale.US,
                 "1,%s,,,V,1.0,0.0,0.0,%.3f,%.3f,1.0,0.0,A\r\n",
                 varName, minVal, maxVal));
@@ -133,7 +121,7 @@ public class ComtradeExporter {
         writer.write(formatComtradeDate(endTime) + "\r\n");
         writer.write("ASCII\r\n");
 
-        // --- Data ---
+        // --- Секция данных ---
         writer.write("--- Data ---\r\n");
         for (int i = 0; i < points.size(); i++) {
             DataStore.Point p = points.get(i);
@@ -142,7 +130,7 @@ public class ComtradeExporter {
         }
         writer.write("\r\n");
 
-        // --- Header ---
+        // --- Секция заголовка ---
         writer.write("--- Header ---\r\n");
         writer.write("COMTRADE 2013 Export from DataServer\r\n");
         writer.write("Sensor ID: " + sensorId + "\r\n");
@@ -153,7 +141,7 @@ public class ComtradeExporter {
         writer.write("Generated: " + new Date() + "\r\n");
         writer.write("\r\n");
 
-        // --- Information ---
+        // --- Секция информации ---
         writer.write("--- Information ---\r\n");
         writer.write("DataServer COMTRADE Exporter\r\n");
         writer.write("Format: COMTRADE 2013 Single File (CFF)\r\n");
@@ -163,14 +151,16 @@ public class ComtradeExporter {
         return baos.toByteArray();
     }
 
-    // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+    // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
 
+    /** Форматирование даты в формат COMTRADE: dd/MM/yyyy,HH:mm:ss.SSSSSS (UTC) */
     private static String formatComtradeDate(long millis) {
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy,HH:mm:ss.SSSSSS");
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
         return sdf.format(new Date(millis));
     }
 
+    /** Генерация короткого имени файла (до 8 символов) на основе ID датчика и переменной */
     private static String generateShortName(String sensorId, String varName) {
         String s = (sensorId.length() > 4 ? sensorId.substring(0, 4) : sensorId);
         String v = (varName.length() > 3 ? varName.substring(0, 3) : varName);
@@ -178,16 +168,5 @@ public class ComtradeExporter {
         int hash = (full.hashCode() & 0xF) % 10;
         String name = s + v + hash;
         return name.replaceAll("[^a-zA-Z0-9]", "X").toUpperCase();
-    }
-
-    // Для обратной совместимости
-    public static byte[] generateZip(String sensorId, String varName,
-                                     List<DataStore.Point> points,
-                                     long startTime, long endTime) throws IOException {
-        return generateZip1999(sensorId, varName, points, startTime, endTime);
-    }
-
-    public static String sanitizeFileName(String name) {
-        return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 }

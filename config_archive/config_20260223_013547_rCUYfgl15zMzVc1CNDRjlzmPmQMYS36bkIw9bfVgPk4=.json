@@ -20,7 +20,7 @@
           "lowLimit": null,
           "warnLimit": 28,
           "alarmLimit": 32,
-          "processing": "moving_avg",
+          "processing": "median",
           "showRaw": true,
           "showProcessed": true
         },

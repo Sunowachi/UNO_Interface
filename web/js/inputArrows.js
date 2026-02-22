@@ -1,3 +1,6 @@
+// ==================== КАСТОМНЫЕ СТРЕЛКИ ДЛЯ ЧИСЛОВЫХ ПОЛЕЙ ====================
+
+/** Инициализация кастомных элементов управления для всех числовых полей внутри указанного контейнера */
 export function initCustomNumberInputs(container = document) {
     const inputs = container.querySelectorAll('input[type="number"]:not([data-custom-number])');
     inputs.forEach(input => {
@@ -9,7 +12,7 @@ export function initCustomNumberInputs(container = document) {
         input.parentNode.insertBefore(wrapper, input);
         wrapper.appendChild(input);
 
-        // Если поле отключено, не создаём кнопки
+        // Если поле отключено, не добавляем кнопки
         if (input.disabled) return;
 
         const btnContainer = document.createElement('div');
@@ -39,6 +42,7 @@ export function initCustomNumberInputs(container = document) {
     });
 }
 
+/** Изменение значения поля на один шаг в указанном направлении */
 function stepValue(input, direction) {
     let step = parseFloat(input.step);
     if (isNaN(step) || step === 0) step = 1;

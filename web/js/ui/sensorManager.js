@@ -3,13 +3,16 @@ import { hasPermission } from '../utils/permissions.js';
 import { showToast } from './toast.js';
 import { lockSession } from '../session.js';
 
+// ==================== УПРАВЛЕНИЕ ДАТЧИКАМИ (АДМИНИСТРИРОВАНИЕ) ====================
+
 let managerModal = null;
 let sensorsData = [];
 let refreshInterval = null;
 let actionInProgress = false;
-// Временное хранилище паролей для только что созданных пользователей (username -> password)
+// Временное хранилище паролей для только что созданных пользователей
 const tempPasswords = new Map();
 
+/** Открыть модальное окно управления датчиками */
 export async function openSensorManager() {
     if (!hasPermission(PERMISSIONS.MANAGE_SENSORS)) {
         showToast('Недостаточно прав');
@@ -30,6 +33,7 @@ export async function openSensorManager() {
     }, 3000);
 }
 
+/** Закрыть окно управления датчиками */
 export function closeSensorManager() {
     if (managerModal) managerModal.classList.remove('show');
     if (refreshInterval) {
@@ -38,6 +42,7 @@ export function closeSensorManager() {
     }
 }
 
+/** Загрузить список датчиков с сервера */
 async function loadSensors(silent = false) {
     try {
         const url = '/admin/sensors?_=' + Date.now();
@@ -60,7 +65,7 @@ async function loadSensors(silent = false) {
     }
 }
 
-// Сравнивает старые и новые данные, обновляет только изменившиеся строки
+/** Сравнить старые и новые данные, обновить только изменившиеся строки */
 function updateTableWithDiff(newData) {
     const oldMap = new Map(sensorsData.map(s => [s.sensorId, s]));
     const newMap = new Map(newData.map(s => [s.sensorId, s]));
@@ -88,13 +93,11 @@ function updateTableWithDiff(newData) {
     sensorsData = newData;
 }
 
-// Обновляет содержимое строки без пересоздания кнопок, если возможно
+/** Обновить содержимое существующей строки */
 function updateRowContent(row, newSensor, oldSensor) {
-    // Обновить класс удаления
     if (newSensor.deleted) row.classList.add('deleted-sensor');
     else row.classList.remove('deleted-sensor');
 
-    // Токен
     const tokenSpan = row.querySelector('.token-mask');
     if (tokenSpan) {
         if (newSensor.token) {
@@ -110,25 +113,18 @@ function updateRowContent(row, newSensor, oldSensor) {
         }
     }
 
-    // Ячейки с датами, IP, статусом (индексы ячеек: 2-5)
     const cells = row.cells;
     if (cells.length >= 6) {
-        // Дата создания (индекс 2)
         cells[2].textContent = newSensor.createdAt ? new Date(newSensor.createdAt).toLocaleString() : '-';
-        // Последняя активность (3)
         cells[3].textContent = newSensor.lastSeen ? new Date(newSensor.lastSeen).toLocaleString() : '-';
-        // IP (4)
         cells[4].textContent = newSensor.registerIp || '-';
-        // Статус (5)
         cells[5].textContent = newSensor.deleted ? 'Удалён' : 'Активен';
     }
 
-    // Ячейка действий (индекс 6) – обновляем кнопки только если изменился статус deleted
     if (cells.length >= 7) {
         const actionsCell = cells[6];
         const wasDeleted = oldSensor ? oldSensor.deleted : !newSensor.deleted;
         if (wasDeleted !== newSensor.deleted) {
-            // Полностью пересоздаём кнопки
             actionsCell.innerHTML = '';
             if (newSensor.deleted) {
                 const restoreBtn = document.createElement('button');
@@ -153,17 +149,16 @@ function updateRowContent(row, newSensor, oldSensor) {
     }
 }
 
+/** Создать новую строку таблицы для датчика */
 function createRow(s) {
     const row = document.createElement('tr');
     row.dataset.sensorId = s.sensorId;
     if (s.deleted) row.classList.add('deleted-sensor');
 
-    // ID
     const idCell = document.createElement('td');
     idCell.textContent = s.sensorId;
     row.appendChild(idCell);
 
-    // Токен
     const tokenCell = document.createElement('td');
     tokenCell.className = 'token-cell';
     const tokenSpan = document.createElement('span');
@@ -186,27 +181,22 @@ function createRow(s) {
     tokenCell.appendChild(tokenSpan);
     row.appendChild(tokenCell);
 
-    // Дата создания
     const createdCell = document.createElement('td');
     createdCell.textContent = s.createdAt ? new Date(s.createdAt).toLocaleString() : '-';
     row.appendChild(createdCell);
 
-    // Последняя активность
     const lastSeenCell = document.createElement('td');
     lastSeenCell.textContent = s.lastSeen ? new Date(s.lastSeen).toLocaleString() : '-';
     row.appendChild(lastSeenCell);
 
-    // IP регистрации
     const ipCell = document.createElement('td');
     ipCell.textContent = s.registerIp || '-';
     row.appendChild(ipCell);
 
-    // Статус
     const statusCell = document.createElement('td');
     statusCell.textContent = s.deleted ? 'Удалён' : 'Активен';
     row.appendChild(statusCell);
 
-    // Действия
     const actionsCell = document.createElement('td');
     if (s.deleted) {
         const restoreBtn = document.createElement('button');
@@ -231,6 +221,7 @@ function createRow(s) {
     return row;
 }
 
+/** Переключить флаг мягкого удаления датчика */
 async function toggleDelete(sensorId, deleted) {
     if (actionInProgress) return;
     actionInProgress = true;
@@ -254,27 +245,24 @@ async function toggleDelete(sensorId, deleted) {
         }
         showToast(deleted ? 'Датчик удалён' : 'Датчик восстановлен');
 
-        // Немедленное локальное обновление
         const sensor = sensorsData.find(s => s.sensorId === sensorId);
         if (sensor) {
             sensor.deleted = deleted;
             const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
             if (row) {
-                // Обновляем только класс и текст статуса, ячейку действий (пересоздадим кнопки)
                 updateRowContent(row, sensor, { ...sensor, deleted: !deleted });
             }
         }
-        // Не вызываем loadSensors сразу – полагаемся на периодический опрос
     } catch (e) {
         console.error('Ошибка операции toggleDelete:', e);
         showToast('Ошибка: ' + e.message);
-        // При ошибке загружаем свежие данные с сервера
         await loadSensors(false);
     } finally {
         actionInProgress = false;
     }
 }
 
+/** Полное удаление датчика из БД */
 async function permanentDelete(sensorId) {
     if (actionInProgress) return;
     if (!confirm(`Вы уверены, что хотите навсегда удалить датчик ${sensorId}? Это действие необратимо.`)) return;
@@ -299,11 +287,9 @@ async function permanentDelete(sensorId) {
         }
         showToast('Датчик удалён навсегда');
 
-        // Удаляем строку из DOM и из массива
         const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
         if (row) row.remove();
         sensorsData = sensorsData.filter(s => s.sensorId !== sensorId);
-        // Не вызываем loadSensors
     } catch (e) {
         console.error('Ошибка операции permanentDelete:', e);
         showToast('Ошибка: ' + e.message);
@@ -313,6 +299,7 @@ async function permanentDelete(sensorId) {
     }
 }
 
+/** Зарегистрировать новый датчик (администратором) */
 async function registerNewSensor() {
     const input = document.getElementById('newSensorId');
     const sensorId = input.value.trim();
@@ -352,7 +339,6 @@ async function registerNewSensor() {
         showToast(`✅ Датчик зарегистрирован!`);
         input.value = '';
 
-        // Добавляем новую строку
         const newSensor = {
             sensorId,
             token: data.token,
@@ -364,7 +350,6 @@ async function registerNewSensor() {
         sensorsData.push(newSensor);
         const tbody = document.getElementById('sensorManagerBody');
         if (tbody) tbody.appendChild(createRow(newSensor));
-        // Не вызываем loadSensors
     } catch (e) {
         console.error('Ошибка регистрации:', e);
         showToast('Ошибка: ' + e.message);
@@ -374,6 +359,7 @@ async function registerNewSensor() {
     }
 }
 
+/** Инициализация обработчиков окна управления датчиками */
 export function initSensorManager() {
     const registerBtn = document.getElementById('registerSensorBtn');
     if (registerBtn) registerBtn.addEventListener('click', registerNewSensor);
@@ -389,13 +375,14 @@ export function initSensorManager() {
     }
 }
 
-// ========== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ==========
+// ==================== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ====================
 
 let userModal = null;
 let usersData = [];
 let userRefreshInterval = null;
 let userActionInProgress = false;
 
+/** Открыть модальное окно управления пользователями */
 export async function openUserManager() {
     if (!hasPermission(PERMISSIONS.MANAGE_USERS)) {
         showToast('Недостаточно прав');
@@ -410,8 +397,8 @@ export async function openUserManager() {
     // Обновляем селект ролей в зависимости от роли текущего пользователя
     const roleSelect = document.getElementById('newUserRole');
     if (roleSelect && currentUser) {
-        const selectedValue = roleSelect.value; // запоминаем выбранное
-        roleSelect.innerHTML = ''; // очищаем
+        const selectedValue = roleSelect.value;
+        roleSelect.innerHTML = '';
 
         const addOption = (value, text) => {
             const opt = document.createElement('option');
@@ -431,7 +418,6 @@ export async function openUserManager() {
             addOption('admin', 'Администратор');
         }
 
-        // Восстанавливаем выбранное, если оно допустимо
         if ([...roleSelect.options].some(opt => opt.value === selectedValue)) {
             roleSelect.value = selectedValue;
         }
@@ -447,6 +433,7 @@ export async function openUserManager() {
     }, 3000);
 }
 
+/** Закрыть окно управления пользователями */
 export function closeUserManager() {
     if (userModal) userModal.classList.remove('show');
     if (userRefreshInterval) {
@@ -455,6 +442,7 @@ export function closeUserManager() {
     }
 }
 
+/** Загрузить список пользователей с сервера */
 async function loadUsers(silent = false) {
     try {
         const url = '/admin/users?_=' + Date.now();
@@ -477,6 +465,7 @@ async function loadUsers(silent = false) {
     }
 }
 
+/** Обновить таблицу пользователей */
 function updateUserTable(newData) {
     const tbody = document.getElementById('userManagerBody');
     if (!tbody) return;
@@ -488,6 +477,7 @@ function updateUserTable(newData) {
     usersData = newData;
 }
 
+/** Создать строку таблицы для пользователя */
 function createUserRow(user, password) {
     const row = document.createElement('tr');
     row.dataset.username = user.username;
@@ -500,7 +490,6 @@ function createUserRow(user, password) {
     roleCell.textContent = user.role;
     row.appendChild(roleCell);
 
-    // Ячейка с паролем
     const passwordCell = document.createElement('td');
     passwordCell.className = 'token-cell';
     if (password) {
@@ -523,7 +512,6 @@ function createUserRow(user, password) {
 
     const actionsCell = document.createElement('td');
 
-    // Проверка: нельзя удалить себя
     if (currentUser && currentUser.username === user.username) {
         const disabledSpan = document.createElement('span');
         disabledSpan.textContent = '—';
@@ -531,7 +519,6 @@ function createUserRow(user, password) {
         disabledSpan.style.opacity = '0.5';
         actionsCell.appendChild(disabledSpan);
     }
-    // Запрещаем удаление разработчика для не-developer
     else if (currentUser && currentUser.role !== 'developer' && user.role === 'developer') {
         const disabledSpan = document.createElement('span');
         disabledSpan.textContent = '—';
@@ -550,6 +537,7 @@ function createUserRow(user, password) {
     return row;
 }
 
+/** Создать нового пользователя */
 async function createUser() {
     if (userActionInProgress) return;
     const usernameInput = document.getElementById('newUsername');
@@ -590,11 +578,10 @@ async function createUser() {
             throw new Error(`Ошибка ${res.status}: ${text}`);
         }
         const data = await res.json();
-        // Сохраняем пароль во временном хранилище
         tempPasswords.set(data.username, data.password);
         showToast(`✅ Пользователь ${data.username} создан. Пароль отображается в таблице (сохраните его, он исчезнет после перезагрузки)`);
         usernameInput.value = '';
-        await loadUsers(); // перезагрузим список (пароль подтянется из tempPasswords)
+        await loadUsers();
     } catch (e) {
         console.error('Ошибка создания пользователя:', e);
         showToast('Ошибка: ' + e.message);
@@ -603,6 +590,7 @@ async function createUser() {
     }
 }
 
+/** Удалить пользователя */
 async function deleteUser(username) {
     if (userActionInProgress) return;
     if (!confirm(`Вы уверены, что хотите удалить пользователя ${username}?`)) return;
@@ -636,6 +624,7 @@ async function deleteUser(username) {
     }
 }
 
+/** Инициализация обработчиков окна управления пользователями */
 export function initUserManager() {
     const controls = document.getElementById('userManagerControls');
     if (controls) {

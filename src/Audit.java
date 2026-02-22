@@ -6,39 +6,34 @@ import java.util.Date;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
 
+/**
+ * Класс для асинхронного аудита событий с ротацией файлов.
+ */
 public class Audit {
-    // ================= КОНФИГУРАЦИЯ =================
 
-    // Имя файла аудита
-    private static final String FILE = "audit.log";
-    // Максимальный размер файла (10 МБ)
-    private static final long MAX_SIZE = 10 * 1024 * 1024;
-    // Количество хранимых архивов
-    private static final int MAX_BACKUPS = 5;
-    // Размер очереди событий (10 000)
-    private static final int QUEUE_CAPACITY = 10_000;
+    // ==================== КОНФИГУРАЦИЯ ====================
+    private static final String FILE = "audit.log";                     // Имя файла аудита
+    private static final long MAX_SIZE = 10 * 1024 * 1024;              // Максимальный размер (10 МБ)
+    private static final int MAX_BACKUPS = 5;                            // Количество хранимых архивов
+    private static final int QUEUE_CAPACITY = 10_000;                    // Размер очереди событий
 
-    // Очередь событий для асинхронной записи
+    // ==================== ОЧЕРЕДЬ И ПОТОК ====================
     private static final BlockingQueue<AuditEvent> eventQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
-    // Флаг работы фонового потока
-    private static volatile boolean running = true;
+    private static volatile boolean running = true;                      // Флаг работы фонового потока
 
-    // Статический инициализатор: запускает поток записи
     static {
-        startWriterThread();
-        // Добавляем shutdown hook для корректного завершения
+        startWriterThread();                                              // Запуск потока при загрузке класса
         Runtime.getRuntime().addShutdownHook(new Thread(Audit::shutdown));
     }
 
-    // ================= ВНУТРЕННИЙ КЛАСС СОБЫТИЯ =================
-
+    // ==================== ВНУТРЕННИЙ КЛАСС – СОБЫТИЕ АУДИТА ====================
     private static class AuditEvent {
         final String timestamp;
         final String level;        // INFO, WARNING, ERROR
         final String user;
         final String action;
         final String result;       // SUCCESS, FAIL, BLOCKED и т.п.
-        final String details;       // дополнительная информация
+        final String details;
         final String ip;
         final String sessionId;
         final long pid;
@@ -57,7 +52,7 @@ public class Audit {
             this.thread = Thread.currentThread().getName();
         }
 
-        // Преобразование в JSON-строку
+        /** Преобразование события в JSON-строку */
         String toJson() {
             return String.format(
                     "{\"timestamp\":\"%s\",\"level\":\"%s\",\"user\":\"%s\",\"action\":\"%s\"," +
@@ -68,65 +63,47 @@ public class Audit {
         }
     }
 
-    // ================= ОСНОВНЫЕ МЕТОДЫ ЛОГИРОВАНИЯ =================
-
+    // ==================== ОСНОВНЫЕ МЕТОДЫ ЛОГИРОВАНИЯ ====================
     // Для обратной совместимости
     public static void log(String user, String action, String ip) {
         log(Level.INFO, user, action, null, null, ip, null);
     }
 
-    // INFO без details и без sessionId
-    public static void info(String user, String action, String ip) {
-        log(Level.INFO, user, action, "SUCCESS", null, ip, null);
-    }
-
-    // INFO с details, без sessionId
     public static void info(String user, String action, String details, String ip) {
         log(Level.INFO, user, action, "SUCCESS", details, ip, null);
     }
 
-    // INFO с details и sessionId
-    public static void info(String user, String action, String details, String ip, String sessionId) {
-        log(Level.INFO, user, action, "SUCCESS", details, ip, sessionId);
-    }
-
-    // WARNING с details, без sessionId
     public static void warn(String user, String action, String details, String ip) {
         log(Level.WARNING, user, action, "WARNING", details, ip, null);
     }
 
-    // WARNING с details и sessionId
     public static void warn(String user, String action, String details, String ip, String sessionId) {
         log(Level.WARNING, user, action, "WARNING", details, ip, sessionId);
     }
 
-    // ERROR с details, без sessionId
     public static void error(String user, String action, String details, String ip) {
         log(Level.ERROR, user, action, "ERROR", details, ip, null);
     }
 
-    // ERROR с details и sessionId
     public static void error(String user, String action, String details, String ip, String sessionId) {
         log(Level.ERROR, user, action, "ERROR", details, ip, sessionId);
     }
 
-    // Базовый метод логирования
+    /** Базовый метод – создаёт событие и помещает в очередь */
     public static void log(Level level, String user, String action, String result, String details, String ip, String sessionId) {
         AuditEvent event = new AuditEvent(level.name(), user, action, result, details, ip, sessionId);
         if (!eventQueue.offer(event)) {
             // Очередь переполнена – сбрасываем в stderr
-            System.err.println("[AUDIT QUEUE FULL] " + event.toJson());
+            System.err.println("[ОЧЕРЕДЬ АУДИТА ПЕРЕПОЛНЕНА] " + event.toJson());
         }
     }
 
-    // ================= УРОВНИ ЛОГИРОВАНИЯ =================
-
+    // ==================== УРОВНИ ЛОГИРОВАНИЯ ====================
     public enum Level {
         INFO, WARNING, ERROR
     }
 
-    // ================= ФОНОВЫЙ ПОТОК ЗАПИСИ =================
-
+    // ==================== ФОНОВЫЙ ПОТОК ЗАПИСИ ====================
     private static void startWriterThread() {
         Thread writer = new Thread(() -> {
             while (running || !eventQueue.isEmpty()) {
@@ -138,7 +115,7 @@ public class Audit {
                     Thread.currentThread().interrupt();
                     break;
                 } catch (Exception e) {
-                    System.err.println("[AUDIT WRITER ERROR] " + e.getMessage());
+                    System.err.println("[ОШИБКА ПОТОКА ЗАПИСИ АУДИТА] " + e.getMessage());
                 }
             }
         });
@@ -148,33 +125,30 @@ public class Audit {
     }
 
     private static void writeEvent(AuditEvent event) {
-        synchronized (LOCK) {  // синхронизация для ротации
+        synchronized (LOCK) {
             try {
                 rotateIfNeeded();
                 try (FileWriter fw = new FileWriter(FILE, true)) {
                     fw.write(event.toJson() + "\n");
                 }
             } catch (Exception e) {
-                System.err.println("[AUDIT WRITE FAIL] " + event.toJson());
+                System.err.println("[ОШИБКА ЗАПИСИ АУДИТА] " + event.toJson());
             }
         }
     }
 
     private static final Object LOCK = new Object();
 
-    // ================= РОТАЦИЯ И АРХИВИРОВАНИЕ =================
-
+    // ==================== РОТАЦИЯ И АРХИВИРОВАНИЕ ====================
     private static void rotateIfNeeded() throws IOException {
         File f = new File(FILE);
         if (!f.exists() || f.length() < MAX_SIZE) return;
 
-        // Переименовываем текущий файл во временный
         File temp = new File(FILE + ".tmp");
         if (!f.renameTo(temp)) {
-            throw new IOException("Cannot rename audit file for rotation");
+            throw new IOException("Не удалось переименовать файл аудита для ротации");
         }
 
-        // Сжимаем в GZIP
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         File archived = new File(FILE + "." + timestamp + ".gz");
         try (GZIPOutputStream gzos = new GZIPOutputStream(new FileOutputStream(archived));
@@ -185,10 +159,7 @@ public class Audit {
                 gzos.write(buffer, 0, len);
             }
         }
-        // Удаляем временный файл
         temp.delete();
-
-        // Удаляем старые архивы, оставляем MAX_BACKUPS
         cleanOldArchives();
     }
 
@@ -198,29 +169,24 @@ public class Audit {
         if (archives == null) return;
         if (archives.length <= MAX_BACKUPS) return;
 
-        // Сортируем по дате (по имени)
         Arrays.sort(archives);
         for (int i = 0; i < archives.length - MAX_BACKUPS; i++) {
             archives[i].delete();
         }
     }
 
-    // ================= ЗАВЕРШЕНИЕ РАБОТЫ =================
-
+    // ==================== ЗАВЕРШЕНИЕ РАБОТЫ ====================
     public static void shutdown() {
         running = false;
-        // Ждём до 2 секунд, пока очередь опустеет
         long deadline = System.currentTimeMillis() + 2000;
         while (!eventQueue.isEmpty() && System.currentTimeMillis() < deadline) {
             try { Thread.sleep(100); } catch (InterruptedException ignored) {}
         }
     }
 
-    // ================= САНИТАЙЗИНГ =================
-
+    // ==================== САНИТАЙЗИНГ СТРОК ДЛЯ JSON ====================
     private static String sanitize(String v) {
         if (v == null) return "-";
-        // Удаляем управляющие символы, заменяем кавычки для JSON
         return v.replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\"", "\\\"")

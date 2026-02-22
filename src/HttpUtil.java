@@ -8,91 +8,73 @@ import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+/**
+ * Утилитарные методы для работы с HTTP: заголовки, JSON, куки, статические файлы, конфигурация.
+ */
 public class HttpUtil {
 
-    // ================= КОНСТАНТЫ =================
+    // ==================== КОНСТАНТЫ ====================
+    static final int MAX_JSON_SIZE = 4096;                       // Максимальный размер принимаемого JSON
+    static final int MAX_CONFIG_SIZE = 10 * 1024 * 1024;         // Максимальный размер конфигурационного файла (10 МБ)
+    private static final Path CONFIG_ARCHIVE_DIR = Path.of("config_archive"); // Директория для архивов конфига
+    static final boolean FORCE_SECURE_COOKIE = false;            // Принудительный Secure-флаг для cookie
 
-    // Максимальный размер JSON, принимаемого от клиента (4 КБ)
-    static final int MAX_JSON_SIZE = 4096;
-    // Максимальный размер конфигурационного файла (10 МБ)
-    static final int MAX_CONFIG_SIZE = 10 * 1024 * 1024;
-    // Директория для хранения архивных копий конфигурации
-    private static final Path CONFIG_ARCHIVE_DIR = Path.of("config_archive");
-    // Флаг принудительного использования Secure-флага для cookie (если true, то всегда Secure)
-    static final boolean FORCE_SECURE_COOKIE = false;
+    // ==================== ОБРАБОТКА HTTP-ЗАГОЛОВКОВ ====================
 
-    // ================= ОБРАБОТКА HTTP-ЗАГОЛОВКОВ =================
-
-    // Установка заголовков безопасности для ответа
+    /** Установка стандартных заголовков безопасности */
     static void applySecurityHeaders(HttpExchange ex) {
-        // Запрет определения типа контента по содержимому (защита от MIME-атак)
         ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
-        // Запрет на встраивание в iframe (защита от clickjacking)
         ex.getResponseHeaders().set("X-Frame-Options", "DENY");
-        // Политика безопасности контента: разрешены ресурсы только с того же источника
         ex.getResponseHeaders().set("Content-Security-Policy",
                 "default-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'");
     }
 
-    // Отправка JSON-ответа клиенту
+    /** Отправка JSON-ответа клиенту */
     public static void sendJson(HttpExchange ex, String json) throws IOException {
-        // Проверка, не был ли уже отправлен ответ (заголовок Content-Type уже установлен)
         if (ex.getResponseHeaders().containsKey("Content-Type")) {
-            // Логируем попытку двойного ответа
-            Audit.warn("-", "DOUBLE_RESPONSE_ATTEMPT", "Attempt to send duplicate response", ex.getRemoteAddress().toString());
+            Audit.warn("-", "ПОПЫТКА_ДВОЙНОГО_ОТВЕТА", "Попытка отправить повторный ответ", ex.getRemoteAddress().toString());
             return;
         }
 
-        // Преобразование строки JSON в байты в кодировке UTF-8
         byte[] data = json.getBytes(StandardCharsets.UTF_8);
-        // Добавление заголовков безопасности
         applySecurityHeaders(ex);
-        // Установка заголовка Content-Type с указанием кодировки
         ex.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-        // Отправка кода ответа 200 OK и длины тела
         ex.sendResponseHeaders(200, data.length);
 
-        // Запись данных в тело ответа и закрытие потока
         try (OutputStream os = ex.getResponseBody()) {
             os.write(data);
         }
     }
 
-    // Отправка ошибки клиенту (текстовое сообщение)
+    /** Отправка текстовой ошибки клиенту */
     public static void sendError(HttpExchange ex, int code, String message) {
         try {
-            // Проверка, не был ли уже отправлен ответ
             if (ex.getResponseHeaders().containsKey("Content-Type")) return;
 
-            // Преобразование сообщения в байты UTF-8
             byte[] data = message.getBytes(StandardCharsets.UTF_8);
-            // Добавление заголовков безопасности
             applySecurityHeaders(ex);
-            // Установка Content-Type как обычный текст
             ex.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
-            // Отправка указанного кода ошибки и длины тела
             ex.sendResponseHeaders(code, data.length);
 
-            // Запись данных
             try (OutputStream os = ex.getResponseBody()) {
                 os.write(data);
             }
         } catch (IOException e) {
-            // В случае ошибки отправки – запись в аудит
-            Audit.error("-", "SEND_ERROR_FAIL", e.getMessage(), ex.getRemoteAddress().toString());
+            // Смешная ошибка
+            Audit.error("-", "ОШИБКА_ОТПРАВКИ_ОШИБКИ", e.getMessage(), ex.getRemoteAddress().toString());
         }
     }
 
-    // ================= СЕРИАЛИЗАЦИЯ JSON =================
+    // ==================== СЕРИАЛИЗАЦИЯ JSON ====================
 
-    // Преобразование объекта в JSON-строку
+    /** Преобразование объекта в JSON-строку */
     static String toJson(Object o) {
         StringBuilder sb = new StringBuilder();
         writeJson(sb, o);
         return sb.toString();
     }
 
-    // Рекурсивная запись объекта в StringBuilder в формате JSON
+    /** Рекурсивная запись объекта в JSON */
     @SuppressWarnings("unchecked")
     private static void writeJson(StringBuilder sb, Object o) {
         if (o == null) {
@@ -101,35 +83,28 @@ public class HttpUtil {
         }
 
         if (o instanceof String s) {
-            // Строки заключаются в кавычки с экранированием
             sb.append('"').append(escape(s)).append('"');
             return;
         }
 
         if (o instanceof Number || o instanceof Boolean) {
-            // Числа и булевы значения пишутся как есть
             sb.append(o.toString());
             return;
         }
 
         if (o instanceof Enum<?> e) {
-            // Перечисления пишутся как строки (имя константы)
             sb.append('"').append(e.name()).append('"');
             return;
         }
 
         if (o instanceof Map<?, ?> map) {
-            // Объект JSON: { ключ: значение, ... }
             sb.append('{');
             boolean first = true;
             for (var e : map.entrySet()) {
-                // Ключ должен быть строкой, иначе пропускаем
                 if (!(e.getKey() instanceof String)) continue;
                 if (!first) sb.append(',');
                 first = false;
-                // Ключ в кавычках с экранированием
                 sb.append('"').append(escape((String) e.getKey())).append("\":");
-                // Рекурсивно записываем значение
                 writeJson(sb, e.getValue());
             }
             sb.append('}');
@@ -137,7 +112,6 @@ public class HttpUtil {
         }
 
         if (o instanceof Iterable<?> it) {
-            // Массив JSON: [ значение, ... ]
             sb.append('[');
             boolean first = true;
             for (Object v : it) {
@@ -149,22 +123,20 @@ public class HttpUtil {
             return;
         }
 
-        // Для остальных типов вызываем toString() и экранируем как строку
         sb.append('"').append(escape(o.toString())).append('"');
     }
 
-    // Экранирование специальных символов в JSON-строке
+    /** Экранирование специальных символов в JSON-строке */
     private static String escape(String s) {
         StringBuilder out = new StringBuilder(s.length() + 8);
         for (char c : s.toCharArray()) {
             switch (c) {
-                case '"' -> out.append("\\\""); // экранирование двойной кавычки
-                case '\\' -> out.append("\\\\"); // экранирование обратного слеша
-                case '\n' -> out.append("\\n");   // перевод строки
-                case '\r' -> out.append("\\r");   // возврат каретки
-                case '\t' -> out.append("\\t");   // табуляция
+                case '"' -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
                 default -> {
-                    // Управляющие символы (код < 32) заменяются вопросительным знаком
                     if (c < 32) out.append('?');
                     else out.append(c);
                 }
@@ -173,68 +145,50 @@ public class HttpUtil {
         return out.toString();
     }
 
-    // ================= ПАРСИНГ JSON =================
+    // ==================== ПАРСИНГ JSON ====================
 
-    // Парсинг JSON-объекта из тела запроса в Map<String, String>
+    /** Парсинг JSON-объекта из тела запроса в Map<String, String> */
     static Map<String, String> parseJson(HttpExchange ex) throws IOException {
         try {
-            // Получение Content-Type (если отсутствует, то пустая строка) и приведение к нижнему регистру
             String ct = Optional.ofNullable(ex.getRequestHeaders().getFirst("Content-Type"))
                     .orElse("").toLowerCase();
-            // Если это не JSON, возвращаем пустую карту
             if (!ct.contains("application/json")) return Map.of();
 
-            // Чтение всего тела запроса в массив байт
             byte[] raw = ex.getRequestBody().readAllBytes();
-            // Если тело пустое или превышает максимальный размер – возвращаем пустую карту
             if (raw.length == 0 || raw.length > MAX_JSON_SIZE) return Map.of();
 
-            // Преобразование байт в строку UTF-8 и удаление пробелов по краям
             String json = new String(raw, StandardCharsets.UTF_8).trim();
-            // Проверка, что это объект в фигурных скобках
             if (!json.startsWith("{") || !json.endsWith("}")) return Map.of();
 
-            // Создание карты для результатов
             Map<String, String> map = new HashMap<>();
-            // Удаление внешних скобок и пробелов
             json = json.substring(1, json.length() - 1).trim();
-            // Если строка пустая, возвращаем пустую карту
             if (json.isEmpty()) return map;
 
-            // Разделение строки на пары ключ:значение по запятым
             for (String pair : json.split(",")) {
-                // Разделение пары на ключ и значение (максимум 2 части)
                 String[] kv = pair.split(":", 2);
-                if (kv.length != 2) return Map.of(); // неверный формат
+                if (kv.length != 2) return Map.of();
 
                 String key = kv[0].trim();
                 String val = kv[1].trim();
-                // Проверка, что ключ заключён в двойные кавычки и содержит только буквы, цифры, подчёркивание
                 if (!key.matches("\"[a-zA-Z0-9_]+\"")) return Map.of();
-                // Проверка, что значение заключено в двойные кавычки (строковое)
                 if (!val.matches("\"[^\"]*\"")) return Map.of();
-                // Проверка длины ключа и значения
                 if (key.length() > 64 || val.length() > 512) return Map.of();
 
-                // Добавление в карту, удаляя внешние кавычки
                 map.put(key.substring(1, key.length() - 1), val.substring(1, val.length() - 1));
-                // Ограничение на количество полей в объекте (не более 10)
                 if (map.size() > 10) return Map.of();
             }
             return map;
         } catch (Exception e) {
-            // В случае любой ошибки возвращаем пустую карту
             return Map.of();
         }
     }
 
-    // ================= ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =================
+    // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
 
-    // Получение размера тела запроса из заголовка Content-Length
+    /** Получение размера тела запроса из заголовка Content-Length */
     static long getBodySize(HttpExchange ex) {
         String cl = ex.getRequestHeaders().getFirst("Content-Length");
         if (cl == null) return 0;
-
         try {
             return Long.parseLong(cl);
         } catch (NumberFormatException e) {
@@ -242,39 +196,32 @@ public class HttpUtil {
         }
     }
 
-    // Чтение сырого JSON-тела запроса (возвращает строку или null при ошибке)
+    /** Чтение сырого JSON-тела запроса (возвращает строку или null при ошибке) */
     static String readRawJson(HttpExchange ex, int maxSize) throws IOException {
-        // Проверка Content-Type
         String ct = Optional.ofNullable(ex.getRequestHeaders().getFirst("Content-Type"))
                 .orElse("").toLowerCase();
         if (!ct.startsWith("application/json")) return null;
 
-        // Чтение тела
         byte[] raw = ex.getRequestBody().readAllBytes();
         if (raw.length == 0 || raw.length > maxSize) return null;
 
-        // Преобразование в строку
         String json = new String(raw, StandardCharsets.UTF_8).trim();
-        // Проверка, что это объект
         if (!json.startsWith("{") || !json.endsWith("}")) return null;
         return json;
     }
 
-    // ================= РАБОТА С КУКАМИ =================
+    // ==================== РАБОТА С КУКИ ====================
 
-    // Получение значения куки по имени из запроса
+    /** Получение значения куки по имени из запроса */
     static String getCookie(HttpExchange ex, String name) {
-        // Получение списка заголовков Cookie
         var cookies = ex.getRequestHeaders().get("Cookie");
         if (cookies == null) return null;
 
-        // Проход по всем строкам Cookie
         for (String c : cookies) {
-            // Разделение по точке с запятой (отдельные куки)
             for (String p : c.split(";")) {
                 p = p.trim();
                 int eq = p.indexOf('=');
-                if (eq == -1) continue; // нет знака равенства – пропускаем
+                if (eq == -1) continue;
                 String key = p.substring(0, eq);
                 String val = p.substring(eq + 1);
                 if (name.equals(key)) return val;
@@ -283,38 +230,31 @@ public class HttpUtil {
         return null;
     }
 
-    // Установка куки в ответ
+    /** Установка куки в ответ */
     static void setCookie(HttpExchange ex, String k, String v) {
-        // Определение, нужно ли использовать Secure-флаг
         boolean https = FORCE_SECURE_COOKIE ||
                 "https".equalsIgnoreCase(ex.getRequestHeaders().getFirst("X-Forwarded-Proto"));
 
-        // Атрибут Domain (если задан через переменную окружения)
         String domainAttr = "";
         String cookieDomain = System.getenv("COOKIE_DOMAIN");
         if (cookieDomain != null && !cookieDomain.isBlank()) {
             domainAttr = "; Domain=" + cookieDomain.trim();
         }
 
-        // Атрибут SameSite (из переменной окружения или по умолчанию Strict)
         String sameSite = System.getenv("COOKIE_SAMESITE");
         if (sameSite == null || sameSite.isBlank()) sameSite = "Strict";
-        // Если SameSite=None, но нет HTTPS – принудительно меняем на Strict (браузеры требуют Secure для None)
         if ("None".equalsIgnoreCase(sameSite) && !https) sameSite = "Strict";
 
-        // Формирование строки куки
         String cookie = k + "=" + v +
                 "; Path=/" + domainAttr +
                 "; HttpOnly; SameSite=" + sameSite +
                 (https ? "; Secure" : "");
 
-        // Добавление заголовка Set-Cookie
         ex.getResponseHeaders().add("Set-Cookie", cookie);
     }
 
-    // Очистка куки (установка с истекшим сроком действия)
+    /** Очистка куки (установка с истекшим сроком) */
     static void clearCookie(HttpExchange ex, String k) {
-        // Аналогично setCookie, но с Max-Age=0 и пустым значением
         boolean https = FORCE_SECURE_COOKIE ||
                 "https".equalsIgnoreCase(ex.getRequestHeaders().getFirst("X-Forwarded-Proto"));
 
@@ -328,7 +268,6 @@ public class HttpUtil {
         if (sameSite == null || sameSite.isBlank()) sameSite = "Strict";
         if ("None".equalsIgnoreCase(sameSite) && !https) sameSite = "Strict";
 
-        // Max-Age=0 указывает браузеру удалить куку
         String cookie = k + "=; Path=/; Max-Age=0" +
                 domainAttr + "; HttpOnly; SameSite=" + sameSite +
                 (https ? "; Secure" : "");
@@ -336,22 +275,18 @@ public class HttpUtil {
         ex.getResponseHeaders().add("Set-Cookie", cookie);
     }
 
-    // ================= ОБРАБОТКА СТАТИЧЕСКИХ ФАЙЛОВ =================
+    // ==================== ОБРАБОТКА СТАТИЧЕСКИХ ФАЙЛОВ ====================
 
-    // Обработчик запросов к статическим файлам (GET)
+    /** Обработчик запросов к статическим файлам (GET) */
     static void handleStatic(HttpExchange ex) throws IOException {
-        // Разрешён только GET
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Корневая директория для статики (папка "web")
         Path root = Path.of("web").toAbsolutePath().normalize();
-        // Путь из URL (начинается с /)
         String reqPath = ex.getRequestURI().getPath();
 
-        // Защита от path traversal (обход каталогов через ..)
         if (reqPath.contains("..")) {
             ex.sendResponseHeaders(403, -1);
             return;
@@ -371,17 +306,14 @@ public class HttpUtil {
                 }
                 return;
             } else {
-                // если файла нет в корне, возвращаем 204
                 ex.getResponseHeaders().set("Content-Type", "image/x-icon");
                 ex.sendResponseHeaders(204, -1);
                 return;
             }
         }
 
-        // Если запрашивают корень или panel.html, применяем фильтрацию
         boolean isMainPage = "/".equals(reqPath) || "/panel.html".equals(reqPath);
 
-        // Полный путь к запрошенному файлу, убираем первый символ '/' для не-главных страниц
         Path path;
         if (isMainPage) {
             path = root.resolve("panel.html");
@@ -389,42 +321,34 @@ public class HttpUtil {
             path = root.resolve(reqPath.substring(1)).normalize();
         }
 
-        // Проверка, что путь не выходит за пределы корневой папки
         if (!path.startsWith(root)) {
             ex.sendResponseHeaders(403, -1);
             return;
         }
 
-        // Если путь указывает на директорию, добавляем panel.html (как индексный файл)
         if (Files.isDirectory(path)) {
             path = path.resolve("panel.html");
         }
 
-        // Если файл не существует или скрытый – 404 Not Found
         if (!Files.exists(path) || Files.isHidden(path)) {
             ex.sendResponseHeaders(404, -1);
             return;
         }
 
-        // Имя файла
         String name = path.getFileName().toString();
-        // Проверка, что тип файла разрешён для отдачи
         if (!isAllowedStatic(name)) {
             ex.sendResponseHeaders(403, -1);
             return;
         }
 
-        // Проверка размера файла (не более 1 МБ)
         long size = Files.size(path);
         if (size > 1_000_000) {
             ex.sendResponseHeaders(413, -1);
             return;
         }
 
-        // Чтение всего файла в память
         byte[] data = Files.readAllBytes(path);
 
-        // Для главной страницы проверяем аутентификацию и, если нужно, чистим HTML
         if (isMainPage) {
             boolean auth = isAuthenticated(ex);
             if (!auth) {
@@ -434,61 +358,52 @@ public class HttpUtil {
             }
         }
 
-        // Добавление заголовков безопасности
         applySecurityHeaders(ex);
-        // Установка MIME-типа
         ex.getResponseHeaders().set("Content-Type", getMimeType(name));
-        // HTML не кэшируется
         ex.getResponseHeaders().set("Cache-Control",
                 name.endsWith(".html") ? "no-store" : "public, max-age=3600");
 
-        // Отправка ответа
         ex.sendResponseHeaders(200, data.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(data);
         }
     }
 
-    // Проверка, авторизован ли пользователь (есть ли валидная сессия)
+    /** Проверка, авторизован ли пользователь */
     private static boolean isAuthenticated(HttpExchange ex) {
         Security.Session s = Security.getSession(ex);
         return s != null && !s.expired();
     }
 
-    // Удаляет элемент с указанным id (вместе со всем содержимым) из HTML-строки
+    /** Удаление элемента с указанным id из HTML-строки */
     private static String removeElementById(String html, String id) {
-        // Ищем открывающий тег с данным id
         String openTagPattern = "<div\\s+[^>]*id=\"" + id + "\"[^>]*>";
         java.util.regex.Pattern p = java.util.regex.Pattern.compile(openTagPattern, java.util.regex.Pattern.CASE_INSENSITIVE);
         java.util.regex.Matcher m = p.matcher(html);
         if (!m.find()) {
-            return html; // элемент не найден
+            return html;
         }
-        int start = m.start(); // начало открывающего тега
+        int start = m.start();
 
-        // Ищем закрывающий тег, учитывая вложенность
         int level = 1;
-        int pos = m.end(); // позиция после открывающего тега
+        int pos = m.end();
         while (pos < html.length() && level > 0) {
             int nextOpen = html.indexOf("<div", pos);
             int nextClose = html.indexOf("</div", pos);
-            if (nextClose == -1) break; // нет закрывающего тега – выход
+            if (nextClose == -1) break;
             if (nextOpen != -1 && nextOpen < nextClose) {
-                // Встретился вложенный открывающий тег
                 level++;
-                pos = nextOpen + 4; // продолжаем после "<div"
+                pos = nextOpen + 4;
             } else {
-                // Встретился закрывающий тег
                 level--;
-                pos = nextClose + 5; // продолжаем после "</div"
+                pos = nextClose + 5;
             }
         }
-        int end = pos; // позиция после закрывающего тега
-        // Удаляем найденный участок
+        int end = pos;
         return html.substring(0, start) + html.substring(end);
     }
 
-    // Удаление из HTML всех элементов с ограниченным доступом
+    /** Удаление из HTML всех элементов с ограниченным доступом */
     private static String stripUnauthorizedContent(String html) {
         html = removeElementById(html, "appRoot");
         html = removeElementById(html, "editModalBackdrop");
@@ -497,14 +412,14 @@ public class HttpUtil {
         return html;
     }
 
-    // Проверка, что имя файла имеет разрешённое расширение
+    /** Проверка, что имя файла имеет разрешённое расширение */
     static boolean isAllowedStatic(String name) {
         return name.endsWith(".html") || name.endsWith(".js") || name.endsWith(".css") ||
                 name.endsWith(".json") || name.endsWith(".svg") || name.endsWith(".png") ||
                 name.endsWith(".woff2");
     }
 
-    // Определение MIME-типа по расширению файла
+    /** Определение MIME-типа по расширению файла */
     static String getMimeType(String file) {
         if (file.endsWith(".html")) return "text/html; charset=utf-8";
         if (file.endsWith(".js")) return "application/javascript; charset=utf-8";
@@ -513,41 +428,35 @@ public class HttpUtil {
         if (file.endsWith(".svg")) return "image/svg+xml";
         if (file.endsWith(".png")) return "image/png";
         if (file.endsWith(".woff2")) return "font/woff2";
-        return "application/octet-stream"; // по умолчанию бинарный поток
+        return "application/octet-stream";
     }
 
-    // ================= РАБОТА С КОНФИГУРАЦИЕЙ =================
+    // ==================== РАБОТА С КОНФИГУРАЦИЕЙ ====================
 
-    // Файл конфигурации (расположен в web/config.json)
     static final File CONFIG_FILE = new File("web/config.json");
 
-    // Отправка конфигурации клиенту (GET /config/load)
+    /** Отправка конфигурации клиенту (GET /config/load) */
     static void sendConfig(HttpExchange ex) throws IOException {
-        // Если файл конфигурации не существует, создаём его с пустым массивом датчиков
         if (!CONFIG_FILE.exists()) {
-            CONFIG_FILE.getParentFile().mkdirs(); // создаём родительские директории
+            CONFIG_FILE.getParentFile().mkdirs();
             Files.writeString(CONFIG_FILE.toPath(), "{ \"sensors\": [] }", StandardCharsets.UTF_8);
         }
 
         String content;
         try {
-            // Чтение содержимого файла
             content = Files.readString(CONFIG_FILE.toPath(), StandardCharsets.UTF_8).trim();
         } catch (IOException e) {
-            // При ошибке чтения перезаписываем файл и отдаём пустой JSON
             Files.writeString(CONFIG_FILE.toPath(), "{ \"sensors\": [] }", StandardCharsets.UTF_8);
             sendJson(ex, "{ \"sensors\": [] }");
             return;
         }
 
-        // Если файл пустой, перезаписываем и отдаём пустой JSON
         if (content.isEmpty()) {
             Files.writeString(CONFIG_FILE.toPath(), "{ \"sensors\": [] }", StandardCharsets.UTF_8);
             sendJson(ex, "{ \"sensors\": [] }");
             return;
         }
 
-        // Простейшая проверка, что конфиг содержит объект с ключом "sensors" и массивом
         boolean ok = false;
         try {
             if (content.startsWith("{")) {
@@ -561,36 +470,32 @@ public class HttpUtil {
             ok = false;
         }
 
-        // Если проверка не пройдена, восстанавливаем файл и отдаём пустой JSON
         if (!ok) {
             Files.writeString(CONFIG_FILE.toPath(), "{ \"sensors\": [] }", StandardCharsets.UTF_8);
             sendJson(ex, "{ \"sensors\": [] }");
             return;
         }
 
-        // Отправка содержимого файла как JSON
         sendJson(ex, content);
     }
 
-    // Сохранение конфигурации (POST /config/save)
+    /** Сохранение конфигурации (POST /config/save) */
     static void saveConfig(HttpExchange ex) throws IOException {
         String json = readRawJson(ex, MAX_CONFIG_SIZE);
-        String ip = ex.getRemoteAddress().getAddress().getHostAddress(); // IP для аудита
+        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
 
         if (json == null) {
             sendError(ex, 400, "invalid_json");
             Security.Session s = Security.getSession(ex);
             String user = (s != null) ? s.username : "-";
-            Audit.warn(user, "CONFIG_SAVE_FAIL", "Invalid JSON received", ip);
+            Audit.warn(user, "ОШИБКА_СОХРАНЕНИЯ_КОНФИГА", "Получен некорректный JSON", ip);
             return;
         }
 
-        // Архивируем текущую конфигурацию перед заменой
         try {
             archiveOldConfig();
         } catch (Exception e) {
-            // Логируем ошибку, но не прерываем сохранение
-            Audit.error("system", "CONFIG_ARCHIVE_FAIL", e.getMessage(), ip);
+            Audit.error("system", "ОШИБКА_АРХИВАЦИИ_КОНФИГА", e.getMessage(), ip);
         }
 
         Path tmp = Files.createTempFile("config", ".json");
@@ -601,18 +506,18 @@ public class HttpUtil {
 
         Security.Session s = Security.getSession(ex);
         if (s != null) {
-            Audit.info(s.username, "CONFIG_SAVE", "Configuration saved successfully", ip);
+            Audit.info(s.username, "СОХРАНЕНИЕ_КОНФИГА", "Конфигурация успешно сохранена", ip);
         }
     }
 
-    // Создание директории для архивов, если её нет
+    /** Создание директории для архивов, если её нет */
     private static void ensureArchiveDir() throws IOException {
         if (!Files.exists(CONFIG_ARCHIVE_DIR)) {
             Files.createDirectories(CONFIG_ARCHIVE_DIR);
         }
     }
 
-    // Вычисление SHA-256 хэша файла в формате Base64
+    /** Вычисление SHA-256 хэша файла в формате Base64 */
     private static String computeFileHash(Path path) throws IOException {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -620,11 +525,11 @@ public class HttpUtil {
             byte[] hash = md.digest(data);
             return Base64.getEncoder().encodeToString(hash);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
+            throw new RuntimeException("Алгоритм SHA-256 недоступен", e);
         }
     }
 
-    // Архивирование текущего конфигурационного файла (если он существует)
+    /** Архивирование текущего конфигурационного файла */
     private static void archiveOldConfig() throws IOException {
         Path configPath = CONFIG_FILE.toPath();
         if (!Files.exists(configPath)) return;
@@ -635,22 +540,19 @@ public class HttpUtil {
         String archiveName = "config_" + timestamp + "_" + hash + ".json";
         Path archivePath = CONFIG_ARCHIVE_DIR.resolve(archiveName);
 
-        // Копируем файл, заменяя существующий с таким же именем (на случай повторного сохранения)
         Files.copy(configPath, archivePath, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    // ================= ОБРАБОТКА ПАРАМЕТРОВ ЗАПРОСА =================
+    // ==================== ОБРАБОТКА ПАРАМЕТРОВ ЗАПРОСА ====================
 
-    // Извлечение параметра rangeMs из строки запроса (например, ?rangeMs=60000)
+    /** Извлечение параметра rangeMs из строки запроса */
     static long parseRange(HttpExchange ex) {
         String q = ex.getRequestURI().getQuery();
         if (q == null) return 0;
 
-        // Разделяем параметры по &
         for (String p : q.split("&")) {
             if (p.startsWith("rangeMs=")) {
                 try {
-                    // Парсим число, не допуская отрицательных значений
                     return Math.max(0, Long.parseLong(p.substring(8)));
                 } catch (NumberFormatException ignored) {
                     return 0;

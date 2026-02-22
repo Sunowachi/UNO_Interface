@@ -6,122 +6,110 @@ import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Управление подключением к PostgreSQL, пулом соединений и основными операциями с БД.
+ */
 public class Database {
-    // Константы цветов для консоли (ANSI-коды)
-    public static final String WHITE  = "\u001B[0m";   // Сброс цвета
-    public static final String RED    = "\u001B[31m";  // Красный текст
-    public static final String GREEN  = "\u001B[32m";  // Зелёный текст
-    public static final String YELLOW = "\u001B[33m";  // Жёлтый текст
 
-    // Настройки подключения к БД: берутся из переменных окружения или используются значения по умолчанию
+    // ==================== ЦВЕТА ДЛЯ КОНСОЛИ (ANSI) ====================
+    public static final String WHITE  = "\u001B[0m";
+    public static final String RED    = "\u001B[31m";
+    public static final String GREEN  = "\u001B[32m";
+    public static final String YELLOW = "\u001B[33m";
+
+    // ==================== КОНФИГУРАЦИЯ ПОДКЛЮЧЕНИЯ ====================
     private static final String DB_URL = System.getenv().getOrDefault(
-            "DB_URL", "jdbc:postgresql://localhost:5432/sensors"  // URL для подключения к PostgreSQL
+            "DB_URL", "jdbc:postgresql://localhost:5432/sensors"
     );
-    private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "postgres"); // Имя пользователя
-    private static final String DB_PASS = System.getenv().getOrDefault("DB_PASS", "1");         // Пароль
+    private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "postgres");
+    private static final String DB_PASS = System.getenv().getOrDefault("DB_PASS", "1");
 
-    // Настройки пула соединений
-    private static final int POOL_SIZE = 10;                      // Количество соединений в пуле
-    private static final int BORROW_TIMEOUT_MS = 3000;            // Таймаут ожидания соединения (мс)
-    private static ArrayBlockingQueue<Connection> pool;           // Очередь для пула соединений (потокобезопасная)
+    // ==================== ПУЛ СОЕДИНЕНИЙ ====================
+    private static final int POOL_SIZE = 10;
+    private static final int BORROW_TIMEOUT_MS = 3000;
+    private static ArrayBlockingQueue<Connection> pool;
 
-    // Внутренний класс, представляющий пользователя (из БД)
+    // ==================== ВНУТРЕННИЙ КЛАСС – ПОЛЬЗОВАТЕЛЬ ====================
     static class User {
-        final String passwordHash;   // Хэш пароля
-        final String role;           // Роль пользователя
+        final String passwordHash;
+        final String role;
         User(String p, String r) {
             passwordHash = p;
             role = r;
         }
     }
 
-    /* ========== ИНИЦИАЛИЗАЦИЯ ========== */
+    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
-    // Инициализация базы данных и пула соединений (вызывается при старте)
+    /** Инициализация драйвера, пула соединений и таблиц */
     static void init() {
         try {
-            // Загрузка драйвера PostgreSQL (регистрация в DriverManager)
             Class.forName("org.postgresql.Driver");
-            // Создание пула как блокирующей очереди с фиксированной ёмкостью
             pool = new ArrayBlockingQueue<>(POOL_SIZE);
 
-            // Заполнение пула соединениями
             for (int i = 0; i < POOL_SIZE; i++) {
-                pool.add(createConnection());   // Создаём соединение и добавляем в очередь
+                pool.add(createConnection());
             }
 
-            // Получаем соединение для инициализации таблиц
             Connection c = borrow();
             try (Statement st = c.createStatement()) {
-                initTables(st);                  // Создаём таблицы, если их нет
+                initTables(st);
             } finally {
-                release(c);                       // Возвращаем соединение обратно в пул
+                release(c);
             }
 
-            // Вывод сообщения об успешной инициализации (зелёным цветом)
-            System.out.println(GREEN + "✔ PostgreSQL connected (pool=" + POOL_SIZE + ")" + WHITE);
+            System.out.println(GREEN + "✔ PostgreSQL подключён (пул=" + POOL_SIZE + ")" + WHITE);
         } catch (Exception e) {
-            // При ошибке выбрасываем исключение с описанием
-            throw new RuntimeException("Database init failed", e);
+            throw new RuntimeException("Ошибка инициализации базы данных", e);
         }
     }
 
-    // Создание нового соединения с БД (вызывается при наполнении пула и при необходимости пересоздания)
+    /** Создание нового физического соединения */
     private static Connection createConnection() throws SQLException {
-        // Устанавливаем соединение через DriverManager
         Connection c = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
-        // Устанавливаем autoCommit в true (каждый SQL-запрос сразу фиксируется)
         c.setAutoCommit(true);
-        // Устанавливаем таймаут сети для соединения (3 секунды)
         c.setNetworkTimeout(null, 3000);
         return c;
     }
 
-    /* ========== УПРАВЛЕНИЕ СОЕДИНЕНИЯМИ ========== */
+    // ==================== УПРАВЛЕНИЕ СОЕДИНЕНИЯМИ ====================
 
-    // Получение соединения из пула (блокируется до таймаута, если нет свободных)
+    /** Получение соединения из пула (блокируется при отсутствии) */
     static Connection borrow() {
         try {
-            // Пытаемся извлечь соединение из очереди; если нет свободных, ждём до BORROW_TIMEOUT_MS
             Connection c = pool.poll(BORROW_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            if (c == null) throw new SQLException("DB pool exhausted"); // Если очередь пуста после таймаута
+            if (c == null) throw new SQLException("Пул соединений исчерпан");
 
-            // Проверяем, не закрыто ли соединение и валидно ли оно (тест-запрос)
             if (c.isClosed() || !c.isValid(2)) {
-                quietlyClose(c);               // Закрываем нерабочее соединение тихо
-                return createConnection();      // Создаём новое вместо него
+                quietlyClose(c);
+                return createConnection();
             }
             return c;
         } catch (Exception e) {
-            // Любое исключение оборачиваем в RuntimeException
-            throw new RuntimeException("DB unavailable", e);
+            throw new RuntimeException("БД недоступна", e);
         }
     }
 
-    // Возврат соединения в пул (или закрытие при ошибке)
+    /** Возврат соединения в пул или его закрытие */
     static void release(Connection c) {
-        if (c == null) return;                     // Если соединение null, ничего не делаем
+        if (c == null) return;
         try {
-            // Если соединение закрыто, невалидно или не удалось вернуть в очередь (пул полон), закрываем его
             if (c.isClosed() || !c.isValid(1) || !pool.offer(c)) {
                 quietlyClose(c);
             }
         } catch (Exception e) {
-            // При ошибке проверки всё равно пытаемся закрыть
             quietlyClose(c);
         }
     }
 
-    // Закрытие соединения без выброса исключений (тихое закрытие)
+    /** Тихая принудительная очистка соединения */
     private static void quietlyClose(Connection c) {
-        try { c.close(); } catch (Exception ignored) {}   // Игнорируем возможные ошибки
+        try { c.close(); } catch (Exception ignored) {}
     }
 
-    /* ========== УПРАВЛЕНИЕ ТАБЛИЦАМИ ========== */
+    // ==================== СОЗДАНИЕ ТАБЛИЦ ====================
 
-    // Создание таблиц и индексов
     private static void initTables(Statement st) throws SQLException {
-        // Таблица пользователей
         st.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 username TEXT PRIMARY KEY CHECK (length(username) <= 64),
@@ -130,7 +118,6 @@ public class Database {
             )
         """);
 
-        // Таблица датчиков
         st.execute("""
             CREATE TABLE IF NOT EXISTS sensors(
                 sensor_id TEXT PRIMARY KEY CHECK (length(sensor_id) <= 64),
@@ -143,7 +130,6 @@ public class Database {
             )
         """);
 
-        // Таблица истории показаний
         st.execute("""
             CREATE TABLE IF NOT EXISTS history(
                 id BIGSERIAL PRIMARY KEY,
@@ -155,7 +141,6 @@ public class Database {
             )
         """);
 
-        // Таблица неудачных попыток входа
         st.execute("""
             CREATE TABLE IF NOT EXISTS failed_logins(
                 username TEXT NOT NULL CHECK (length(username) <= 64),
@@ -167,7 +152,6 @@ public class Database {
             )
         """);
 
-        // Таблица тревог
         st.execute("""
             CREATE TABLE IF NOT EXISTS alerts(
                 id BIGSERIAL PRIMARY KEY,
@@ -181,7 +165,6 @@ public class Database {
             )
         """);
 
-        // Индексы
         st.execute("CREATE INDEX IF NOT EXISTS idx_history_ts ON history(ts)");
         st.execute("CREATE INDEX IF NOT EXISTS idx_history_sensor_var ON history(sensor_id, var_name)");
         st.execute("CREATE INDEX IF NOT EXISTS idx_failed_logins ON failed_logins(username, ip)");
@@ -189,35 +172,30 @@ public class Database {
         st.execute("CREATE INDEX IF NOT EXISTS idx_alerts_sensor ON alerts(sensor_id)");
     }
 
-    /* ========== ОПЕРАЦИИ С ПОЛЬЗОВАТЕЛЯМИ ========== */
+    // ==================== ОПЕРАЦИИ С ПОЛЬЗОВАТЕЛЯМИ ====================
 
-    // Поиск пользователя по имени в БД
+    /** Поиск пользователя по имени, возвращает объект User или null */
     static User findUser(String username) {
-        // Проверка длины имени (не больше 64 символов)
         if (username == null || username.length() > 64) return null;
 
-        Connection c = borrow();   // Берём соединение из пула
+        Connection c = borrow();
         try (PreparedStatement ps = c.prepareStatement(
                 "SELECT password_hash, role FROM users WHERE username=?")) {
-            ps.setString(1, username);   // Устанавливаем параметр запроса
-            ResultSet rs = ps.executeQuery(); // Выполняем запрос
-            // Если запись найдена, создаём объект User с хэшем пароля и ролью, иначе null
+            ps.setString(1, username);
+            ResultSet rs = ps.executeQuery();
             return rs.next() ? new User(rs.getString(1), rs.getString(2)) : null;
         } catch (SQLException e) {
-            throw new RuntimeException("DB error", e);   // Ошибка БД оборачивается
+            throw new RuntimeException("Ошибка БД", e);
         } finally {
-            release(c);   // Возвращаем соединение в пул
+            release(c);
         }
     }
 
-    // Создание учётной записи разработчика по умолчанию (если её нет)
+    /** Создание учётной записи разработчика по умолчанию (если её нет) */
     static void ensureDefaultDeveloper() {
-        // Если пользователь "developer" уже существует, ничего не делаем
         if (findUser("developer") != null) return;
 
-        // Генерируем случайный пароль
         String password = UUID.randomUUID().toString();
-        // Хэшируем пароль с помощью Security.hashPassword
         String hash = Security.hashPassword(password);
 
         Connection c = borrow();
@@ -226,27 +204,28 @@ public class Database {
             ps.setString(1, "developer");
             ps.setString(2, hash);
             ps.setString(3, "developer");
-            ps.executeUpdate();   // Выполняем вставку
+            ps.executeUpdate();
         } catch (Exception e) {
             throw new RuntimeException("Не удалось создать аккаунт разработчика: ", e);
         } finally {
             release(c);
         }
 
-        // Выводим в консоль предупреждение
         System.out.println(YELLOW + """
             ===========================================================
             ⚠️ ВНИМАНИЕ! Создан аккаунт разработчика!
-            🔑 Username: developer
-            🔑 Password: """ + RED + password + YELLOW + """
+            🔑 Логин: developer
+            🔑 Пароль: """ + RED + password + YELLOW + """
             ⚠️ СОХРАНИТЕ ПАРОЛЬ — он больше не будет показан!
             ===========================================================
             """ + WHITE);
 
-        Audit.info("system", "DEFAULT_DEVELOPER_CREATED", "Password: " + password, "localhost");
+        Audit.info("system", "СОЗДАН_РАЗРАБОТЧИК_ПО_УМОЛЧАНИЮ", "Пароль: Ну ты и смешарик)", "localhost");
     }
 
-    // Запись тревоги в БД
+    // ==================== ТРЕВОГИ ====================
+
+    /** Запись тревоги в таблицу alerts */
     public static void recordAlert(String sensorId, String varName, double value, String users, String snapshot) {
         Connection c = null;
         try {
@@ -264,13 +243,13 @@ public class Database {
                 ps.executeUpdate();
             }
         } catch (SQLException e) {
-            Audit.error("system", "ALERT_RECORD_FAIL", e.getMessage(), "-");
+            Audit.error("system", "ОШИБКА_ЗАПИСИ_ТРЕВОГИ", e.getMessage(), "-");
         } finally {
             release(c);
         }
     }
 
-    // Вычисление хэша конфигурационного файла
+    /** Вычисление SHA-256 хэша файла конфигурации (web/config.json) */
     private static String getConfigHash() {
         try {
             File f = new File("web/config.json");
@@ -280,12 +259,14 @@ public class Database {
             byte[] hash = md.digest(data);
             return Base64.getEncoder().encodeToString(hash);
         } catch (Exception e) {
-            Audit.error("system", "CONFIG_HASH_FAIL", e.getMessage(), "-");
+            Audit.error("system", "ОШИБКА_ВЫЧИСЛЕНИЯ_ХЭША_КОНФИГА", e.getMessage(), "-");
             return "";
         }
     }
 
-    // Получение списка всех датчиков (с расшифрованными токенами)
+    // ==================== ОПЕРАЦИИ С ДАТЧИКАМИ ====================
+
+    /** Получение списка всех датчиков (с расшифрованными токенами) */
     public static List<Map<String, Object>> listSensors() {
         List<Map<String, Object>> result = new ArrayList<>();
         Connection c = borrow();
@@ -319,16 +300,15 @@ public class Database {
         return result;
     }
 
-    // Регистрация датчика администратором (без ключа)
+    /** Регистрация датчика администратором (без ключа) */
     public static String registerSensorByAdmin(String sensorId, String ip) {
         if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty()) return null;
         Connection c = null;
         try {
             c = borrow();
-            // Проверка уникальности
             try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM sensors WHERE sensor_id=?")) {
                 ps.setString(1, sensorId);
-                if (ps.executeQuery().next()) return null; // уже есть
+                if (ps.executeQuery().next()) return null;
             }
             String token = UUID.randomUUID().toString().replace("-", "");
             String hash = Security.hashToken(token);
@@ -344,17 +324,17 @@ public class Database {
                 ps.setString(6, ip);
                 ps.executeUpdate();
             }
-            Audit.info(sensorId, "SENSOR_REGISTER_BY_ADMIN", "Sensor registered by admin", ip);
+            Audit.info(sensorId, "РЕГИСТРАЦИЯ_ДАТЧИКА_АДМИНОМ", "Датчик зарегистрирован администратором", ip);
             return token;
         } catch (SQLException e) {
-            Audit.warn(sensorId, "SENSOR_REGISTER_ADMIN_FAIL", e.getMessage(), ip);
+            Audit.warn(sensorId, "ОШИБКА_РЕГИСТРАЦИИ_ДАТЧИКА_АДМИНОМ", e.getMessage(), ip);
             return null;
         } finally {
             release(c);
         }
     }
 
-    // Мягкое удаление / восстановление датчика (переключение флага deleted)
+    /** Переключение флага мягкого удаления датчика */
     public static boolean toggleDeleteSensor(String sensorId, boolean deleted) {
         Connection c = null;
         try {
@@ -366,14 +346,14 @@ public class Database {
                 return ps.executeUpdate() > 0;
             }
         } catch (SQLException e) {
-            Audit.warn(sensorId, "SENSOR_TOGGLE_DELETE_FAIL", e.getMessage(), "-");
+            Audit.warn(sensorId, "ОШИБКА_ПЕРЕКЛЮЧЕНИЯ_УДАЛЕНИЯ", e.getMessage(), "-");
             return false;
         } finally {
             release(c);
         }
     }
 
-    // Полное удаление датчика из БД
+    /** Полное удаление датчика из БД */
     public static boolean permanentDeleteSensor(String sensorId) {
         Connection c = null;
         try {
@@ -383,18 +363,16 @@ public class Database {
                 return ps.executeUpdate() > 0;
             }
         } catch (SQLException e) {
-            Audit.warn(sensorId, "SENSOR_PERMANENT_DELETE_FAIL", e.getMessage(), "-");
+            Audit.warn(sensorId, "ОШИБКА_ПОЛНОГО_УДАЛЕНИЯ", e.getMessage(), "-");
             return false;
         } finally {
             release(c);
         }
     }
 
-    // ================= ОПЕРАЦИИ С ПОЛЬЗОВАТЕЛЯМИ =================
+    // ==================== ОПЕРАЦИИ С ПОЛЬЗОВАТЕЛЯМИ (УПРАВЛЕНИЕ) ====================
 
-    /**
-     * Возвращает список всех пользователей (логин и роль).
-     */
+    /** Получение списка всех пользователей (логин и роль) */
     public static List<Map<String, Object>> listUsers() {
         List<Map<String, Object>> result = new ArrayList<>();
         Connection c = borrow();
@@ -415,11 +393,7 @@ public class Database {
         return result;
     }
 
-    /**
-     * Создаёт нового пользователя с указанным логином и ролью.
-     * Генерирует случайный пароль, хэширует его и сохраняет в БД.
-     * @return сгенерированный открытый пароль или null при ошибке (например, пользователь уже существует).
-     */
+    /** Создание нового пользователя с указанными логином и ролью. Возвращает сгенерированный пароль или null */
     public static String createUser(String username, String role) {
         if (username == null || username.length() > 64 || !username.matches("[a-zA-Z0-9_]+")) return null;
         if (role == null || !List.of("developer", "admin", "observer", "worker").contains(role)) return null;
@@ -427,7 +401,6 @@ public class Database {
         Connection c = null;
         try {
             c = borrow();
-            // Проверка уникальности
             try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM users WHERE username=?")) {
                 ps.setString(1, username);
                 if (ps.executeQuery().next()) return null;
@@ -444,20 +417,18 @@ public class Database {
                 ps.executeUpdate();
             }
 
-            Audit.info("admin", "USER_CREATED", "User " + username + " created with role " + role, "system");
+            Audit.info("admin", "ПОЛЬЗОВАТЕЛЬ_СОЗДАН", "Пользователь " + username + " создан с ролью " + role, "system");
             return password;
         } catch (SQLException e) {
-            if ("23505".equals(e.getSQLState())) return null; // unique violation
-            Audit.warn("admin", "USER_CREATE_FAIL", e.getMessage(), "system");
+            if ("23505".equals(e.getSQLState())) return null;
+            Audit.warn("admin", "ОШИБКА_СОЗДАНИЯ_ПОЛЬЗОВАТЕЛЯ", e.getMessage(), "system");
             return null;
         } finally {
             release(c);
         }
     }
 
-    /**
-     * Удаляет пользователя из БД.
-     */
+    /** Удаление пользователя из БД */
     public static boolean deleteUser(String username) {
         Connection c = null;
         try {
@@ -466,13 +437,13 @@ public class Database {
                 ps.setString(1, username);
                 int rows = ps.executeUpdate();
                 if (rows > 0) {
-                    Audit.info("admin", "USER_DELETED", "User " + username + " deleted", "system");
+                    Audit.info("admin", "ПОЛЬЗОВАТЕЛЬ_УДАЛЁН", "Пользователь " + username + " удалён", "system");
                     return true;
                 }
                 return false;
             }
         } catch (SQLException e) {
-            Audit.warn("admin", "USER_DELETE_FAIL", e.getMessage(), "system");
+            Audit.warn("admin", "ОШИБКА_УДАЛЕНИЯ_ПОЛЬЗОВАТЕЛЯ", e.getMessage(), "system");
             return false;
         } finally {
             release(c);

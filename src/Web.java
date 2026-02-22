@@ -10,141 +10,112 @@ import java.util.concurrent.*;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Основной класс HTTP-сервера. Регистрирует обработчики и управляет жизненным циклом.
+ */
 public class Web {
-    // Порт, на котором будет запущен сервер
-    private static final int PORT = 8181;
-    // Максимальный размер тела запроса в байтах (64 КБ)
-    private static final int MAX_BODY_SIZE = 64 * 1024;
-    // Пул потоков для асинхронной обработки данных от датчиков (макс. 50 потоков)
-    private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(50);
-    // Время запуска сервера в миллисекундах (используется для клиентской синхронизации)
-    public static final long SERVER_START = System.currentTimeMillis();
 
-    // ================= МЕТОДЫ ИНИЦИАЛИЗАЦИИ =================
+    // ==================== КОНФИГУРАЦИЯ ====================
+    private static final int PORT = 8181;                         // Порт сервера
+    private static final int MAX_BODY_SIZE = 64 * 1024;           // Максимальный размер тела запроса (64 КБ)
+    private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(50); // Пул для асинхронной обработки данных датчиков
+    public static final long SERVER_START = System.currentTimeMillis(); // Время запуска сервера
 
-    // Точка входа в приложение
+    // ==================== ТОЧКА ВХОДА ====================
     public static void main(String[] args) throws IOException {
-        // Инициализация соединения с базой данных
         Database.init();
-        // Создание учётной записи разработчика по умолчанию, если её нет
         Security.ensureDefaultDeveloper();
-        // Предварительное заполнение кэша данными из БД для ускорения работы
         DataStore.warmupCacheFromDb();
-        // Запуск фонового потока для периодической записи кэша в БД
         DataStore.startDbWriter();
 
-        // Создание HTTP-сервера, слушающего порт PORT, с размером очереди 50
         HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 50);
 
-        // Регистрация обработчиков для различных URL-путей
-        // Каждый обработчик – ссылка на статический метод класса Web
+        // Регистрация обработчиков
         server.createContext("/data", Web::handleData);                 // Приём данных от датчиков
-        server.createContext("/init", Web::handleInit);                 // Инициализация клиента (список датчиков и время старта)
-        server.createContext("/sensors", Web::handleSensors);           // Получение списка всех датчиков
-        server.createContext("/sensor/register", Web::handleSensorRegister); // Регистрация нового датчика
-        server.createContext("/config/load", Web::handleConfigLoad);    // Загрузка конфигурации (прокси на Security)
-        server.createContext("/config/save", Web::handleConfigSave);    // Сохранение конфигурации (прокси на Security)
-        server.createContext("/auth/login", Web::handleLogin);          // Аутентификация пользователя
-        server.createContext("/auth/logout", Web::handleLogout);        // Завершение сессии пользователя
+        server.createContext("/init", Web::handleInit);                 // Инициализация клиента
+        server.createContext("/sensors", Web::handleSensors);           // Список датчиков
+        server.createContext("/sensor/register", Web::handleSensorRegister); // Регистрация датчика
+        server.createContext("/config/load", Web::handleConfigLoad);    // Загрузка конфигурации
+        server.createContext("/config/save", Web::handleConfigSave);    // Сохранение конфигурации
+        server.createContext("/auth/login", Web::handleLogin);          // Вход
+        server.createContext("/auth/logout", Web::handleLogout);        // Выход
         server.createContext("/auth/me", Web::handleAuthMe);            // Информация о текущем пользователе
-        server.createContext("/auth/ping", Web::handleAuthPing);        // Проверка валидности сессии
-        server.createContext("/", Web::handleStatic);                   // Раздача статических файлов (HTML, JS, CSS)
-        server.createContext("/export/comtrade", Web::handleExportComtrade); // Экспорт файла COMTRADE
-        server.createContext("/api/alert", Web::handleAlert);
-        server.createContext("/admin/sensors", Web::handleAdminSensors);
-        server.createContext("/admin/sensor/register", Web::handleAdminSensorRegister);
-        server.createContext("/admin/sensor/toggle-delete", Web::handleAdminSensorToggleDelete);
-        server.createContext("/admin/sensor/delete-permanent", Web::handleAdminSensorDeletePermanent);
-        server.createContext("/admin/users", Web::handleAdminUsers);
-        server.createContext("/admin/user/create", Web::handleAdminUserCreate);
-        server.createContext("/admin/user/delete", Web::handleAdminUserDelete);
+        server.createContext("/auth/ping", Web::handleAuthPing);        // Проверка сессии
+        server.createContext("/", Web::handleStatic);                   // Статические файлы
+        server.createContext("/export/comtrade", Web::handleExportComtrade); // Экспорт COMTRADE
+        server.createContext("/api/alert", Web::handleAlert);           // Сохранение тревоги
+        server.createContext("/admin/sensors", Web::handleAdminSensors); // Управление датчиками (админ)
+        server.createContext("/admin/sensor/register", Web::handleAdminSensorRegister); // Регистрация датчика админом
+        server.createContext("/admin/sensor/toggle-delete", Web::handleAdminSensorToggleDelete); // Мягкое удаление
+        server.createContext("/admin/sensor/delete-permanent", Web::handleAdminSensorDeletePermanent); // Полное удаление
+        server.createContext("/admin/users", Web::handleAdminUsers);    // Список пользователей
+        server.createContext("/admin/user/create", Web::handleAdminUserCreate); // Создание пользователя
+        server.createContext("/admin/user/delete", Web::handleAdminUserDelete); // Удаление пользователя
 
-        // Назначение пула потоков для обработки входящих запросов (100 потоков)
         server.setExecutor(Executors.newFixedThreadPool(100));
-        // Запуск сервера
         server.start();
-        // Вывод в консоль сообщения об успешном запуске
         System.out.println("✅ Сервер запущен: http://localhost:" + PORT);
 
-        // Создание планировщика с одним потоком для периодических задач
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Запуск задачи очистки устаревших записей в кэше каждую минуту (начальная задержка 1 мин.)
         scheduler.scheduleAtFixedRate(DataStore::cleanupCache, 1, 1, TimeUnit.MINUTES);
 
-        // Регистрация обработчика завершения работы приложения (вызывается при SIGTERM, Ctrl+C)
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("⏹ Завершение работы сервера...");
             try {
-                // Принудительное завершение планировщика
                 scheduler.shutdownNow();
-                // Остановка HTTP-сервера с таймаутом 1 секунда
                 server.stop(1);
-                // Принудительное завершение пула обработчиков датчиков
                 sensorExecutor.shutdownNow();
-            } catch (Exception ignored) {} // Игнорируем исключения при остановке
+            } catch (Exception ignored) {}
             try {
-                // Пауза 1.5 секунды для завершения фоновых операций
                 Thread.sleep(1500);
             } catch (InterruptedException ignored) {}
             System.out.println("✔ Сервер остановлен!");
         }));
     }
 
-    // ================= ОБРАБОТЧИКИ ЗАПРОСОВ =================
+    // ==================== ОБРАБОТЧИКИ ЗАПРОСОВ ====================
 
-    // Обработчик GET /init – возвращает время старта сервера и список датчиков
+    /** GET /init – возвращает время старта и данные датчиков */
     static void handleInit(HttpExchange ex) throws IOException {
-        // Проверка метода запроса: разрешён только GET
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
-            ex.sendResponseHeaders(405, -1); // 405 Method Not Allowed, тело ответа отсутствует
+            ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Получение сессии по Cookie (или другому заголовку)
         Security.Session s = Security.getSession(ex);
-        // Если сессия не найдена – пользователь не аутентифицирован
         if (s == null) {
-            HttpUtil.sendError(ex, 401, "unauthorized"); // 401 Unauthorized
+            HttpUtil.sendError(ex, 401, "unauthorized");
             return;
         }
 
-        // Проверка, имеет ли сессия право VIEW_DATA; если нет – отправляется ошибка 403
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
 
-        // Парсинг параметра range из строки запроса (для фильтрации по времени)
         long rangeMs = HttpUtil.parseRange(ex);
-        // Формирование JSON-ответа: время старта и JSON-строка со списком датчиков
         HttpUtil.sendJson(ex, "{\"startTime\":" + SERVER_START +
                 ",\"sensors\":" + DataStore.buildSensorsJson(rangeMs) + "}");
     }
 
-    // Обработчик POST /data – принимает показания от датчиков
+    /** POST /data – приём показаний от датчиков */
     static void handleData(HttpExchange ex) throws IOException {
-        // Разрешён только POST
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Получение заголовка Content-Type
         String ct = ex.getRequestHeaders().getFirst("Content-Type");
-        // Проверка, что Content-Type начинается с application/json
         if (ct == null || !ct.startsWith("application/json")) {
-            HttpUtil.sendError(ex, 415, "unsupported_media_type"); // 415 Unsupported Media Type
+            HttpUtil.sendError(ex, 415, "unsupported_media_type");
             return;
         }
 
-        // Проверка размера тела запроса: если превышает лимит – ошибка 413
         if (HttpUtil.getBodySize(ex) > MAX_BODY_SIZE) {
             HttpUtil.sendError(ex, 413, "payload_too_large");
             return;
         }
 
-        // Чтение заголовков аутентификации датчика
         String sensorId = ex.getRequestHeaders().getFirst("X-Sensor-Id");
         String token = ex.getRequestHeaders().getFirst("X-Sensor-Token");
 
-        // Проверка валидности ID датчика и токена, а также IP-адреса
         if (!Security.validateSensorToken(sensorId, token, ex.getRemoteAddress())) {
             HttpUtil.sendError(ex, 401, "invalid_sensor");
             return;
@@ -152,49 +123,40 @@ public class Web {
 
         final byte[] body;
         try {
-            // Чтение всего тела запроса в массив байт
             body = ex.getRequestBody().readAllBytes();
         } catch (Exception e) {
-            HttpUtil.sendError(ex, 400, "bad_payload"); // 400 Bad Request
+            HttpUtil.sendError(ex, 400, "bad_payload");
             return;
         }
 
-        // Отправка немедленного ответа "ok" клиенту
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
-        // Асинхронная обработка данных в отдельном потоке (чтобы не блокировать обработчик)
         sensorExecutor.submit(() -> {
             try {
-                // Передача данных в DataStore для обработки и сохранения
                 DataStore.handleSensorPost(body, sensorId);
             } catch (Exception e) {
-                // В случае ошибки – запись в аудит
-                Audit.error(sensorId, "SENSOR_POST_FAIL", e.getMessage(), "-");
+                Audit.error(sensorId, "ОШИБКА_POST_ДАТЧИКА", e.getMessage(), "-");
             }
         });
     }
 
-    // Обработчик GET /sensors – возвращает список всех зарегистрированных датчиков
+    /** GET /sensors – список датчиков с их статусами */
     static void handleSensors(HttpExchange ex) throws IOException {
-        // Только GET
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
             return;
         }
 
-        // Проверка аутентификации пользователя
         Security.Session s = Security.getSession(ex);
         if (s == null) {
             HttpUtil.sendError(ex, 401, "unauthorized");
             return;
         }
 
-        // Проверка права VIEW_DATA
         if (!Security.require(s, ex, Security.Permission.VIEW_DATA)) return;
-        // Получение списка датчиков из DataStore, преобразование в JSON и отправка
         HttpUtil.sendJson(ex, HttpUtil.toJson(DataStore.listSensors()));
     }
 
-    // Обработчик POST /sensor/register – регистрация нового датчика
+    /** POST /sensor/register – регистрация нового датчика */
     static void handleSensorRegister(HttpExchange ex) throws IOException {
         try {
             if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
@@ -220,18 +182,17 @@ public class Web {
                 return;
             }
 
-            // Получаем IP до проверок, чтобы использовать в аудите
             String ip = ex.getRemoteAddress().getAddress().getHostAddress();
 
             if (!sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
                 HttpUtil.sendError(ex, 400, "invalid_sensor_id");
-                Audit.warn(sensorId, "SENSOR_REGISTER_VALIDATION_FAIL", "Invalid sensor ID format", ip);
+                Audit.warn(sensorId, "ОШИБКА_ВАЛИДАЦИИ_ДАТЧИКА", "Неверный формат ID датчика", ip);
                 return;
             }
 
             if (!Security.checkSensorRegisterKey(key)) {
                 HttpUtil.sendError(ex, 403, "forbidden");
-                Audit.warn(sensorId, "SENSOR_REGISTER_KEY_FAIL", "Invalid registration key", ip);
+                Audit.warn(sensorId, "ОШИБКА_КЛЮЧА_РЕГИСТРАЦИИ", "Неверный ключ регистрации", ip);
                 return;
             }
 
@@ -239,18 +200,18 @@ public class Web {
 
             if (token == null) {
                 HttpUtil.sendError(ex, 409, "already_registered");
-                Audit.warn(sensorId, "SENSOR_REGISTER_FAIL", "Sensor already registered", ip);
+                Audit.warn(sensorId, "ОШИБКА_РЕГИСТРАЦИИ_ДАТЧИКА", "Датчик уже зарегистрирован", ip);
                 return;
             }
 
-            Audit.info(sensorId, "SENSOR_REGISTER", "Sensor registered successfully", ip);
+            Audit.info(sensorId, "РЕГИСТРАЦИЯ_ДАТЧИКА", "Датчик успешно зарегистрирован", ip);
             HttpUtil.sendJson(ex, "{\"token\":\"" + token + "\"}");
         } catch (Exception e) {
             HttpUtil.sendError(ex, 500, "internal_error");
         }
     }
 
-    // Обработчик COMTRADE - экспорт файла в этом формате
+    /** GET /export/comtrade – экспорт данных в формате COMTRADE */
     static void handleExportComtrade(HttpExchange ex) throws IOException {
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -270,7 +231,7 @@ public class Web {
         String varName = params.get("var");
         String fromStr = params.get("from");
         String toStr = params.get("to");
-        String version = params.get("version"); // "1999" или "2013"
+        String version = params.get("version");
 
         if (sensorId == null || varName == null || fromStr == null || toStr == null) {
             HttpUtil.sendError(ex, 400, "missing parameters: sensor, var, from, to");
@@ -294,7 +255,7 @@ public class Web {
         List<DataStore.Point> points = DataStore.getPointsFromDb(sensorId, varName, fromTs, toTs);
         if (points.isEmpty()) {
             HttpUtil.sendError(ex, 404, "no data found");
-            Audit.warn(sensorId, "COMTRADE_EXPORT_FAIL", "No data found for " + varName, s.username);
+            Audit.warn(sensorId, "ОШИБКА_ЭКСПОРТА_COMTRADE", "Нет данных для " + varName, s.username);
             return;
         }
         if (points.size() < 2) {
@@ -310,7 +271,7 @@ public class Web {
             fileData = ComtradeExporter.generateCff2013(sensorId, varName, points, fromTs, toTs);
             contentType = "application/octet-stream";
             extension = ".cff";
-        } else { // по умолчанию 1999
+        } else {
             fileData = ComtradeExporter.generateZip1999(sensorId, varName, points, fromTs, toTs);
             contentType = "application/zip";
             extension = ".zip";
@@ -321,13 +282,13 @@ public class Web {
         ex.getResponseHeaders().set("Content-Disposition",
                 "attachment; filename=\"" + sensorId + "_" + varName + extension + "\"");
         ex.sendResponseHeaders(200, fileData.length);
-        Audit.info(sensorId, "COMTRADE_EXPORT", "Exported " + varName + " from " + fromTs + " to " + toTs, s.username);
+        Audit.info(sensorId, "ЭКСПОРТ_COMTRADE", "Экспортирован " + varName + " с " + fromTs + " по " + toTs, s.username);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(fileData);
         }
     }
 
-    // Обработчик для сохранения тревог, отправляемых клиентом
+    /** POST /api/alert – сохранение тревоги, отправленной клиентом */
     static void handleAlert(HttpExchange ex) throws IOException {
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -348,12 +309,11 @@ public class Web {
         }
 
         byte[] body = ex.getRequestBody().readAllBytes();
-        if (body.length == 0 || body.length > 64 * 1024) { // 64 KB
+        if (body.length == 0 || body.length > 64 * 1024) {
             HttpUtil.sendError(ex, 400, "bad_request");
             return;
         }
 
-        // Примитивный парсинг JSON (ожидаем объект с полями sensorId, varName, value)
         String json = new String(body, StandardCharsets.UTF_8).trim();
         if (!json.startsWith("{") || !json.endsWith("}")) {
             HttpUtil.sendError(ex, 400, "bad_request");
@@ -398,7 +358,6 @@ public class Web {
             return;
         }
 
-        // Получаем список активных пользователей (их имена через запятую)
         List<String> users = Security.getActiveUsers();
         String usersStr = String.join(", ", users);
 
@@ -407,8 +366,9 @@ public class Web {
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
-    // ================= АДМИНИСТРИРОВАНИЕ ДАТЧИКОВ =================
+    // ==================== АДМИНИСТРИРОВАНИЕ ДАТЧИКОВ ====================
 
+    /** GET /admin/sensors – список всех датчиков с токенами (для админки) */
     static void handleAdminSensors(HttpExchange ex) throws IOException {
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -417,7 +377,6 @@ public class Web {
         Security.Session s = Security.getSession(ex);
         if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
 
-        // Отключаем кэширование
         ex.getResponseHeaders().set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
         ex.getResponseHeaders().set("Pragma", "no-cache");
         ex.getResponseHeaders().set("Expires", "0");
@@ -426,6 +385,7 @@ public class Web {
         HttpUtil.sendJson(ex, HttpUtil.toJson(sensors));
     }
 
+    /** POST /admin/sensor/register – регистрация датчика администратором */
     static void handleAdminSensorRegister(HttpExchange ex) throws IOException {
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -454,6 +414,7 @@ public class Web {
         HttpUtil.sendJson(ex, HttpUtil.toJson(resp));
     }
 
+    /** POST /admin/sensor/toggle-delete – мягкое удаление / восстановление датчика */
     static void handleAdminSensorToggleDelete(HttpExchange ex) throws IOException {
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -479,6 +440,7 @@ public class Web {
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
+    /** POST /admin/sensor/delete-permanent – полное удаление датчика */
     static void handleAdminSensorDeletePermanent(HttpExchange ex) throws IOException {
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -502,7 +464,7 @@ public class Web {
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
-    // Вспомогательный метод для разбора query-строки
+    /** Разбор query-строки в Map */
     private static Map<String, String> parseQuery(String query) {
         Map<String, String> map = new HashMap<>();
         if (query == null) return map;
@@ -515,8 +477,9 @@ public class Web {
         return map;
     }
 
-    // ================= УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ =================
+    // ==================== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ====================
 
+    /** GET /admin/users – список всех пользователей */
     static void handleAdminUsers(HttpExchange ex) throws IOException {
         if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -533,6 +496,7 @@ public class Web {
         HttpUtil.sendJson(ex, HttpUtil.toJson(users));
     }
 
+    /** POST /admin/user/create – создание нового пользователя */
     static void handleAdminUserCreate(HttpExchange ex) throws IOException {
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -558,7 +522,6 @@ public class Web {
             return;
         }
 
-        // Запрещаем администратору создавать разработчика
         if ("developer".equals(role) && !"developer".equals(s.role)) {
             HttpUtil.sendError(ex, 403, "only_developer_can_create_developer");
             return;
@@ -576,6 +539,7 @@ public class Web {
         HttpUtil.sendJson(ex, HttpUtil.toJson(resp));
     }
 
+    /** POST /admin/user/delete – удаление пользователя */
     static void handleAdminUserDelete(HttpExchange ex) throws IOException {
         if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
             ex.sendResponseHeaders(405, -1);
@@ -592,13 +556,11 @@ public class Web {
             return;
         }
 
-        // Запрещаем удаление самого себя
         if (username.equals(s.username)) {
             HttpUtil.sendError(ex, 403, "cannot_delete_self");
             return;
         }
 
-        // Запрещаем администратору удалять разработчика
         Database.User userToDelete = Database.findUser(username);
         if (userToDelete != null && "developer".equals(userToDelete.role) && !"developer".equals(s.role)) {
             HttpUtil.sendError(ex, 403, "cannot_delete_developer");
@@ -613,35 +575,34 @@ public class Web {
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 
-    // ================= ПРОКСИ-ОБРАБОТЧИКИ =================
-    // Все следующие методы просто делегируют выполнение соответствующим методам класса Security
-    // Это сделано для единообразия регистрации контекстов в main()
+    // ==================== ПРОКСИ-ОБРАБОТЧИКИ ====================
+    // Делегируют выполнение соответствующим методам Security
 
     static void handleLogin(HttpExchange ex) throws IOException {
-        Security.handleLogin(ex); // Аутентификация пользователя
+        Security.handleLogin(ex);
     }
 
     static void handleLogout(HttpExchange ex) throws IOException {
-        Security.handleLogout(ex); // Завершение сессии
+        Security.handleLogout(ex);
     }
 
     static void handleAuthMe(HttpExchange ex) throws IOException {
-        Security.handleAuthMe(ex); // Информация о текущем пользователе
+        Security.handleAuthMe(ex);
     }
 
     static void handleAuthPing(HttpExchange ex) throws IOException {
-        Security.handleAuthPing(ex); // Проверка активности сессии
+        Security.handleAuthPing(ex);
     }
 
     static void handleConfigLoad(HttpExchange ex) throws IOException {
-        Security.handleConfigLoad(ex); // Загрузка конфигурации
+        Security.handleConfigLoad(ex);
     }
 
     static void handleConfigSave(HttpExchange ex) throws IOException {
-        Security.handleConfigSave(ex); // Сохранение конфигурации
+        Security.handleConfigSave(ex);
     }
 
     static void handleStatic(HttpExchange ex) throws IOException {
-        HttpUtil.handleStatic(ex); // Обслуживание статических файлов
+        HttpUtil.handleStatic(ex);
     }
 }

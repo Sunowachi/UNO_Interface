@@ -6,19 +6,24 @@
     <link rel="stylesheet" href="css/panel.css">
 </head>
 <body>
-<!-- Основное приложение (скрыто до авторизации) -->
+
+<!-- ========== ОСНОВНОЕ ПРИЛОЖЕНИЕ (СКРЫТО ДО АВТОРИЗАЦИИ) ========== -->
 <div id="appRoot" hidden>
     <div id="mainLayout">
+        <!-- Верхняя панель с заголовком и кнопкой выхода -->
         <div class="top-bar">
             <div class="title-group">
                 <h1>Показания датчиков</h1>
                 <button id="logoutBtn" class="btn btn-secondary logout-btn" title="Выйти из аккаунта" hidden>Выйти</button>
             </div>
         </div>
+        <!-- Таймер работы сервера -->
         <p id="timer"><b>Время работы:</b> 0 сек</p>
+
         <div class="row">
-            <!-- Область графиков -->
+            <!-- ========== ОБЛАСТЬ ГРАФИКОВ ========== -->
             <div class="charts-area">
+                <!-- Управление временным диапазоном -->
                 <div id="timeRangeControls" class="time-range-controls">
                     <label>
                         Дни
@@ -34,9 +39,11 @@
                     </label>
                     <button id="applyTimeRangeBtn" class="btn">Применить</button>
                 </div>
+                <!-- Контейнер для графиков -->
                 <div id="chartsContainer" class="charts-container"></div>
             </div>
-            <!-- Панель управления датчиками -->
+
+            <!-- ========== ПАНЕЛЬ УПРАВЛЕНИЯ ДАТЧИКАМИ ========== -->
             <div class="card" id="sensorPanel">
                 <div class="panel-header">
                     <h3>Датчики</h3>
@@ -47,6 +54,7 @@
                 <div class="panel-footer" id="sensorPanelFooter"></div>
             </div>
         </div>
+
         <!-- Панель глобальной тревоги -->
         <div id="redAlertBar" class="red-alert-bar" hidden>
             <span class="alert-icon">🔥</span>
@@ -54,7 +62,10 @@
         </div>
     </div>
 </div>
-<!-- Модальные окна -->
+
+<!-- ========== МОДАЛЬНЫЕ ОКНА ========== -->
+
+<!-- Окно редактирования датчика -->
 <div id="editModalBackdrop" class="modal-backdrop" autocomplete="off">
     <div class="modal">
         <h3>Редактирование датчика</h3>
@@ -84,12 +95,14 @@
             <button id="saveSensorBtn" class="btn btn-primary">Сохранить</button>
         </div>
     </div>
-    <!-- Панель списка устройств -->
+    <!-- Панель списка устройств (отображается рядом с модальным окном) -->
     <div id="devicePanel" class="device-panel">
         <h3>Список подключенных устройств</h3>
         <ul id="deviceList" class="list-reset"></ul>
     </div>
 </div>
+
+<!-- Окно подтверждения отмены изменений -->
 <div id="cancelConfirmBackdrop" class="modal-backdrop">
     <div class="modal">
         <h3>Отменить изменения?</h3>
@@ -100,6 +113,8 @@
         </div>
     </div>
 </div>
+
+<!-- Окно экспорта данных -->
 <div id="exportModalBackdrop" class="modal-backdrop">
     <div class="modal modal-export">
         <h3>Экспорт данных</h3>
@@ -121,7 +136,7 @@
                     <input type="datetime-local" id="exportTo" class="input-full" autocomplete="off">
                 </label>
             </div>
-            <!-- Контейнер для динамических строк (будет заполняться через JS) -->
+            <!-- Контейнер для динамических строк датчик/переменная -->
             <div id="exportVariablesContainer"></div>
             <!-- Кнопки управления строками -->
             <div class="export-buttons-row">
@@ -133,22 +148,24 @@
             <button id="cancelExportBtn" class="btn">Отмена</button>
             <button id="downloadExportBtn" class="btn btn-primary">Скачать</button>
         </div>
-        <!-- Модальное окно выбора датчиков для экспорта -->
-        <div id="exportSelectorBackdrop" class="modal-backdrop">
-            <div class="modal modal-selector">
-                <h3>Выберите данные для экспорта</h3>
-                <div class="modal-content-scroll">
-                    <div id="exportSelectorList" class="selector-list"></div>
-                </div>
-                <div class="modal-footer">
-                    <button id="cancelSelectorBtn" class="btn">Отмена</button>
-                    <button id="addSelectedBtn" class="btn btn-primary">Добавить выбранные</button>
-                </div>
-            </div>
+    </div>
+</div>
+
+<!-- Окно выбора датчиков для экспорта (внутри окна экспорта) -->
+<div id="exportSelectorBackdrop" class="modal-backdrop">
+    <div class="modal modal-selector">
+        <h3>Выберите данные для экспорта</h3>
+        <div class="modal-content-scroll">
+            <div id="exportSelectorList" class="selector-list"></div>
+        </div>
+        <div class="modal-footer">
+            <button id="cancelSelectorBtn" class="btn">Отмена</button>
+            <button id="addSelectedBtn" class="btn btn-primary">Добавить выбранные</button>
         </div>
     </div>
 </div>
-<!-- Модальное окно управления датчиками -->
+
+<!-- Модальное окно управления датчиками (администрирование) -->
 <div id="sensorManagerModal" class="modal-backdrop">
     <div class="modal modal-large">
         <h3>Управление датчиками</h3>
@@ -177,6 +194,7 @@
         </div>
     </div>
 </div>
+
 <!-- Модальное окно управления пользователями -->
 <div id="userManagerModal" class="modal-backdrop">
     <div class="modal modal-large">
@@ -211,7 +229,8 @@
         </div>
     </div>
 </div>
-<!-- Окно авторизации -->
+
+<!-- ========== ОКНО АВТОРИЗАЦИИ ========== -->
 <div id="loginModal" class="login-backdrop">
     <div class="login-box">
         <h2>Вход</h2>
@@ -221,6 +240,7 @@
         <div id="loginError"></div>
     </div>
 </div>
+
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -1,11 +1,13 @@
 import { setCurrentUser, csrfToken } from '../constants.js';
 import { hideApp } from './app.js';
-import { initSession, lockSession } from '../session.js';
+import { initSession, lockSession, openLoginModal, closeLoginModal } from '../session.js';
 import { init } from '../api.js';
+
+// ==================== ЛОГИКА ВХОДА В СИСТЕМУ ====================
 
 let loginModal = document.getElementById('loginModal');
 
-// Функция для определения мобильного устройства
+/** Определение мобильного устройства по touch и размеру экрана */
 function isMobileDevice() {
     const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     const isSmallScreen = window.innerWidth < 768;
@@ -13,7 +15,7 @@ function isMobileDevice() {
     return hasTouch && (isSmallScreen || hasHighDpr);
 }
 
-// Функция для отправки запроса с заголовком
+/** Отправка запроса на вход с заголовком о мобильности */
 async function loginWithMobileCheck(credentials) {
     const headers = {
         'Content-Type': 'application/json',
@@ -32,16 +34,7 @@ async function loginWithMobileCheck(credentials) {
     });
 }
 
-export function openLoginModal() {
-    if (loginModal) loginModal.classList.add('show');
-    const errorEl = document.getElementById("loginError");
-    if (errorEl) errorEl.textContent = '';
-}
-
-export function closeLoginModal() {
-    if (loginModal) loginModal.classList.remove('show');
-}
-
+/** Отображение ошибки в окне входа */
 function showLoginError(message) {
     const errorEl = document.getElementById('loginError');
     if (errorEl) {
@@ -53,6 +46,7 @@ function showLoginError(message) {
     }
 }
 
+/** Обработчик отправки формы входа */
 export async function login(e) {
     e?.preventDefault();
     setCurrentUser(null);
@@ -68,36 +62,33 @@ export async function login(e) {
 
     let response;
     try {
-        // Используем функцию с проверкой мобильности
         response = await loginWithMobileCheck({ username, password });
     } catch (networkError) {
-        console.error('Network error during login:', networkError);
+        console.error('Сетевая ошибка при входе:', networkError);
         showLoginError('Сетевая ошибка. Проверьте соединение с сервером.');
         hideApp();
         openLoginModal();
         return;
     }
 
-    // Получаем текст ответа
     let responseText;
     try {
         responseText = await response.text();
     } catch (e) {
-        console.error('Failed to read response text:', e);
+        console.error('Не удалось прочитать ответ сервера:', e);
         showLoginError('Ошибка чтения ответа от сервера');
         hideApp();
         openLoginModal();
         return;
     }
 
-    // Пытаемся распарсить JSON, если это возможно
     let data = {};
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
         try {
             data = JSON.parse(responseText);
         } catch (e) {
-            console.warn('Response is not valid JSON despite content-type:', responseText);
+            console.warn('Ответ не является валидным JSON:', responseText);
         }
     }
 
@@ -124,7 +115,6 @@ export async function login(e) {
         return;
     }
 
-    // Успешный вход
     showLoginError('');
     closeLoginModal();
 
@@ -133,13 +123,14 @@ export async function login(e) {
         await init();
         window.location.reload();
     } catch (err) {
-        console.error('Error during post-login initialization:', err);
+        console.error('Ошибка инициализации после входа:', err);
         hideApp();
         openLoginModal();
         showLoginError('Ошибка инициализации приложения');
     }
 }
 
+/** Принудительный выход (logout) */
 export async function forceLogout() {
     try {
         await fetch('/auth/logout', { method: 'POST', credentials: 'include' });

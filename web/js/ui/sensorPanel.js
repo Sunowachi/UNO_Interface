@@ -12,10 +12,12 @@ import { updateRedAlert } from './redAlert.js';
 import { openEditModal, onAddSensorClick } from './editModal.js';
 import { drawCurrent } from '../charts.js';
 
-// Хранилище предыдущих классов тревоги для каждой переменной
-const previousVarAlertState = new Map(); // ключ "sensorId:varName"
+// ==================== ПАНЕЛЬ ДАТЧИКОВ (СПИСОК СПРАВА) ====================
 
-// Отправка тревоги на сервер
+/** Хранилище предыдущих классов тревоги для каждой переменной (ключ "sensorId:varName") */
+const previousVarAlertState = new Map();
+
+/** Отправка тревоги на сервер */
 async function sendAlert(sensorId, varName, value) {
     if (!csrfToken) return;
     // Собираем snapshot всех переменных этого датчика из конфигурации
@@ -27,7 +29,6 @@ async function sendAlert(sensorId, varName, value) {
             snapshot[v] = values && values.length > 0 ? values[values.length - 1] : null;
         }
     }
-    // Кодируем snapshot в Base64, чтобы избежать проблем с парсингом JSON на сервере
     const snapshotBase64 = btoa(JSON.stringify(snapshot));
     try {
         const response = await fetch('/api/alert', {
@@ -52,14 +53,14 @@ async function sendAlert(sensorId, varName, value) {
     }
 }
 
-// Функция выбора датчика по его ID
+/** Выбор датчика по его ID */
 export function selectSensor(id) {
-  setCurrentSensor(id);          // Устанавливаем текущий датчик
-  updateSensorPanel();           // Обновляем панель датчиков (подсветка выбранного)
-  drawCurrent();                 // Отрисовываем графики для выбранного датчика
+    setCurrentSensor(id);
+    updateSensorPanel();
+    drawCurrent();
 }
 
-// Функция для управления кнопкой добавления датчика
+/** Управление кнопками в нижней части панели (добавление, экспорт, управление) */
 export function updateAddButtonVisibility() {
     const footer = document.getElementById('sensorPanelFooter');
     if (!footer) return;
@@ -135,218 +136,208 @@ export function updateAddButtonVisibility() {
     }
 }
 
-// Панель датчиков
+/** Обновление панели датчиков (список элементов) */
 export function updateSensorPanel(forceRebuild = false) {
-  const list = document.getElementById('sensorList'); // Находим контейнер списка (ul)
-  if (!list) return; // Если контейнер отсутствует, выходим
+    const list = document.getElementById('sensorList');
+    if (!list) return;
 
-  // Фильтруем датчики, исключая помеченные как удалённые (deleted = true)
-  const visibleSensors = config.sensors.filter(s => !s.deleted);
+    const visibleSensors = config.sensors.filter(s => !s.deleted);
 
-  // Если нет ни одного видимого датчика
-  if (visibleSensors.length === 0) {
-    list.innerHTML = '';
-    const li = document.createElement('li');
-    li.textContent = 'Нет настроенных датчиков';
-    li.style.color = '#777';
-    list.appendChild(li);
-    setCurrentSensor(null);
-    const chartsContainer = document.getElementById('chartsContainer');
-    if (chartsContainer) chartsContainer.innerHTML = '';
-    return;
-  }
+    if (visibleSensors.length === 0) {
+        list.innerHTML = '';
+        const li = document.createElement('li');
+        li.textContent = 'Нет настроенных датчиков';
+        li.style.color = '#777';
+        list.appendChild(li);
+        setCurrentSensor(null);
+        const chartsContainer = document.getElementById('chartsContainer');
+        if (chartsContainer) chartsContainer.innerHTML = '';
+        return;
+    }
 
-  // Полная перестройка (при изменении конфигурации)
-  if (forceRebuild) {
-    list.innerHTML = ''; // Очищаем список перед перестроением
+    if (forceRebuild) {
+        // Полная перестройка списка
+        list.innerHTML = '';
+        let redAlertSensors = [];
+
+        visibleSensors.forEach((sCfg, index) => {
+            let sensorAlertClass = null;
+            const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
+            const vars = Array.isArray(sCfg.vars)
+                ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
+                : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+
+            for (const v of vars) {
+                const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
+                if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
+                    const lastVal = sData.values[sData.values.length - 1];
+                    const vs = varSettings.find(x => x.var === v) || {};
+                    const varAlert = getAlertClass(vs, lastVal);
+                    const key = `${sCfg.id}:${v}`;
+                    const prevAlert = previousVarAlertState.get(key);
+                    if (varAlert === 'blink-red' && prevAlert !== 'blink-red') {
+                        sendAlert(sCfg.id, v, lastVal);
+                    }
+                    previousVarAlertState.set(key, varAlert);
+                    sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
+                }
+            }
+
+            if (sensorAlertClass === 'blink-red') {
+                const sensorName = sCfg.name || 'Датчик ' + (index + 1);
+                redAlertSensors.push(sensorName);
+            }
+
+            const li = document.createElement('li');
+            li.dataset.sensorId = sCfg.id;
+            li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
+
+            const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
+                (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
+
+            const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+            if (canEdit) {
+                const editBtn = document.createElement('button');
+                editBtn.textContent = '✏️';
+                editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
+                editBtn.title = 'Редактировать датчик';
+                editBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    openEditModal(sCfg.id);
+                });
+                li.appendChild(editBtn);
+            }
+            if (hasReference) {
+                const refIcon = document.createElement('span');
+                refIcon.className = 'sensor-ref-icon';
+                refIcon.textContent = '🔗';
+                refIcon.title = 'Импортирует данные других датчиков';
+                li.appendChild(refIcon);
+            }
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'sensor-name';
+            nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
+            nameSpan.style.flex = '1 1 auto';
+            li.appendChild(nameSpan);
+
+            li.addEventListener('click', () => selectSensor(sCfg.id));
+
+            if (String(sCfg.id) === String(currentSensor)) {
+                li.classList.add('sensor-selected');
+            }
+
+            li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+            if (sensorAlertClass) li.classList.add(sensorAlertClass);
+
+            list.appendChild(li);
+        });
+
+        updateRedAlert(redAlertSensors);
+        return;
+    }
+
+    // Инкрементальное обновление (только классы тревоги и выделение)
+    const existingMap = new Map();
+    for (let li of list.children) {
+        const id = li.dataset.sensorId;
+        if (id) existingMap.set(id, li);
+    }
+
     let redAlertSensors = [];
 
     visibleSensors.forEach((sCfg, index) => {
-      let sensorAlertClass = null;
-      const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
-      const vars = Array.isArray(sCfg.vars)
-        ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
-        : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+        const id = String(sCfg.id);
+        let li = existingMap.get(id);
 
-      for (const v of vars) {
-        const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
-        if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
-          const lastVal = sData.values[sData.values.length - 1];
-          const vs = varSettings.find(x => x.var === v) || {};
-          const varAlert = getAlertClass(vs, lastVal);
-          const key = `${sCfg.id}:${v}`;
-          const prevAlert = previousVarAlertState.get(key);
-          if (varAlert === 'blink-red' && prevAlert !== 'blink-red') {
-            sendAlert(sCfg.id, v, lastVal);
-          }
-          previousVarAlertState.set(key, varAlert);
-          sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
+        let sensorAlertClass = null;
+        const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
+        const vars = Array.isArray(sCfg.vars)
+            ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
+            : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
+
+        for (const v of vars) {
+            const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
+            if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
+                const lastVal = sData.values[sData.values.length - 1];
+                const vs = varSettings.find(x => x.var === v) || {};
+                const varAlert = getAlertClass(vs, lastVal);
+                const key = `${sCfg.id}:${v}`;
+                const prevAlert = previousVarAlertState.get(key);
+                if (varAlert === 'blink-red' && prevAlert !== 'blink-red') {
+                    sendAlert(sCfg.id, v, lastVal);
+                }
+                previousVarAlertState.set(key, varAlert);
+                sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
+            }
         }
-      }
 
-      if (sensorAlertClass === 'blink-red') {
-        const sensorName = sCfg.name || 'Датчик ' + (index + 1);
-        redAlertSensors.push(sensorName);
-      }
+        if (sensorAlertClass === 'blink-red') {
+            const sensorName = sCfg.name || 'Датчик ' + (index + 1);
+            redAlertSensors.push(sensorName);
+        }
 
-      const li = document.createElement('li');
-      li.dataset.sensorId = sCfg.id;
-      li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
+        if (li) {
+            li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+            if (sensorAlertClass) li.classList.add(sensorAlertClass);
 
-      // Проверяем, есть ли ссылочные переменные
-      const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
-                           (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
+            if (String(sCfg.id) === String(currentSensor)) {
+                li.classList.add('sensor-selected');
+            } else {
+                li.classList.remove('sensor-selected');
+            }
 
-      const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
-      if (canEdit) {
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '✏️';
-        editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
-        editBtn.title = 'Редактировать датчик';
-        editBtn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          openEditModal(sCfg.id);
-        });
-        li.appendChild(editBtn);
-      }
-      if (hasReference) {
-          const refIcon = document.createElement('span');
-          refIcon.className = 'sensor-ref-icon';
-          refIcon.textContent = '🔗';
-          refIcon.title = 'Импортирует данные других датчиков';
-          li.appendChild(refIcon);
-      }
+            existingMap.delete(id);
+        } else {
+            li = document.createElement('li');
+            li.dataset.sensorId = id;
+            li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
 
-      // Создаём nameSpan и добавляем его
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'sensor-name';
-      nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
-      nameSpan.style.flex = '1 1 auto';
-      li.appendChild(nameSpan);
+            const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
+                (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
 
-      li.addEventListener('click', () => selectSensor(sCfg.id));
+            const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
+            if (canEdit) {
+                const editBtn = document.createElement('button');
+                editBtn.textContent = '✏️';
+                editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
+                editBtn.title = 'Редактировать датчик';
+                editBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    openEditModal(sCfg.id);
+                });
+                li.appendChild(editBtn);
+            }
 
-      if (String(sCfg.id) === String(currentSensor)) {
-        li.classList.add('sensor-selected');
-      }
+            if (hasReference) {
+                const refIcon = document.createElement('span');
+                refIcon.className = 'sensor-ref-icon';
+                refIcon.textContent = '🔗';
+                refIcon.title = 'Импортирует данные других датчиков';
+                li.appendChild(refIcon);
+            }
 
-      li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
-      if (sensorAlertClass) li.classList.add(sensorAlertClass);
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'sensor-name';
+            nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
+            nameSpan.style.flex = '1 1 auto';
+            li.appendChild(nameSpan);
 
-      list.appendChild(li);
+            li.addEventListener('click', () => selectSensor(sCfg.id));
+
+            if (String(sCfg.id) === String(currentSensor)) {
+                li.classList.add('sensor-selected');
+            }
+
+            li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
+            if (sensorAlertClass) li.classList.add(sensorAlertClass);
+
+            list.appendChild(li);
+        }
     });
 
+    for (let li of existingMap.values()) {
+        li.remove();
+    }
     updateRedAlert(redAlertSensors);
-    return;
-  }
-  // Инкрементальное обновление (только классы тревоги и выделение)
-  const existingMap = new Map();
-  for (let li of list.children) {
-    const id = li.dataset.sensorId;
-    if (id) existingMap.set(id, li);
-  }
-
-  let redAlertSensors = [];
-
-  visibleSensors.forEach((sCfg, index) => {
-    const id = String(sCfg.id);
-    let li = existingMap.get(id);
-
-    // Определяем класс тревоги
-    let sensorAlertClass = null;
-    const varSettings = Array.isArray(sCfg.varSettings) ? sCfg.varSettings : [];
-    const vars = Array.isArray(sCfg.vars)
-      ? sCfg.vars.map(v => String(v).trim()).filter(Boolean)
-      : String(sCfg.vars || '').split(',').map(v => v.trim()).filter(Boolean);
-
-    for (const v of vars) {
-      const sData = allSensors[v] || allSensors[`${sCfg.id}:${v}`] || allSensors[`${sCfg.id}:${v.toLowerCase()}`];
-      if (sData && Array.isArray(sData.values) && sData.values.length > 0) {
-        const lastVal = sData.values[sData.values.length - 1];
-        const vs = varSettings.find(x => x.var === v) || {};
-        const varAlert = getAlertClass(vs, lastVal);
-        const key = `${sCfg.id}:${v}`;
-        const prevAlert = previousVarAlertState.get(key);
-        if (varAlert === 'blink-red' && prevAlert !== 'blink-red') {
-          sendAlert(sCfg.id, v, lastVal);
-        }
-        previousVarAlertState.set(key, varAlert);
-        sensorAlertClass = pickHigherAlertClass(sensorAlertClass, varAlert);
-      }
-    }
-
-    if (sensorAlertClass === 'blink-red') {
-      const sensorName = sCfg.name || 'Датчик ' + (index + 1);
-      redAlertSensors.push(sensorName);
-    }
-
-    if (li) {
-      // Обновляем классы
-      li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
-      if (sensorAlertClass) li.classList.add(sensorAlertClass);
-
-      // Обновляем выделение
-      if (String(sCfg.id) === String(currentSensor)) {
-        li.classList.add('sensor-selected');
-      } else {
-        li.classList.remove('sensor-selected');
-      }
-
-      existingMap.delete(id);
-    } else {
-      // Новый датчик – создаём элемент
-      li = document.createElement('li');
-      li.dataset.sensorId = id;
-      li.style.cssText = 'cursor: pointer; padding: 4px 4px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 4px;';
-
-      // Проверяем, есть ли ссылочные переменные
-      const hasReference = (Array.isArray(sCfg.vars) && sCfg.vars.some(v => v.includes('_'))) ||
-                           (typeof sCfg.vars === 'string' && sCfg.vars.includes('_'));
-
-      const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
-      if (canEdit) {
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '✏️';
-        editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
-        editBtn.title = 'Редактировать датчик';
-        editBtn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          openEditModal(sCfg.id);
-        });
-        li.appendChild(editBtn);
-      }
-
-      if (hasReference) {
-          const refIcon = document.createElement('span');
-          refIcon.className = 'sensor-ref-icon';
-          refIcon.textContent = '🔗';
-          refIcon.title = 'Импортирует данные других датчиков';
-          li.appendChild(refIcon);
-      }
-
-      // Затем создаём nameSpan и добавляем его
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'sensor-name';
-      nameSpan.textContent = sCfg.name || 'Датчик ' + (index + 1);
-      nameSpan.style.flex = '1 1 auto';
-      li.appendChild(nameSpan);
-
-      li.addEventListener('click', () => selectSensor(sCfg.id));
-
-      if (String(sCfg.id) === String(currentSensor)) {
-        li.classList.add('sensor-selected');
-      }
-
-      li.classList.remove('blink-blue', 'blink-yellow', 'blink-red');
-      if (sensorAlertClass) li.classList.add(sensorAlertClass);
-
-      list.appendChild(li);
-    }
-  });
-
-  // Удаляем элементы датчиков, которых больше нет
-  for (let li of existingMap.values()) {
-    li.remove();
-  }
-  updateRedAlert(redAlertSensors);
 }

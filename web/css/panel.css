@@ -1,4 +1,4 @@
-/* ========== ПЕРЕМЕННЫЕ ========== */
+/* ========== ПЕРЕМЕННЫЕ ЦВЕТОВ И РАЗМЕРОВ ========== */
 :root {
     --color-primary-dark: #1A4B77;
     --color-primary: #0077CC;
@@ -50,7 +50,6 @@ body {
 }
 
 /* ========== ЛОГИН ========== */
-
 #loginError {
     color: #ffb3b3;
     background: rgba(211, 47, 47, 0.2);
@@ -100,8 +99,7 @@ body {
     border-color: var(--color-primary-light);
 }
 
-/* ========== ПАНЕЛЬ РЕГИСТРАЦИИ ТОКЕНОВ ДАТЧИКОВ ========== */
-
+/* ========== ПАНЕЛЬ РЕГИСТРАЦИИ ТОКЕНОВ ДАТЧИКОВ (АДМИНИСТРИРОВАНИЕ) ========== */
 .modal.modal-large {
     width: 1600px;
     max-width: 95%;
@@ -171,22 +169,18 @@ body {
     background-color: #b71c1c;
 }
 
-/* ========== ПАНЕЛЬ ПОЛЬЗОВАТЕЛЕЙ ========== */
-
-/* Модальное окно */
+/* ========== ПАНЕЛЬ УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ ========== */
 #userManagerModal .modal {
     width: 800px;
     max-width: 95%;
 }
 
-/* Заголовок */
 #userManagerModal h3 {
     margin: 0 0 20px 0;
     color: var(--color-primary-light);
     font-weight: 600;
 }
 
-/* Блок управления созданием пользователя */
 #userManagerModal .sensor-manager-controls {
     display: flex;
     gap: 12px;
@@ -199,7 +193,6 @@ body {
     border: 1px solid var(--color-border);
 }
 
-/* Поле ввода логина и выпадающий список */
 #userManagerModal .sensor-manager-controls .input-full,
 #userManagerModal .sensor-manager-controls select {
     width: 300px;
@@ -217,7 +210,6 @@ body {
     padding-right: 40px;
 }
 
-/* Выпадающий список */
 #userManagerModal .sensor-manager-controls select {
     width: 200px;
 }
@@ -229,7 +221,6 @@ body {
     box-shadow: 0 0 0 3px rgba(64, 176, 255, 0.3);
 }
 
-/* Кнопка создания */
 #userManagerModal .sensor-manager-controls .btn-primary {
     flex: 0 0 auto;
     padding: 10px 24px;
@@ -237,7 +228,6 @@ body {
     font-weight: 500;
 }
 
-/* Таблица пользователей */
 #userManagerModal .sensor-manager-table {
     width: 100%;
     border-collapse: collapse;
@@ -255,13 +245,11 @@ body {
     border-bottom: 1px solid var(--color-border);
 }
 
-/* Ячейка с ролью – выделяем цветом */
 #userManagerBody td:nth-child(2) {
     font-weight: 500;
     color: var(--color-primary-light);
 }
 
-/* Кнопки действий в таблице */
 #userManagerBody .btn-small {
     padding: 6px 16px;
     font-size: 13px;
@@ -278,7 +266,6 @@ body {
     border-color: var(--color-primary-light);
 }
 
-/* Кнопка удаления */
 #userManagerBody .btn-danger {
     background: #d32f2f;
     border-color: #b71c1c;
@@ -289,7 +276,6 @@ body {
     background: #b71c1c;
 }
 
-/* Футер модального окна */
 #userManagerModal .modal-footer {
     margin-top: 20px;
     padding-top: 15px;
@@ -306,14 +292,13 @@ body {
     font-size: 0.9rem;
 }
 
-/* ========== ПАНЕЛЬ ДАТЧИКОВ ========== */
-
+/* ========== ПАНЕЛЬ ДАТЧИКОВ (СПРАВА) ========== */
 #sensorPanel {
     position: fixed;
     top: 10px;
     right: 10px;
     width: 300px;
-    max-height: calc(100vh - 400px);
+    max-height: calc(100vh - 300px);
     background: var(--color-surface);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -369,7 +354,6 @@ body {
     padding: 15px 5px 5px;
 }
 
-/* Выделение выбранного датчика */
 .sensor-list li.sensor-selected {
     background-color: var(--color-primary-dark);
     border-left: 4px solid var(--color-primary-light);
@@ -563,12 +547,10 @@ canvas {
 }
 
 /* ========== МЕНЮ ЭКСПОРТА ========== */
-
 .modal-export {
     width: 800px;
 }
 
-/* Контейнер для полей "От" и "До" */
 .export-time-range {
     display: flex;
     flex-direction: column;
@@ -602,7 +584,6 @@ canvas {
     box-shadow: 0 0 0 3px rgba(64, 176, 255, 0.3);
 }
 
-/* Контейнер для динамических строк датчик/переменная */
 #exportVariablesContainer {
     margin: 20px 0;
     max-height: 300px;
@@ -610,7 +591,6 @@ canvas {
     padding-right: 8px;
 }
 
-/* Строка добавления датчика и переменной */
 .export-var-row {
     display: flex;
     gap: 10px;
@@ -663,7 +643,6 @@ canvas {
     border-color: var(--color-primary-light);
 }
 
-/* Кнопка добавления новой строки */
 #addExportVarRow {
     width: 100%;
     margin-top: 8px;
@@ -683,7 +662,6 @@ canvas {
     border-style: solid;
 }
 
-/* Футер модального окна с кнопками */
 .modal-footer {
     display: flex;
     justify-content: flex-end;
@@ -693,7 +671,6 @@ canvas {
     border-top: 1px solid var(--color-border);
 }
 
-/* Кнопки в футере панели датчиков (уже есть, но улучшим) */
 .panel-footer {
     display: flex;
     gap: 8px;
@@ -712,7 +689,7 @@ canvas {
 }
 
 .export-time-range input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);        /* инвертирует цвет иконки (делает светлую на тёмном фоне) */
+    filter: invert(1);
     cursor: pointer;
 }
 
@@ -722,7 +699,6 @@ canvas {
     margin-top: 8px;
 }
 
-/* Модальное окно выбора экспорта */
 .modal-selector {
     width: 500px;
     max-width: 90%;
@@ -809,7 +785,6 @@ canvas {
     flex-shrink: 0;
 }
 
-/* Поля ввода времени (главная страница) */
 .time-input {
     width: 90px;
     padding: 8px 10px;
@@ -920,7 +895,6 @@ canvas {
     color: var(--color-text-secondary);
 }
 
-/* Поля ввода пределов (редактор датчика) */
 .var-low-input,
 .var-warn-input,
 .var-alarm-input {
@@ -999,12 +973,14 @@ input[type="checkbox"] {
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
+    z-index: 10000 !important;
 }
 
 .modal-backdrop.show,
 .login-backdrop.show {
-    display: flex;
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .modal {
@@ -1161,7 +1137,7 @@ input[type="checkbox"] {
     100% { transform: scale(1); }
 }
 
-/* ========== УВЕДОМЛЕНИЯ ========== */
+/* ========== УВЕДОМЛЕНИЯ (TOAST) ========== */
 .toast {
     position: fixed;
     bottom: 25px;
@@ -1273,7 +1249,6 @@ body.red-alert {
 }
 
 /* ========== СТИЛИЗАЦИЯ СКРОЛЛБАРОВ ========== */
-/* Для браузеров на движках WebKit */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -1298,7 +1273,6 @@ body.red-alert {
     background: transparent;
 }
 
-/* Для Firefox */
 * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-primary-dark) var(--color-surface);

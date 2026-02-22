@@ -1,15 +1,22 @@
 import { currentUser } from '../constants.js';
 
-// Показать основное приложение (скрыть экран входа/загрузки)
+// ==================== УПРАВЛЕНИЕ ОТОБРАЖЕНИЕМ ОСНОВНОГО ПРИЛОЖЕНИЯ ====================
+
+/** Показать основное приложение (после успешной авторизации) */
 export function showApp() {
-  // Если пользователь не авторизован, ничего не делаем
-  if (!currentUser) return;
-  const app = document.getElementById('appRoot'); // Находим корневой элемент приложения
-  if (app) app.hidden = false;                    // Убираем атрибут hidden, показываем элемент
+    if (!currentUser) return;
+    const app = document.getElementById('appRoot');
+    if (app) app.hidden = false;
 }
 
-// Скрыть основное приложение
+/** Скрыть основное приложение (при выходе или отсутствии сессии) */
 export function hideApp() {
-  const app = document.getElementById('appRoot'); // Находим корневой элемент
-  if (app) app.hidden = true;                      // Скрываем элемент
+    const app = document.getElementById('appRoot');
+    if (app) {
+        app.hidden = true;
+        // Скрываем все модальные окна, чтобы они не перекрывали окно входа
+        document.querySelectorAll('.modal-backdrop.show').forEach(modal => {
+            modal.classList.remove('show');
+        });
+    }
 }
