@@ -66,6 +66,7 @@ export function updateAddButtonVisibility() {
 
     const canEdit = hasPermission(PERMISSIONS.EDIT_CONFIG);
     const canView = hasPermission(PERMISSIONS.VIEW_DATA);
+    const canManage = hasPermission(PERMISSIONS.MANAGE_SENSORS);
 
     let addBtn = document.getElementById('addSensorBtn');
     let exportBtn = document.getElementById('exportDataBtn');
@@ -97,6 +98,23 @@ export function updateAddButtonVisibility() {
     } else {
         if (exportBtn) exportBtn.remove();
     }
+
+    if (canManage) {
+        let manageBtn = document.getElementById('manageSensorsBtn');
+        if (!manageBtn) {
+            manageBtn = document.createElement('button');
+            manageBtn.id = 'manageSensorsBtn';
+            manageBtn.className = 'btn btn-full';
+            manageBtn.innerHTML = '⚙️ Управление датчиками';
+            manageBtn.addEventListener('click', () => {
+                import('./sensorManager.js').then(m => m.openSensorManager());
+            });
+            footer.appendChild(manageBtn);
+        }
+    } else {
+        const oldBtn = document.getElementById('manageSensorsBtn');
+        if (oldBtn) oldBtn.remove();
+    }
 }
 
 // Панель датчиков
@@ -109,14 +127,14 @@ export function updateSensorPanel(forceRebuild = false) {
 
   // Если нет ни одного видимого датчика
   if (visibleSensors.length === 0) {
-    const li = document.createElement('li');          // Создаём элемент списка
+    list.innerHTML = '';
+    const li = document.createElement('li');
     li.textContent = 'Нет настроенных датчиков';
     li.style.color = '#777';
-    list.appendChild(li);                              // Добавляем в список
-    setCurrentSensor(null);                             // Сбрасываем выбранный датчик
-
-    const chartsContainer = document.getElementById('chartsContainer'); // Контейнер графиков
-    if (chartsContainer) chartsContainer.innerHTML = ''; // Очищаем графики
+    list.appendChild(li);
+    setCurrentSensor(null);
+    const chartsContainer = document.getElementById('chartsContainer');
+    if (chartsContainer) chartsContainer.innerHTML = '';
     return;
   }
 

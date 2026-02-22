@@ -132,7 +132,7 @@
     },
     {
       "id": "Test6",
-      "name": "Насосная Станция",
+      "name": "Test6",
       "vars": [
         "vibration",
         "temp",
@@ -143,7 +143,7 @@
       "varSettings": [
         {
           "var": "vibration",
-          "label": "Вибрация",
+          "label": "vibration",
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "",
@@ -156,20 +156,20 @@
         },
         {
           "var": "temp",
-          "label": "Температура",
-          "color": "#FF5252",
+          "label": "temp",
+          "color": "#42A5F5",
           "rawColor": "#B0BEC5",
-          "unit": "°C",
+          "unit": "",
           "lowLimit": null,
           "warnLimit": null,
           "alarmLimit": null,
-          "processing": "moving_avg",
+          "processing": "none",
           "showRaw": true,
-          "showProcessed": true
+          "showProcessed": false
         },
         {
           "var": "noise",
-          "label": "Шум",
+          "label": "noise",
           "color": "#66BB6A",
           "rawColor": "#B0BEC5",
           "unit": "",
@@ -182,7 +182,7 @@
         },
         {
           "var": "voltage",
-          "label": "Напряжение",
+          "label": "voltage",
           "color": "#FFA726",
           "rawColor": "#B0BEC5",
           "unit": "",
@@ -197,7 +197,7 @@
     },
     {
       "id": "Test7",
-      "name": "Серверная",
+      "name": "Test7",
       "vars": [
         "hum",
         "voltage",
@@ -233,16 +233,16 @@
         },
         {
           "var": "temp",
-          "label": "Температура",
-          "color": "#FF5252",
+          "label": "temp",
+          "color": "#66BB6A",
           "rawColor": "#B0BEC5",
           "unit": "",
           "lowLimit": null,
-          "warnLimit": 30,
-          "alarmLimit": 35,
-          "processing": "moving_avg",
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
           "showRaw": true,
-          "showProcessed": true
+          "showProcessed": false
         }
       ]
     },
@@ -368,39 +368,6 @@
           "processing": "none",
           "showRaw": true,
           "showProcessed": false
-        }
-      ]
-    },
-    {
-      "id": "1",
-      "name": "Температуры",
-      "vars": [
-        "Test1_temp",
-        "Test3_temp",
-        "Test4_temp",
-        "Test5_temp",
-        "Test6_temp",
-        "Test7_temp"
-      ],
-      "deleted": false,
-      "varSettings": [
-        {
-          "var": "Test1_temp"
-        },
-        {
-          "var": "Test3_temp"
-        },
-        {
-          "var": "Test4_temp"
-        },
-        {
-          "var": "Test5_temp"
-        },
-        {
-          "var": "Test6_temp"
-        },
-        {
-          "var": "Test7_temp"
         }
       ]
     }

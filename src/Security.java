@@ -1,9 +1,16 @@
 import com.sun.net.httpserver.HttpExchange;
+
+import javax.crypto.Cipher;
 import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.*;
@@ -26,8 +33,62 @@ public class Security {
     // Максимальная длина пароля (ограничение для защиты от DoS)
     static final int MAX_PASSWORD_LENGTH = 256;
 
-    // Ключ для регистрации новых датчиков, берётся из переменной окружения
     static final String SENSOR_REGISTER_KEY = System.getenv("SENSOR_REGISTER_KEY");
+
+    // Ключ для шифрования токенов датчиков (автоматическая генерация при первом запуске)
+    private static final String ENCRYPTION_KEY_ENV = "TOKEN_ENCRYPTION_KEY";
+    private static final String ENCRYPTION_KEY_FILE = "encryption.key";
+    private static final int KEY_SIZE_BYTES = 32; // 256 бит
+    private static final byte[] ENCRYPTION_KEY;
+
+    static {
+        // Проверка ключа регистрации датчиков
+        if (SENSOR_REGISTER_KEY == null || SENSOR_REGISTER_KEY.isEmpty()) {
+            throw new IllegalStateException("SENSOR_REGISTER_KEY должен быть установлен через переменную среды");
+        }
+
+        // Загрузка или генерация ключа шифрования токенов
+        byte[] key = null;
+        // 1. Попытка взять из переменной окружения
+        String envKey = System.getenv(ENCRYPTION_KEY_ENV);
+        if (envKey != null && !envKey.isEmpty()) {
+            try {
+                key = Base64.getDecoder().decode(envKey);
+                if (key.length != KEY_SIZE_BYTES) {
+                    throw new IllegalArgumentException("Ключ из переменной окружения имеет неверную длину (ожидалось 32 байта)");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException("Не удалось декодировать TOKEN_ENCRYPTION_KEY как Base64", e);
+            }
+        } else {
+            // 2. Попытка прочитать из файла
+            Path keyFile = Paths.get(ENCRYPTION_KEY_FILE);
+            if (Files.exists(keyFile)) {
+                try {
+                    String fileContent = Files.readString(keyFile).trim();
+                    key = Base64.getDecoder().decode(fileContent);
+                    if (key.length != KEY_SIZE_BYTES) {
+                        throw new IllegalStateException("Ключ из файла имеет неверную длину");
+                    }
+                } catch (Exception e) {
+                    throw new IllegalStateException("Не удалось прочитать ключ из файла " + ENCRYPTION_KEY_FILE, e);
+                }
+            } else {
+                // 3. Генерация нового ключа и сохранение в файл
+                try {
+                    SecureRandom sr = SecureRandom.getInstanceStrong();
+                    key = new byte[KEY_SIZE_BYTES];
+                    sr.nextBytes(key);
+                    String encoded = Base64.getEncoder().encodeToString(key);
+                    Files.writeString(keyFile, encoded);
+                    System.out.println("🔐 Сгенерирован новый ключ шифрования токенов, сохранён в " + ENCRYPTION_KEY_FILE);
+                } catch (Exception e) {
+                    throw new IllegalStateException("Не удалось сгенерировать ключ шифрования", e);
+                }
+            }
+        }
+        ENCRYPTION_KEY = key;
+    }
 
     // Статический блок инициализации: проверяет, что ключ регистрации задан
     static {
@@ -43,12 +104,12 @@ public class Security {
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;
 
     // Перечисление возможных прав доступа
-    enum Permission { VIEW_DATA, EDIT_CONFIG }
+    enum Permission { VIEW_DATA, EDIT_CONFIG, MANAGE_SENSORS }
 
     // Карта ролей и соответствующих им прав (неизменяемая)
     static final Map<String, Set<Permission>> ROLE_PERMS = Map.of(
             "developer", EnumSet.allOf(Permission.class),           // разработчик имеет все права
-            "admin", EnumSet.of(Permission.VIEW_DATA, Permission.EDIT_CONFIG), // админ: просмотр и редактирование
+            "admin", EnumSet.of(Permission.VIEW_DATA, Permission.EDIT_CONFIG, Permission.MANAGE_SENSORS), // админ: просмотр и редактирование
             "observer", EnumSet.of(Permission.VIEW_DATA),           // наблюдатель: только просмотр
             "worker", EnumSet.of(Permission.VIEW_DATA)              // рабочий: только просмотр
     );
@@ -172,6 +233,7 @@ public class Security {
             String token = UUID.randomUUID().toString().replace("-", "");
             // Хэширование токена для хранения в БД
             String hash = hashToken(token);
+            String encryptedToken = encryptToken(token);
             long now = System.currentTimeMillis(); // текущее время
 
             // Вставка новой записи о датчике
@@ -179,6 +241,7 @@ public class Security {
                     "INSERT INTO sensors (sensor_id, token_hash, created_at, last_seen, register_ip) VALUES (?,?,?,?,?)")) {
                 ps.setString(1, sensorId);   // ID датчика
                 ps.setString(2, hash);        // хэш токена
+                ps.setString(3, encryptedToken);
                 ps.setLong(3, now);            // время создания
                 ps.setLong(4, now);            // время последнего обращения (равно созданию)
                 ps.setString(5, ip);            // IP регистрации
@@ -195,6 +258,46 @@ public class Security {
             return null;
         } finally {
             Database.release(c); // возвращаем соединение
+        }
+    }
+
+    // ================= ШИФРОВАНИЕ ТОКЕНОВ =================
+
+    private static final String AES_ALGO = "AES/GCM/NoPadding";
+    private static final int GCM_TAG_LENGTH = 128;
+    private static final int GCM_IV_LENGTH = 12;
+
+    public static String encryptToken(String token) {
+        try {
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            SecureRandom.getInstanceStrong().nextBytes(iv);
+            Cipher cipher = Cipher.getInstance(AES_ALGO);
+            SecretKeySpec keySpec = new SecretKeySpec(ENCRYPTION_KEY, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec);
+            byte[] cipherText = cipher.doFinal(token.getBytes(StandardCharsets.UTF_8));
+            byte[] combined = new byte[iv.length + cipherText.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(cipherText, 0, combined, iv.length, cipherText.length);
+            return Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка шифрования токена", e);
+        }
+    }
+
+    public static String decryptToken(String encrypted) {
+        try {
+            byte[] combined = Base64.getDecoder().decode(encrypted);
+            byte[] iv = Arrays.copyOfRange(combined, 0, GCM_IV_LENGTH);
+            byte[] cipherText = Arrays.copyOfRange(combined, GCM_IV_LENGTH, combined.length);
+            Cipher cipher = Cipher.getInstance(AES_ALGO);
+            SecretKeySpec keySpec = new SecretKeySpec(ENCRYPTION_KEY, "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec);
+            byte[] plain = cipher.doFinal(cipherText);
+            return new String(plain, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка дешифрования токена", e);
         }
     }
 

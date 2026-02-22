@@ -160,6 +160,35 @@
         </div>
     </div>
 </div>
+<!-- Модальное окно управления датчиками -->
+<div id="sensorManagerModal" class="modal-backdrop">
+    <div class="modal modal-large">
+        <h3>Управление датчиками</h3>
+        <div class="modal-content-scroll">
+            <div class="sensor-manager-controls">
+                <input type="text" id="newSensorId" placeholder="ID нового датчика" class="input-full">
+                <button id="registerSensorBtn" class="btn btn-primary">Зарегистрировать</button>
+            </div>
+            <table class="sensor-manager-table">
+                <thead>
+                <tr>
+                    <th>ID датчика</th>
+                    <th>Токен</th>
+                    <th>Создан</th>
+                    <th>Последняя активность</th>
+                    <th>IP регистрации</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+                </thead>
+                <tbody id="sensorManagerBody"></tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button id="closeManagerBtn" class="btn">Закрыть</button>
+        </div>
+    </div>
+</div>
 
 <!-- Окно авторизации -->
 <div id="loginModal" class="login-backdrop">

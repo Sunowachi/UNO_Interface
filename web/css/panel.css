@@ -100,6 +100,77 @@ body {
     border-color: var(--color-primary-light);
 }
 
+/* ========== ПАНЕЛЬ РЕГИСТРАЦИИ ТОКЕНОВ ДАТЧИКОВ ========== */
+
+.modal.modal-large {
+    width: 1600px;
+    max-width: 95%;
+}
+
+.sensor-manager-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.sensor-manager-controls input {
+    flex: 1;
+}
+
+.sensor-manager-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.sensor-manager-table th,
+.sensor-manager-table td {
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.sensor-manager-table th {
+    background-color: var(--color-surface-hover);
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.sensor-manager-table tr.deleted-sensor {
+    opacity: 0.5;
+    background-color: rgba(0,0,0,0.1);
+}
+
+.token-cell {
+    font-family: monospace;
+    cursor: help;
+}
+
+.token-mask {
+    pointer-events: auto;
+    display: inline-block;
+    background: #333;
+    color: #ccc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: help;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.btn-danger {
+    background-color: #d32f2f;
+    border-color: #b71c1c;
+}
+.btn-danger:hover {
+    background-color: #b71c1c;
+}
+
 /* ========== ПАНЕЛЬ ДАТЧИКОВ ========== */
 #sensorPanel {
     position: fixed;

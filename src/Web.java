@@ -51,6 +51,10 @@ public class Web {
         server.createContext("/", Web::handleStatic);                   // Раздача статических файлов (HTML, JS, CSS)
         server.createContext("/export/comtrade", Web::handleExportComtrade); // Экспорт файла COMTRADE
         server.createContext("/api/alert", Web::handleAlert);
+        server.createContext("/admin/sensors", Web::handleAdminSensors);
+        server.createContext("/admin/sensor/register", Web::handleAdminSensorRegister);
+        server.createContext("/admin/sensor/toggle-delete", Web::handleAdminSensorToggleDelete);
+        server.createContext("/admin/sensor/delete-permanent", Web::handleAdminSensorDeletePermanent);
 
         // Назначение пула потоков для обработки входящих запросов (100 потоков)
         server.setExecutor(Executors.newFixedThreadPool(100));
@@ -397,6 +401,101 @@ public class Web {
 
         Database.recordAlert(sensorId, varName, value, usersStr, snapshot);
 
+        HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
+    }
+
+    // ================= АДМИНИСТРИРОВАНИЕ ДАТЧИКОВ =================
+
+    static void handleAdminSensors(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
+
+        // Отключаем кэширование
+        ex.getResponseHeaders().set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        ex.getResponseHeaders().set("Pragma", "no-cache");
+        ex.getResponseHeaders().set("Expires", "0");
+
+        List<Map<String, Object>> sensors = Database.listSensors();
+        HttpUtil.sendJson(ex, HttpUtil.toJson(sensors));
+    }
+
+    static void handleAdminSensorRegister(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
+        if (!Security.checkCsrf(ex, s)) return;
+
+        Map<String, String> data = HttpUtil.parseJson(ex);
+        String sensorId = data.get("sensorId");
+        if (sensorId == null || !sensorId.matches("[a-zA-Z0-9_-]{3,64}")) {
+            HttpUtil.sendError(ex, 400, "invalid_sensor_id");
+            return;
+        }
+
+        String ip = ex.getRemoteAddress().getAddress().getHostAddress();
+        String token = Database.registerSensorByAdmin(sensorId, ip);
+        if (token == null) {
+            HttpUtil.sendError(ex, 409, "already_exists");
+            return;
+        }
+
+        Map<String, String> resp = new HashMap<>();
+        resp.put("token", token);
+        HttpUtil.sendJson(ex, HttpUtil.toJson(resp));
+    }
+
+    static void handleAdminSensorToggleDelete(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
+        if (!Security.checkCsrf(ex, s)) return;
+
+        Map<String, String> data = HttpUtil.parseJson(ex);
+        String sensorId = data.get("sensorId");
+        String deletedStr = data.get("deleted");
+        if (sensorId == null || deletedStr == null) {
+            HttpUtil.sendError(ex, 400, "missing_params");
+            return;
+        }
+        boolean deleted = Boolean.parseBoolean(deletedStr);
+        boolean ok = Database.toggleDeleteSensor(sensorId, deleted);
+        if (!ok) {
+            HttpUtil.sendError(ex, 404, "sensor_not_found");
+            return;
+        }
+        HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
+    }
+
+    static void handleAdminSensorDeletePermanent(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
+        if (!Security.checkCsrf(ex, s)) return;
+
+        Map<String, String> data = HttpUtil.parseJson(ex);
+        String sensorId = data.get("sensorId");
+        if (sensorId == null) {
+            HttpUtil.sendError(ex, 400, "missing_sensor_id");
+            return;
+        }
+        boolean ok = Database.permanentDeleteSensor(sensorId);
+        if (!ok) {
+            HttpUtil.sendError(ex, 404, "sensor_not_found");
+            return;
+        }
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
     }
 

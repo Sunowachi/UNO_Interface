@@ -14,8 +14,8 @@ public class HttpUtil {
 
     // Максимальный размер JSON, принимаемого от клиента (4 КБ)
     static final int MAX_JSON_SIZE = 4096;
-    // Максимальный размер конфигурационного файла (16 КБ)
-    static final int MAX_CONFIG_SIZE = 16 * 1024;
+    // Максимальный размер конфигурационного файла (10 МБ)
+    static final int MAX_CONFIG_SIZE = 10 * 1024 * 1024;
     // Директория для хранения архивных копий конфигурации
     private static final Path CONFIG_ARCHIVE_DIR = Path.of("config_archive");
     // Флаг принудительного использования Secure-флага для cookie (если true, то всегда Secure)

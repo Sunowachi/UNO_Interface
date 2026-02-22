@@ -2,8 +2,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.sql.*;
-import java.util.Base64;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -120,7 +119,7 @@ public class Database {
 
     /* ========== УПРАВЛЕНИЕ ТАБЛИЦАМИ ========== */
 
-    // Создание таблиц и индексов, если их ещё нет
+    // Создание таблиц и индексов
     private static void initTables(Statement st) throws SQLException {
         // Таблица пользователей
         st.execute("""
@@ -136,13 +135,15 @@ public class Database {
             CREATE TABLE IF NOT EXISTS sensors(
                 sensor_id TEXT PRIMARY KEY CHECK (length(sensor_id) <= 64),
                 token_hash TEXT NOT NULL,
+                encrypted_token TEXT,
                 created_at BIGINT NOT NULL,
                 last_seen BIGINT NOT NULL,
-                register_ip TEXT NOT NULL CHECK (length(register_ip) <= 45)
+                register_ip TEXT NOT NULL CHECK (length(register_ip) <= 45),
+                deleted BOOLEAN DEFAULT FALSE
             )
         """);
 
-        // Таблица истории показаний (с внешним ключом на sensors)
+        // Таблица истории показаний
         st.execute("""
             CREATE TABLE IF NOT EXISTS history(
                 id BIGSERIAL PRIMARY KEY,
@@ -154,7 +155,7 @@ public class Database {
             )
         """);
 
-        // Таблица для отслеживания неудачных попыток входа (блокировки)
+        // Таблица неудачных попыток входа
         st.execute("""
             CREATE TABLE IF NOT EXISTS failed_logins(
                 username TEXT NOT NULL CHECK (length(username) <= 64),
@@ -166,7 +167,7 @@ public class Database {
             )
         """);
 
-        // Таблица для хранения тревог
+        // Таблица тревог
         st.execute("""
             CREATE TABLE IF NOT EXISTS alerts(
                 id BIGSERIAL PRIMARY KEY,
@@ -180,10 +181,12 @@ public class Database {
             )
         """);
 
-        // Индексы для ускорения запросов
-        st.execute("CREATE INDEX IF NOT EXISTS idx_history_ts ON history(ts)");                 // По времени
-        st.execute("CREATE INDEX IF NOT EXISTS idx_history_sensor_var ON history(sensor_id, var_name)"); // По датчику и переменной
-        st.execute("CREATE INDEX IF NOT EXISTS idx_failed_logins ON failed_logins(username, ip)"); // По пользователю и IP
+        // Индексы
+        st.execute("CREATE INDEX IF NOT EXISTS idx_history_ts ON history(ts)");
+        st.execute("CREATE INDEX IF NOT EXISTS idx_history_sensor_var ON history(sensor_id, var_name)");
+        st.execute("CREATE INDEX IF NOT EXISTS idx_failed_logins ON failed_logins(username, ip)");
+        st.execute("CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts)");
+        st.execute("CREATE INDEX IF NOT EXISTS idx_alerts_sensor ON alerts(sensor_id)");
     }
 
     /* ========== ОПЕРАЦИИ С ПОЛЬЗОВАТЕЛЯМИ ========== */
@@ -279,6 +282,111 @@ public class Database {
         } catch (Exception e) {
             Audit.error("system", "CONFIG_HASH_FAIL", e.getMessage(), "-");
             return "";
+        }
+    }
+
+    // Получение списка всех датчиков (с расшифрованными токенами)
+    public static List<Map<String, Object>> listSensors() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Connection c = borrow();
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT sensor_id, encrypted_token, created_at, last_seen, register_ip, deleted FROM sensors ORDER BY sensor_id")) {
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("sensorId", rs.getString(1));
+                String encrypted = rs.getString(2);
+                if (encrypted != null) {
+                    try {
+                        row.put("token", Security.decryptToken(encrypted));
+                    } catch (Exception e) {
+                        row.put("token", "[ошибка дешифровки]");
+                    }
+                } else {
+                    row.put("token", null);
+                }
+                row.put("createdAt", rs.getLong(3));
+                row.put("lastSeen", rs.getLong(4));
+                row.put("registerIp", rs.getString(5));
+                row.put("deleted", rs.getBoolean(6));
+                result.add(row);
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка получения списка датчиков", e);
+        } finally {
+            release(c);
+        }
+        return result;
+    }
+
+    // Регистрация датчика администратором (без ключа)
+    public static String registerSensorByAdmin(String sensorId, String ip) {
+        if (sensorId == null || sensorId.length() > 64 || ip == null || ip.isEmpty()) return null;
+        Connection c = null;
+        try {
+            c = borrow();
+            // Проверка уникальности
+            try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM sensors WHERE sensor_id=?")) {
+                ps.setString(1, sensorId);
+                if (ps.executeQuery().next()) return null; // уже есть
+            }
+            String token = UUID.randomUUID().toString().replace("-", "");
+            String hash = Security.hashToken(token);
+            String encryptedToken = Security.encryptToken(token);
+            long now = System.currentTimeMillis();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO sensors (sensor_id, token_hash, encrypted_token, created_at, last_seen, register_ip, deleted) VALUES (?,?,?,?,?,?,false)")) {
+                ps.setString(1, sensorId);
+                ps.setString(2, hash);
+                ps.setString(3, encryptedToken);
+                ps.setLong(4, now);
+                ps.setLong(5, now);
+                ps.setString(6, ip);
+                ps.executeUpdate();
+            }
+            Audit.info(sensorId, "SENSOR_REGISTER_BY_ADMIN", "Sensor registered by admin", ip);
+            return token;
+        } catch (SQLException e) {
+            Audit.warn(sensorId, "SENSOR_REGISTER_ADMIN_FAIL", e.getMessage(), ip);
+            return null;
+        } finally {
+            release(c);
+        }
+    }
+
+    // Мягкое удаление / восстановление датчика (переключение флага deleted)
+    public static boolean toggleDeleteSensor(String sensorId, boolean deleted) {
+        Connection c = null;
+        try {
+            c = borrow();
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE sensors SET deleted=? WHERE sensor_id=?")) {
+                ps.setBoolean(1, deleted);
+                ps.setString(2, sensorId);
+                return ps.executeUpdate() > 0;
+            }
+        } catch (SQLException e) {
+            Audit.warn(sensorId, "SENSOR_TOGGLE_DELETE_FAIL", e.getMessage(), "-");
+            return false;
+        } finally {
+            release(c);
+        }
+    }
+
+    // Полное удаление датчика из БД
+    public static boolean permanentDeleteSensor(String sensorId) {
+        Connection c = null;
+        try {
+            c = borrow();
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM sensors WHERE sensor_id=?")) {
+                ps.setString(1, sensorId);
+                return ps.executeUpdate() > 0;
+            }
+        } catch (SQLException e) {
+            Audit.warn(sensorId, "SENSOR_PERMANENT_DELETE_FAIL", e.getMessage(), "-");
+            return false;
+        } finally {
+            release(c);
         }
     }
 }

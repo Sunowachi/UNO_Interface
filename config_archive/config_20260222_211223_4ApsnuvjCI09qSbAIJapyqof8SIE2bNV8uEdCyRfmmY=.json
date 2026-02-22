@@ -1,0 +1,98 @@
+{
+  "sensors": [
+    {
+      "id": "Test2",
+      "name": "Test2",
+      "vars": [
+        "noise",
+        "vibration"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "noise",
+          "label": "noise",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "vibration",
+          "label": "vibration",
+          "color": "#42A5F5",
+          "rawColor": "#B0BEC5",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        }
+      ]
+    },
+    {
+      "id": "Test4",
+      "name": "Test4",
+      "vars": [
+        "hum",
+        "temp",
+        "pressure"
+      ],
+      "deleted": false,
+      "varSettings": [
+        {
+          "var": "hum",
+          "label": "hum",
+          "color": "#FF5252",
+          "rawColor": "#B0BEC5",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "temp",
+          "label": "temp",
+          "color": "#42A5F5",
+          "rawColor": "#B0BEC5",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        },
+        {
+          "var": "pressure",
+          "label": "pressure",
+          "color": "#66BB6A",
+          "rawColor": "#B0BEC5",
+          "unit": "",
+          "lowLimit": null,
+          "warnLimit": null,
+          "alarmLimit": null,
+          "processing": "none",
+          "showRaw": true,
+          "showProcessed": false
+        }
+      ]
+    },
+    {
+      "id": "Test1",
+      "name": "Датчик Test1",
+      "vars": "",
+      "deleted": false
+    }
+  ]
+}
