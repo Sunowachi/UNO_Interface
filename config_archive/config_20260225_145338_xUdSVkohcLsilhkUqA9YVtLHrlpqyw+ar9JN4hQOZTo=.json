@@ -26,7 +26,7 @@
         },
         {
           "var": "noise",
-          "label": "noise",
+          "label": "Шум",
           "color": "#42A5F5",
           "rawColor": "#B0BEC5",
           "unit": "",

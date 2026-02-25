@@ -61,171 +61,171 @@
             <span class="alert-message"></span>
         </div>
     </div>
-</div>
 
-<!-- ========== МОДАЛЬНЫЕ ОКНА ========== -->
+    <!-- ========== МОДАЛЬНЫЕ ОКНА ========== -->
 
-<!-- Окно редактирования датчика -->
-<div id="editModalBackdrop" class="modal-backdrop" autocomplete="off">
-    <div class="modal">
-        <h3>Редактирование датчика</h3>
-        <div class="modal-content-scroll">
-            <label>
-                ID датчика:<br>
-                <input id="sensorId" class="input-full" autocomplete="off">
-            </label>
-            <br><br>
-            <label>
-                Название датчика:<br>
-                <input id="sensorName" class="input-full" autocomplete="off">
-            </label>
-            <br><br>
-            <label>
-                Переменные (через запятую):<br>
-                <input id="sensorVars" class="input-full" autocomplete="off">
-            </label>
-            <div id="varSettingsBlock" class="margin-top">
-                <h4>Настройки переменных</h4>
-                <div id="varSettingsContainer" class="var-settings-container"></div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button id="deleteSensorBtn" class="btn btn-danger margin-right-auto">Удалить</button>
-            <button id="cancelSensorBtn" class="btn">Отмена</button>
-            <button id="saveSensorBtn" class="btn btn-primary">Сохранить</button>
-        </div>
-    </div>
-    <!-- Панель списка устройств (отображается рядом с модальным окном) -->
-    <div id="devicePanel" class="device-panel">
-        <h3>Список подключенных устройств</h3>
-        <ul id="deviceList" class="list-reset"></ul>
-    </div>
-</div>
-
-<!-- Окно подтверждения отмены изменений -->
-<div id="cancelConfirmBackdrop" class="modal-backdrop">
-    <div class="modal">
-        <h3>Отменить изменения?</h3>
-        <p>Изменения не будут сохранены.</p>
-        <div class="modal-footer">
-            <button id="cancelConfirmBackBtn" class="btn">Вернуться</button>
-            <button id="cancelConfirmOkBtn" class="btn btn-danger">Подтвердить</button>
-        </div>
-    </div>
-</div>
-
-<!-- Окно экспорта данных -->
-<div id="exportModalBackdrop" class="modal-backdrop">
-    <div class="modal modal-export">
-        <h3>Экспорт данных</h3>
-        <div class="modal-content-scroll">
-            <label>
-                Тип экспорта:
-                <select id="exportType" class="input-full">
-                    <option value="1999">COMTRADE 1999 (ZIP)</option>
-                    <option value="2013" selected>COMTRADE 2013 (CFF)</option>
-                </select>
-            </label>
-            <div class="export-time-range">
+    <!-- Окно редактирования датчика -->
+    <div id="editModalBackdrop" class="modal-backdrop" autocomplete="off">
+        <div class="modal">
+            <h3>Редактирование датчика</h3>
+            <div class="modal-content-scroll">
                 <label>
-                    От:
-                    <input type="datetime-local" id="exportFrom" class="input-full" autocomplete="off">
+                    ID датчика:<br>
+                    <input id="sensorId" class="input-full" autocomplete="off">
                 </label>
+                <br><br>
                 <label>
-                    До:
-                    <input type="datetime-local" id="exportTo" class="input-full" autocomplete="off">
+                    Название датчика:<br>
+                    <input id="sensorName" class="input-full" autocomplete="off">
                 </label>
+                <br><br>
+                <label>
+                    Переменные (через запятую):<br>
+                    <input id="sensorVars" class="input-full" autocomplete="off">
+                </label>
+                <div id="varSettingsBlock" class="margin-top">
+                    <h4>Настройки переменных</h4>
+                    <div id="varSettingsContainer" class="var-settings-container"></div>
+                </div>
             </div>
-            <!-- Контейнер для динамических строк датчик/переменная -->
-            <div id="exportVariablesContainer"></div>
-            <!-- Кнопки управления строками -->
-            <div class="export-buttons-row">
-                <button id="populateFromDevicesBtn" class="btn btn-small btn-secondary" type="button">📋 Загрузить из устройств</button>
-                <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить датчик/переменную</button>
+            <div class="modal-footer">
+                <button id="deleteSensorBtn" class="btn btn-danger margin-right-auto">Удалить</button>
+                <button id="cancelSensorBtn" class="btn">Отмена</button>
+                <button id="saveSensorBtn" class="btn btn-primary">Сохранить</button>
             </div>
         </div>
-        <div class="modal-footer">
-            <button id="cancelExportBtn" class="btn">Отмена</button>
-            <button id="downloadExportBtn" class="btn btn-primary">Скачать</button>
+        <!-- Панель списка устройств (отображается рядом с модальным окном) -->
+        <div id="devicePanel" class="device-panel">
+            <h3>Список подключенных устройств</h3>
+            <ul id="deviceList" class="list-reset"></ul>
         </div>
     </div>
-</div>
 
-<!-- Окно выбора датчиков для экспорта (внутри окна экспорта) -->
-<div id="exportSelectorBackdrop" class="modal-backdrop">
-    <div class="modal modal-selector">
-        <h3>Выберите данные для экспорта</h3>
-        <div class="modal-content-scroll">
-            <div id="exportSelectorList" class="selector-list"></div>
-        </div>
-        <div class="modal-footer">
-            <button id="cancelSelectorBtn" class="btn">Отмена</button>
-            <button id="addSelectedBtn" class="btn btn-primary">Добавить выбранные</button>
+    <!-- Окно подтверждения отмены изменений -->
+    <div id="cancelConfirmBackdrop" class="modal-backdrop">
+        <div class="modal">
+            <h3>Отменить изменения?</h3>
+            <p>Изменения не будут сохранены.</p>
+            <div class="modal-footer">
+                <button id="cancelConfirmBackBtn" class="btn">Вернуться</button>
+                <button id="cancelConfirmOkBtn" class="btn btn-danger">Подтвердить</button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Модальное окно управления датчиками (администрирование) -->
-<div id="sensorManagerModal" class="modal-backdrop">
-    <div class="modal modal-large">
-        <h3>Управление датчиками</h3>
-        <div class="modal-content-scroll">
-            <div class="sensor-manager-controls">
-                <input type="text" id="newSensorId" placeholder="ID нового датчика" class="input-full" autocomplete="off">
-                <button id="registerSensorBtn" class="btn btn-primary">Зарегистрировать</button>
+    <!-- Окно экспорта данных -->
+    <div id="exportModalBackdrop" class="modal-backdrop">
+        <div class="modal modal-export">
+            <h3>Экспорт данных</h3>
+            <div class="modal-content-scroll">
+                <label>
+                    Тип экспорта:
+                    <select id="exportType" class="input-full">
+                        <option value="1999">COMTRADE 1999 (ZIP)</option>
+                        <option value="2013" selected>COMTRADE 2013 (CFF)</option>
+                    </select>
+                </label>
+                <div class="export-time-range">
+                    <label>
+                        От:
+                        <input type="datetime-local" id="exportFrom" class="input-full" autocomplete="off">
+                    </label>
+                    <label>
+                        До:
+                        <input type="datetime-local" id="exportTo" class="input-full" autocomplete="off">
+                    </label>
+                </div>
+                <!-- Контейнер для динамических строк датчик/переменная -->
+                <div id="exportVariablesContainer"></div>
+                <!-- Кнопки управления строками -->
+                <div class="export-buttons-row">
+                    <button id="populateFromDevicesBtn" class="btn btn-small btn-secondary" type="button">📋 Загрузить из устройств</button>
+                    <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить датчик/переменную</button>
+                </div>
             </div>
-            <table class="sensor-manager-table">
-                <thead>
-                <tr>
-                    <th>ID датчика</th>
-                    <th>Токен</th>
-                    <th>Создан</th>
-                    <th>Последняя активность</th>
-                    <th>IP регистрации</th>
-                    <th>Статус</th>
-                    <th>Действия</th>
-                </tr>
-                </thead>
-                <tbody id="sensorManagerBody"></tbody>
-            </table>
-        </div>
-        <div class="modal-footer">
-            <button id="closeManagerBtn" class="btn">Закрыть</button>
+            <div class="modal-footer">
+                <button id="cancelExportBtn" class="btn">Отмена</button>
+                <button id="downloadExportBtn" class="btn btn-primary">Скачать</button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Модальное окно управления пользователями -->
-<div id="userManagerModal" class="modal-backdrop">
-    <div class="modal modal-large">
-        <h3>Управление пользователями</h3>
-        <div class="modal-content-scroll">
-            <div class="sensor-manager-controls" id="userManagerControls">
-                <select id="newUserRole" class="input-full">
-                    <option value="observer">Наблюдатель</option>
-                    <option value="worker">Рабочий</option>
-                    <option value="admin">Администратор</option>
-                    <option value="developer">Разработчик</option>
-                </select>
-                <button id="createUserBtn" class="btn btn-primary">Создать</button>
+    <!-- Окно выбора датчиков для экспорта (внутри окна экспорта) -->
+    <div id="exportSelectorBackdrop" class="modal-backdrop">
+        <div class="modal modal-selector">
+            <h3>Выберите данные для экспорта</h3>
+            <div class="modal-content-scroll">
+                <div id="exportSelectorList" class="selector-list"></div>
             </div>
-            <div class="password-warning">
-                ⚠️ Пароль отображается только один раз и исчезнет после перезагрузки страницы. Сохраните его.
+            <div class="modal-footer">
+                <button id="cancelSelectorBtn" class="btn">Отмена</button>
+                <button id="addSelectedBtn" class="btn btn-primary">Добавить выбранные</button>
             </div>
-            <table class="sensor-manager-table">
-                <thead>
-                <tr>
-                    <th>Логин</th>
-                    <th>Роль</th>
-                    <th>Пароль</th>
-                    <th>Действия</th>
-                </tr>
-                </thead>
-                <tbody id="userManagerBody"></tbody>
-            </table>
         </div>
-        <div class="modal-footer">
-            <button id="closeUserManagerBtn" class="btn">Закрыть</button>
+    </div>
+
+    <!-- Модальное окно управления датчиками (администрирование) -->
+    <div id="sensorManagerModal" class="modal-backdrop">
+        <div class="modal modal-large">
+            <h3>Управление датчиками</h3>
+            <div class="modal-content-scroll">
+                <div class="sensor-manager-controls">
+                    <input type="text" id="newSensorId" placeholder="ID нового датчика" class="input-full" autocomplete="off">
+                    <button id="registerSensorBtn" class="btn btn-primary">Зарегистрировать</button>
+                </div>
+                <table class="sensor-manager-table">
+                    <thead>
+                    <tr>
+                        <th>ID датчика</th>
+                        <th>Токен</th>
+                        <th>Создан</th>
+                        <th>Последняя активность</th>
+                        <th>IP регистрации</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                    </thead>
+                    <tbody id="sensorManagerBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="closeManagerBtn" class="btn">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно управления пользователями -->
+    <div id="userManagerModal" class="modal-backdrop">
+        <div class="modal modal-large">
+            <h3>Управление пользователями</h3>
+            <div class="modal-content-scroll">
+                <div class="sensor-manager-controls" id="userManagerControls">
+                    <select id="newUserRole" class="input-full">
+                        <option value="observer">Наблюдатель</option>
+                        <option value="worker">Рабочий</option>
+                        <option value="admin">Администратор</option>
+                        <option value="developer">Разработчик</option>
+                    </select>
+                    <button id="createUserBtn" class="btn btn-primary">Создать</button>
+                </div>
+                <div class="password-warning">
+                    ⚠️ Пароль отображается только один раз и исчезнет после перезагрузки страницы. Сохраните его.
+                </div>
+                <table class="sensor-manager-table">
+                    <thead>
+                    <tr>
+                        <th>Логин</th>
+                        <th>Роль</th>
+                        <th>Пароль</th>
+                        <th>Действия</th>
+                    </tr>
+                    </thead>
+                    <tbody id="userManagerBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button id="closeUserManagerBtn" class="btn">Закрыть</button>
+            </div>
         </div>
     </div>
 </div>
