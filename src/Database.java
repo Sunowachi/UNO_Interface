@@ -1,6 +1,16 @@
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -18,16 +28,164 @@ public class Database {
     public static final String YELLOW = "\u001B[33m";
 
     // ==================== КОНФИГУРАЦИЯ ПОДКЛЮЧЕНИЯ ====================
-    private static final String DB_URL = System.getenv().getOrDefault(
-            "DB_URL", "jdbc:postgresql://localhost:5432/sensors"
-    );
-    private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "postgres");
-    private static final String DB_PASS = System.getenv().getOrDefault("DB_PASS", "1");
+    private static final String DB_URL;
+    private static final String DB_USER;
+    private static final String DB_PASS;
+    private static final Path CONFIG_PATH = Paths.get("db_connection.properties");
 
     // ==================== ПУЛ СОЕДИНЕНИЙ ====================
-    private static final int POOL_SIZE = 10;
-    private static final int BORROW_TIMEOUT_MS = 3000;
+    private static final int POOL_SIZE = Config.getInt("db.poolSize", 10);
+    private static final int BORROW_TIMEOUT_MS = Config.getInt("db.borrowTimeoutMs", 3000);
     private static ArrayBlockingQueue<Connection> pool;
+
+    // ==================== ШИФРОВАНИЕ ПАРОЛЯ ====================
+    private static final String DB_PASSWORD_ENCRYPTION_KEY;
+    private static boolean urlWasPlain = false;
+    private static boolean userWasPlain = false;
+    private static boolean passwordWasPlain = false;
+    private static String plainUrl;
+    private static String plainUser;
+    private static String plainPassword;
+
+    static {
+        // Инициализация ключа шифрования для параметров БД
+        String envKey = System.getenv("DB_PASSWORD_ENCRYPTION_KEY");
+        if (envKey != null && !envKey.isEmpty()) {
+            DB_PASSWORD_ENCRYPTION_KEY = envKey;
+        } else {
+            Path keyFile = Paths.get("db_encryption.key");
+            if (Files.exists(keyFile)) {
+                try {
+                    DB_PASSWORD_ENCRYPTION_KEY = Files.readString(keyFile).trim();
+                } catch (IOException e) {
+                    throw new RuntimeException("Не удалось прочитать ключ шифрования параметров БД из файла " + keyFile, e);
+                }
+            } else {
+                // Генерируем новый ключ
+                byte[] key = new byte[32];
+                new SecureRandom().nextBytes(key);
+                String encoded = Base64.getEncoder().encodeToString(key);
+                try {
+                    Files.writeString(keyFile, encoded);
+                    System.out.println("🔐 Сгенерирован новый ключ шифрования параметров БД, сохранён в " + keyFile);
+                } catch (IOException e) {
+                    throw new RuntimeException("Не удалось сохранить ключ шифрования параметров БД", e);
+                }
+                DB_PASSWORD_ENCRYPTION_KEY = encoded;
+            }
+        }
+
+        // Чтение параметров подключения из файла (только файл, переменные окружения игнорируются)
+        Properties dbProps = new Properties();
+        if (Files.exists(CONFIG_PATH)) {
+            try (InputStream is = Files.newInputStream(CONFIG_PATH)) {
+                dbProps.load(is);
+                System.out.println("✅ Загружены параметры БД из " + CONFIG_PATH);
+            } catch (IOException e) {
+                System.err.println("⚠️ Ошибка чтения " + CONFIG_PATH + "!");
+            }
+        } else {
+            System.err.println("⚠️ Файл " + CONFIG_PATH + " не найден!");
+        }
+
+        // ---- Обработка URL (только из файла) ----
+        String rawUrl = dbProps.getProperty("db.url");
+        if (rawUrl == null || rawUrl.isEmpty()) {
+            throw new RuntimeException("URL базы данных не задан. Укажите db.url в файле " + CONFIG_PATH + "!");
+        }
+        if (rawUrl.startsWith("ENC:")) {
+            DB_URL = decryptString(rawUrl.substring(4));
+        } else {
+            plainUrl = rawUrl;
+            urlWasPlain = true;
+            DB_URL = rawUrl;
+        }
+
+        // ---- Обработка пользователя (только из файла) ----
+        String rawUser = dbProps.getProperty("db.user");
+        if (rawUser == null || rawUser.isEmpty()) {
+            throw new RuntimeException("Пользователь БД не задан. Укажите db.user в файле " + CONFIG_PATH + "!");
+        }
+        if (rawUser.startsWith("ENC:")) {
+            DB_USER = decryptString(rawUser.substring(4));
+        } else {
+            plainUser = rawUser;
+            userWasPlain = true;
+            DB_USER = rawUser;
+        }
+
+        // ---- Обработка пароля (только из файла) ----
+        String rawPassword = dbProps.getProperty("db.password");
+        if (rawPassword == null || rawPassword.isEmpty()) {
+            throw new RuntimeException("Пароль для подключения к БД не задан. Укажите его в файле настроек " + CONFIG_PATH + "!");
+        }
+        if (rawPassword.startsWith("ENC:")) {
+            DB_PASS = decryptString(rawPassword.substring(4));
+        } else {
+            plainPassword = rawPassword;
+            passwordWasPlain = true;
+            DB_PASS = rawPassword;
+        }
+    }
+
+    // ==================== ШИФРОВАНИЕ/ДЕШИФРОВАНИЕ ====================
+    private static final String AES_ALGO = "AES/GCM/NoPadding";
+    private static final int GCM_TAG_LENGTH = 128;
+    private static final int GCM_IV_LENGTH = 12;
+
+    private static String encryptString(String plain) {
+        try {
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            new SecureRandom().nextBytes(iv);
+            Cipher cipher = Cipher.getInstance(AES_ALGO);
+            SecretKeySpec keySpec = new SecretKeySpec(Base64.getDecoder().decode(DB_PASSWORD_ENCRYPTION_KEY), "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec);
+            byte[] cipherText = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+            byte[] combined = new byte[iv.length + cipherText.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(cipherText, 0, combined, iv.length, cipherText.length);
+            return Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка шифрования строки", e);
+        }
+    }
+
+    private static String decryptString(String encrypted) {
+        try {
+            byte[] combined = Base64.getDecoder().decode(encrypted);
+            byte[] iv = Arrays.copyOfRange(combined, 0, GCM_IV_LENGTH);
+            byte[] cipherText = Arrays.copyOfRange(combined, GCM_IV_LENGTH, combined.length);
+            Cipher cipher = Cipher.getInstance(AES_ALGO);
+            SecretKeySpec keySpec = new SecretKeySpec(Base64.getDecoder().decode(DB_PASSWORD_ENCRYPTION_KEY), "AES");
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec);
+            byte[] plain = cipher.doFinal(cipherText);
+            return new String(plain, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка дешифрования строки", e);
+        }
+    }
+
+    private static void saveEncryptedConfig(String encUrl, String encUser, String encPassword) {
+        try {
+            Properties props = new Properties();
+            if (Files.exists(CONFIG_PATH)) {
+                try (InputStream is = Files.newInputStream(CONFIG_PATH)) {
+                    props.load(is);
+                }
+            }
+            if (encUrl != null) props.setProperty("db.url", "ENC:" + encUrl);
+            if (encUser != null) props.setProperty("db.user", "ENC:" + encUser);
+            if (encPassword != null) props.setProperty("db.password", "ENC:" + encPassword);
+            try (OutputStream os = Files.newOutputStream(CONFIG_PATH)) {
+                props.store(os, "Database connection properties (encrypted)");
+            }
+            System.out.println("✅ Параметры БД зашифрованы и сохранены в " + CONFIG_PATH);
+        } catch (IOException e) {
+            System.err.println("⚠️ Не удалось сохранить зашифрованные параметры в файл: " + e.getMessage());
+        }
+    }
 
     // ==================== ВНУТРЕННИЙ КЛАСС – ПОЛЬЗОВАТЕЛЬ ====================
     static class User {
@@ -49,6 +207,22 @@ public class Database {
 
             for (int i = 0; i < POOL_SIZE; i++) {
                 pool.add(createConnection());
+            }
+
+            // Проверяем соединение и, если нужно, шифруем открытые параметры
+            Connection test = borrow();
+            try {
+                if (urlWasPlain || userWasPlain || passwordWasPlain) {
+                    String encUrl = urlWasPlain ? encryptString(plainUrl) : null;
+                    String encUser = userWasPlain ? encryptString(plainUser) : null;
+                    String encPassword = passwordWasPlain ? encryptString(plainPassword) : null;
+                    saveEncryptedConfig(encUrl, encUser, encPassword);
+                    // Сбрасываем флаги, чтобы при повторном вызове init не шифровать снова
+                    urlWasPlain = userWasPlain = passwordWasPlain = false;
+                    plainUrl = plainUser = plainPassword = null;
+                }
+            } finally {
+                release(test);
             }
 
             Connection c = borrow();

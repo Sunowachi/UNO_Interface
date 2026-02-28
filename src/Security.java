@@ -30,7 +30,26 @@ public class Security {
     static final int KEY_LENGTH = 256;                                // Длина ключа (бит)
     static final int MAX_PASSWORD_LENGTH = 256;                       // Макс. длина пароля
 
-    static final String SENSOR_REGISTER_KEY = System.getenv("SENSOR_REGISTER_KEY");
+    static final String SENSOR_REGISTER_KEY;
+    static {
+        String key = System.getenv("SENSOR_REGISTER_KEY");
+        if (key == null || key.isEmpty()) {
+            Path keyFile = Paths.get("reg.key");
+            if (Files.exists(keyFile)) {
+                try {
+                    key = Files.readString(keyFile).trim();
+                    if (key.isEmpty()) {
+                        throw new IllegalStateException("Файл reg.key пуст");
+                    }
+                } catch (IOException e) {
+                    throw new IllegalStateException("Не удалось прочитать файл с ключом регистрации датчиков: " + keyFile.toAbsolutePath(), e);
+                }
+            } else {
+                throw new IllegalStateException("SENSOR_REGISTER_KEY не задан ни в переменной окружения среды разработки, ни в файле reg.key");
+            }
+        }
+        SENSOR_REGISTER_KEY = key;
+    }
 
     // Ключ шифрования токенов датчиков
     private static final String ENCRYPTION_KEY_ENV = "TOKEN_ENCRYPTION_KEY";
@@ -40,15 +59,15 @@ public class Security {
 
     static {
         if (SENSOR_REGISTER_KEY == null || SENSOR_REGISTER_KEY.isEmpty()) {
-            throw new IllegalStateException("SENSOR_REGISTER_KEY должен быть установлен через переменную среды");
+            throw new IllegalStateException("SENSOR_REGISTER_KEY не установлен!");
         }
 
-        byte[] key = null;
+        byte[] enckey = null;
         String envKey = System.getenv(ENCRYPTION_KEY_ENV);
         if (envKey != null && !envKey.isEmpty()) {
             try {
-                key = Base64.getDecoder().decode(envKey);
-                if (key.length != KEY_SIZE_BYTES) {
+                enckey = Base64.getDecoder().decode(envKey);
+                if (enckey.length != KEY_SIZE_BYTES) {
                     throw new IllegalArgumentException("Ключ из переменной окружения имеет неверную длину (ожидалось 32 байта)");
                 }
             } catch (IllegalArgumentException e) {
@@ -59,8 +78,8 @@ public class Security {
             if (Files.exists(keyFile)) {
                 try {
                     String fileContent = Files.readString(keyFile).trim();
-                    key = Base64.getDecoder().decode(fileContent);
-                    if (key.length != KEY_SIZE_BYTES) {
+                    enckey = Base64.getDecoder().decode(fileContent);
+                    if (enckey.length != KEY_SIZE_BYTES) {
                         throw new IllegalStateException("Ключ из файла имеет неверную длину");
                     }
                 } catch (Exception e) {
@@ -69,9 +88,9 @@ public class Security {
             } else {
                 try {
                     SecureRandom sr = SecureRandom.getInstanceStrong();
-                    key = new byte[KEY_SIZE_BYTES];
-                    sr.nextBytes(key);
-                    String encoded = Base64.getEncoder().encodeToString(key);
+                    enckey = new byte[KEY_SIZE_BYTES];
+                    sr.nextBytes(enckey);
+                    String encoded = Base64.getEncoder().encodeToString(enckey);
                     Files.writeString(keyFile, encoded);
                     System.out.println("🔐 Сгенерирован новый ключ шифрования токенов, сохранён в " + ENCRYPTION_KEY_FILE);
                 } catch (Exception e) {
@@ -79,11 +98,13 @@ public class Security {
                 }
             }
         }
-        ENCRYPTION_KEY = key;
+        ENCRYPTION_KEY = enckey;
     }
 
-    static final int MAX_SENSORS_TOTAL = 10_000;                     // Макс. общее количество датчиков
-    static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = 10;            // Лимит регистраций с одного IP в час
+    // Макс. общее количество датчиков
+    static final int MAX_SENSORS_TOTAL = Config.getInt("security.maxSensorsTotal", 10_000);
+    // Лимит регистраций с одного IP в час
+    static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = Config.getInt("security.maxSensorRegPerIpPerHour", 10);
 
     // ==================== ПРАВА ДОСТУПА ====================
     enum Permission { VIEW_DATA, EDIT_CONFIG, MANAGE_SENSORS, MANAGE_USERS }

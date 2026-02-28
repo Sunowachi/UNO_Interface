@@ -13,13 +13,18 @@ import java.util.concurrent.atomic.AtomicLong;
 public class DataStore {
 
     // ==================== КОНФИГУРАЦИЯ КЭША И ОГРАНИЧЕНИЙ ====================
-    static final int CACHE_POINTS = 200;                 // Максимальное количество точек в кэше на одну метрику
-    static final long SENSOR_TTL_MS = 60_000;            // Время жизни датчика без активности (считается онлайн)
-
-    static final long SENSOR_MIN_POST_INTERVAL_MS = 200; // Минимальный интервал между POST от одного датчика
-    static final int MAX_SENSOR_FIELDS = 100;            // Максимальное количество полей в одном POST
-    static final int MAX_NEW_METRICS_PER_POST = 50;      // Максимальное количество новых метрик, создаваемых за один POST
-    static final int MAX_ACTIVE_SENSORS = 20_000;        // Максимальное количество одновременно активных датчиков
+    // Максимальное количество точек в кэше на одну метрику
+    static final int CACHE_POINTS = Config.getInt("datastore.cachePoints", 200);
+    // Время жизни датчика без активности (считается онлайн)
+    static final long SENSOR_TTL_MS = Config.getLong("datastore.sensorTtlMs", 60_000);
+    // Минимальный интервал между POST от одного датчика
+    static final long SENSOR_MIN_POST_INTERVAL_MS = Config.getLong("datastore.minPostIntervalMs", 200);
+    // Максимальное количество полей в одном POST
+    static final int MAX_SENSOR_FIELDS = Config.getInt("datastore.maxSensorFields", 100);
+    // Максимальное количество новых метрик, создаваемых за один POST
+    static final int MAX_NEW_METRICS_PER_POST = Config.getInt("datastore.maxNewMetricsPerPost", 50);
+    // Максимальное количество одновременно активных датчиков
+    static final int MAX_ACTIVE_SENSORS = Config.getInt("datastore.maxActiveSensors", 20_000);
 
     // ==================== СОСТОЯНИЕ СИСТЕМЫ ====================
     static final Map<String, Long> lastPostTs = new ConcurrentHashMap<>();   // Время последнего POST для каждого датчика
@@ -28,10 +33,14 @@ public class DataStore {
     static final AtomicLong droppedPoints = new AtomicLong();                 // Счётчик отброшенных точек (для мониторинга)
 
     // ==================== АСИНХРОННАЯ ЗАПИСЬ В БД ====================
-    static final int DB_BATCH_SIZE = 500;                 // Размер пакета для записи в БД
-    static final int DB_QUEUE_LIMIT = 500_000;            // Максимальный размер очереди на запись
-    static final BlockingQueue<DbPoint> dbQueue = new LinkedBlockingQueue<>(DB_QUEUE_LIMIT); // Очередь точек на запись
-    static volatile boolean dbRunning = true;              // Флаг работы фонового потока записи
+    // Размер пакета для записи в БД
+    static final int DB_BATCH_SIZE = Config.getInt("datastore.dbBatchSize", 500);
+    // Максимальный размер очереди на запись
+    static final int DB_QUEUE_LIMIT = Config.getInt("datastore.dbQueueLimit", 500_000);
+    // Очередь точек на запись
+    static final BlockingQueue<DbPoint> dbQueue = new LinkedBlockingQueue<>(DB_QUEUE_LIMIT);
+    // Флаг работы фонового потока записи
+    static volatile boolean dbRunning = true;
 
     // ==================== КЭШ ИСТОРИЧЕСКИХ ДАННЫХ (ИЗ БД) ====================
     private static long lastHistoryLoadTime = 0;

@@ -16,8 +16,10 @@ import java.util.Map;
 public class Web {
 
     // ==================== КОНФИГУРАЦИЯ ====================
-    private static final int PORT = 8181;                         // Порт сервера
-    private static final int MAX_BODY_SIZE = 64 * 1024;           // Максимальный размер тела запроса (64 КБ)
+    // Порт сервера
+    private static final int PORT = Config.getInt("server.port", 8181);
+    // Максимальный размер тела запроса
+    private static final int MAX_BODY_SIZE = Config.getInt("server.maxBodySize", 64 * 1024);
     private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(50); // Пул для асинхронной обработки данных датчиков
     public static final long SERVER_START = System.currentTimeMillis(); // Время запуска сервера
 

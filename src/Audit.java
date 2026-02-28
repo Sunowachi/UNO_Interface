@@ -12,10 +12,14 @@ import java.util.zip.GZIPOutputStream;
 public class Audit {
 
     // ==================== КОНФИГУРАЦИЯ ====================
-    private static final String FILE = "audit.log";                     // Имя файла аудита
-    private static final long MAX_SIZE = 10 * 1024 * 1024;              // Максимальный размер (10 МБ)
-    private static final int MAX_BACKUPS = 5;                            // Количество хранимых архивов
-    private static final int QUEUE_CAPACITY = 10_000;                    // Размер очереди событий
+    // Имя файла аудита
+    private static final String FILE = Config.get("audit.file", "audit.log");
+    // Максимальный размер (10 МБ)
+    private static final long MAX_SIZE = Config.getLong("audit.maxSize", 10 * 1024 * 1024);
+    // Количество хранимых архивов
+    private static final int MAX_BACKUPS = Config.getInt("audit.maxBackups", 5);
+    // Размер очереди событий
+    private static final int QUEUE_CAPACITY = Config.getInt("audit.queueCapacity", 10_000);
 
     // ==================== ОЧЕРЕДЬ И ПОТОК ====================
     private static final BlockingQueue<AuditEvent> eventQueue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);

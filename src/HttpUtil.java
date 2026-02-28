@@ -14,10 +14,14 @@ import java.util.Date;
 public class HttpUtil {
 
     // ==================== КОНСТАНТЫ ====================
-    static final int MAX_JSON_SIZE = 4096;                       // Максимальный размер принимаемого JSON
-    static final int MAX_CONFIG_SIZE = 10 * 1024 * 1024;         // Максимальный размер конфигурационного файла (10 МБ)
-    private static final Path CONFIG_ARCHIVE_DIR = Path.of("config_archive"); // Директория для архивов конфига
-    static final boolean FORCE_SECURE_COOKIE = false;            // Принудительный Secure-флаг для cookie
+    // Максимальный размер принимаемого JSON
+    static final int MAX_JSON_SIZE = Config.getInt("http.maxJsonSize", 4096);
+    // Максимальный размер конфигурационного файла
+    static final int MAX_CONFIG_SIZE = Config.getInt("http.maxConfigSize", 10 * 1024 * 1024);
+    // Директория для архивов конфига
+    private static final Path CONFIG_ARCHIVE_DIR = Path.of("config_archive");
+    // Принудительный Secure-флаг для cookie
+    static final boolean FORCE_SECURE_COOKIE = false;
 
     // ==================== ОБРАБОТКА HTTP-ЗАГОЛОВКОВ ====================
 
