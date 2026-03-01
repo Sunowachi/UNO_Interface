@@ -38,7 +38,7 @@ public class Database {
     private static final int BORROW_TIMEOUT_MS = Config.getInt("db.borrowTimeoutMs", 3000);
     private static ArrayBlockingQueue<Connection> pool;
 
-    // ==================== ШИФРОВАНИЕ ПАРОЛЯ ====================
+    // ==================== ШИФРОВАНИЕ ФАЙЛОВ ПОДКЛЮЧЕНИЯ К БД ====================
     private static final String DB_PASSWORD_ENCRYPTION_KEY;
     private static boolean urlWasPlain = false;
     private static boolean userWasPlain = false;
@@ -197,6 +197,15 @@ public class Database {
         }
     }
 
+    // ==================== МЕТРИКИ ====================
+    public static Map<String, Object> getPoolStats() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("total", POOL_SIZE);
+        stats.put("active", POOL_SIZE - pool.remainingCapacity());
+        stats.put("available", pool.remainingCapacity());
+        return stats;
+    }
+
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
     /** Инициализация драйвера, пула соединений и таблиц */
@@ -268,6 +277,10 @@ public class Database {
     static void release(Connection c) {
         if (c == null) return;
         try {
+            if (!c.getAutoCommit()) {
+                c.rollback();
+                c.setAutoCommit(true);
+            }
             if (c.isClosed() || !c.isValid(1) || !pool.offer(c)) {
                 quietlyClose(c);
             }

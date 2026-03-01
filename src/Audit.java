@@ -1,8 +1,11 @@
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
 
@@ -196,5 +199,39 @@ public class Audit {
                 .replace("\"", "\\\"")
                 .replace("|", "_")
                 .trim();
+    }
+
+    public static long getAuditFileSize() {
+        File f = new File(FILE);
+        return f.exists() ? f.length() : 0;
+    }
+    public static List<String> getLatestEntries(int limit) {
+        List<String> entries = new ArrayList<>();
+        File f = new File(FILE);
+        if (!f.exists()) return entries;
+        try (RandomAccessFile raf = new RandomAccessFile(f, "r")) {
+            long length = raf.length();
+            if (length == 0) return entries;
+            long pos = length;
+            int lines = 0;
+            while (pos > 0 && lines < limit) {
+                pos--;
+                raf.seek(pos);
+                int b = raf.read();
+                if (b == '\n' || pos == 0) {
+                    long start = (pos == 0) ? 0 : pos + 1;
+                    long end = length;
+                    byte[] lineBytes = new byte[(int)(end - start)];
+                    raf.seek(start);
+                    raf.readFully(lineBytes);
+                    entries.add(0, new String(lineBytes, StandardCharsets.UTF_8));
+                    lines++;
+                    length = pos;
+                }
+            }
+        } catch (Exception e) {
+            Audit.error("system", "ОШИБКА_ЧТЕНИЯ_АУДИТА", e.getMessage(), "-");
+        }
+        return entries;
     }
 }

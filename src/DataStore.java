@@ -176,6 +176,27 @@ public class DataStore {
         lastPostTs.entrySet().removeIf(e -> now - e.getValue() > SENSOR_TTL_MS * 3);
     }
 
+    // ==================== МЕТРИКИ ====================
+    public static int getQueueSize() {
+        return dbQueue.size();
+    }
+
+    public static long getDroppedPoints() {
+        return droppedPoints.get();
+    }
+
+    public static int getActiveMetricsCount() {
+        return cache.size();
+    }
+
+    public static int getActiveSensorsCount() {
+        return lastPostTs.size();
+    }
+
+    public static Map<String, Long> getLastSensorTimes() {
+        return new HashMap<>(lastPostTs);
+    }
+
     // ==================== ОБРАБОТКА HTTP-ЗАПРОСОВ ====================
 
     /** Обработка данных, присланных датчиком (POST /data) */
@@ -366,6 +387,7 @@ public class DataStore {
                 ps.clearBatch();
             }
             c.commit();
+            c.setAutoCommit(true);
         } catch (Exception e) {
             try { if (c != null) c.rollback(); } catch (Exception ignored) {}
         } finally {
@@ -467,6 +489,23 @@ public class DataStore {
             return m;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    public static void cleanupOldHistory() {
+        long cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000; // 30 дней
+        Connection c = null;
+        try {
+            c = Database.borrow();
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM history WHERE ts < ?")) {
+                ps.setLong(1, cutoff);
+                int deleted = ps.executeUpdate();
+                System.out.println("Очистка history: удалено " + deleted + " записей");
+            }
+        } catch (Exception e) {
+            Audit.error("system", "ОШИБКА_ОЧИСТКИ_HISTORY", e.getMessage(), "-");
+        } finally {
+            Database.release(c);
         }
     }
 }

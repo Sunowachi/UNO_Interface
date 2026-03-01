@@ -211,7 +211,8 @@ export const PERMISSIONS = Object.freeze({
     ADMIN_DB:        'admin_db',        // Администрирование БД
     DEV_ALL:         'dev_all',         // Полные права разработчика
     MANAGE_SENSORS:  'manage_sensors',   // Управление датчиками
-    MANAGE_USERS:    'manage_users'
+    MANAGE_USERS:    'manage_users',
+    VIEW_DIAGNOSTIC: 'view_diagnostic'
 });
 
 // Роли пользователей
@@ -233,7 +234,8 @@ export const ROLE_PERMISSIONS = Object.freeze({
         PERMISSIONS.EXPORT_DATA,
         PERMISSIONS.ADMIN_DB,
         PERMISSIONS.MANAGE_SENSORS,
-        PERMISSIONS.MANAGE_USERS
+        PERMISSIONS.MANAGE_USERS,
+        PERMISSIONS.VIEW_DIAGNOSTIC
     ]),
     [ROLES.WORKER]: new Set([PERMISSIONS.VIEW_DATA, PERMISSIONS.VIEW_CHARTS]),
     [ROLES.OBSERVER]: new Set([PERMISSIONS.VIEW_DATA])

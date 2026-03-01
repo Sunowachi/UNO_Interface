@@ -228,6 +228,29 @@
             </div>
         </div>
     </div>
+
+    <!-- Модальное окно диагностики -->
+    <div id="diagnosticModalBackdrop" class="modal-backdrop">
+        <div class="modal modal-large">
+            <h3>Диагностика системы</h3>
+            <div class="modal-tabs">
+                <button class="tab-button active" data-tab="overview">Общее</button>
+                <button class="tab-button" data-tab="database">База данных</button>
+                <button class="tab-button" data-tab="datastore">DataStore</button>
+                <button class="tab-button" data-tab="disk">Диск</button>
+                <button class="tab-button" data-tab="system">Система</button>
+                <button class="tab-button" data-tab="sensors">Датчики</button>
+                <button class="tab-button" data-tab="audit">Аудит</button>
+            </div>
+            <div class="modal-content-scroll" id="diagnosticContent">
+                <!-- динамическое содержимое -->
+            </div>
+            <div class="modal-footer">
+                <span id="diagTimestamp"></span>
+                <button id="closeDiagnosticBtn" class="btn">Закрыть</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ========== ОКНО АВТОРИЗАЦИИ ========== -->

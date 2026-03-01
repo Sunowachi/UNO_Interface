@@ -6,6 +6,7 @@ import { hideApp } from './ui/app.js';
 import { initCustomNumberInputs } from './inputArrows.js';
 import { initExportModal } from './ui/export.js';
 import { initSensorManager, initUserManager } from './ui/sensorManager.js';
+import { initDiagnostic } from './ui/diagnostic.js';
 
 // ==================== ТОЧКА ВХОДА ПОСЛЕ ЗАГРУЗКИ DOM ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initCustomNumberInputs();             // Применяем кастомные стрелки для числовых полей
         initSensorManager();                  // Инициализируем менеджер датчиков
         initUserManager();                    // Инициализируем менеджер пользователей
+        initDiagnostic();                    // Инициализация диагностики
     } catch (e) {
         setTimeout(openLoginModal, 100);      // В случае ошибки показываем окно входа
     }

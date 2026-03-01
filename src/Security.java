@@ -107,11 +107,17 @@ public class Security {
     static final int MAX_SENSOR_REG_PER_IP_PER_HOUR = Config.getInt("security.maxSensorRegPerIpPerHour", 10);
 
     // ==================== ПРАВА ДОСТУПА ====================
-    enum Permission { VIEW_DATA, EDIT_CONFIG, MANAGE_SENSORS, MANAGE_USERS }
+    enum Permission { VIEW_DATA, EDIT_CONFIG, MANAGE_SENSORS, MANAGE_USERS, VIEW_DIAGNOSTIC }
 
     static final Map<String, Set<Permission>> ROLE_PERMS = Map.of(
             "developer", EnumSet.allOf(Permission.class),
-            "admin", EnumSet.of(Permission.VIEW_DATA, Permission.EDIT_CONFIG, Permission.MANAGE_SENSORS, Permission.MANAGE_USERS),
+            "admin", EnumSet.of(
+                    Permission.VIEW_DATA,
+                    Permission.EDIT_CONFIG,
+                    Permission.MANAGE_SENSORS,
+                    Permission.MANAGE_USERS,
+                    Permission.VIEW_DIAGNOSTIC
+            ),
             "observer", EnumSet.of(Permission.VIEW_DATA),
             "worker", EnumSet.of(Permission.VIEW_DATA)
     );

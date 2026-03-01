@@ -99,7 +99,7 @@ body {
     border-color: var(--color-primary-light);
 }
 
-/* ========== ПАНЕЛЬ РЕГИСТРАЦИИ ТОКЕНОВ ДАТЧИКОВ (АДМИНИСТРИРОВАНИЕ) ========== */
+/* ========== ПАНЕЛЬ РЕГИСТРАЦИИ ТОКЕНОВ ДАТЧИКОВ ========== */
 .modal.modal-large {
     width: 1600px;
     max-width: 95%;
@@ -167,6 +167,15 @@ body {
 }
 .btn-danger:hover {
     background-color: #b71c1c;
+}
+
+th.sort-asc::after {
+    content: ' ▲';
+    font-size: 10px;
+}
+th.sort-desc::after {
+    content: ' ▼';
+    font-size: 10px;
 }
 
 /* ========== ПАНЕЛЬ УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ ========== */
@@ -291,6 +300,74 @@ body {
     color: var(--color-text-secondary);
     font-size: 0.9rem;
 }
+
+/* ========== ПАНЕЛЬ ДИГНОСТИКИ СИСТЕМ ========== */
+.modal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 8px;
+}
+.tab-button {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    transition: var(--transition);
+}
+.tab-button.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary-dark);
+}
+.tab-button:hover {
+    background: var(--color-surface-hover);
+}
+
+.diagnostic-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+.diagnostic-table td, .diagnostic-table th {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+}
+.diagnostic-table th {
+    background-color: var(--color-surface-hover);
+}
+.status-ok { color: #4caf50; font-weight: bold; }
+.status-warning { color: #ff9800; font-weight: bold; }
+.status-error { color: #f44336; font-weight: bold; }
+.status-online { color: #4caf50; }
+.status-stale { color: #ff9800; }
+.status-dead { color: #f44336; }
+
+.audit-log {
+    max-height: 400px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+}
+.audit-entry {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+    overflow-x: auto;
+}
+.audit-entry.error { background-color: rgba(244, 67, 54, 0.1); }
+.audit-entry.warning { background-color: rgba(255, 152, 0, 0.1); }
+.audit-entry .timestamp { color: #888; margin-right: 8px; }
+.audit-entry .level { font-weight: bold; margin-right: 8px; }
+.audit-entry .user { color: #42a5f5; margin-right: 8px; }
+.audit-entry .action { color: #66bb6a; margin-right: 8px; }
+.audit-entry .details { color: #ffa726; margin-right: 8px; }
+.audit-entry .ip { color: #ab47bc; }
 
 /* ========== ПАНЕЛЬ ДАТЧИКОВ (СПРАВА) ========== */
 #sensorPanel {

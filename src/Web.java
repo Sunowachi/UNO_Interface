@@ -20,7 +20,7 @@ public class Web {
     private static final int PORT = Config.getInt("server.port", 8181);
     // Максимальный размер тела запроса
     private static final int MAX_BODY_SIZE = Config.getInt("server.maxBodySize", 64 * 1024);
-    private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(50); // Пул для асинхронной обработки данных датчиков
+    private static final ExecutorService sensorExecutor = Executors.newFixedThreadPool(200); // Пул для асинхронной обработки данных датчиков
     public static final long SERVER_START = System.currentTimeMillis(); // Время запуска сервера
 
     // ==================== ТОЧКА ВХОДА ====================
@@ -53,6 +53,8 @@ public class Web {
         server.createContext("/admin/users", Web::handleAdminUsers);    // Список пользователей
         server.createContext("/admin/user/create", Web::handleAdminUserCreate); // Создание пользователя
         server.createContext("/admin/user/delete", Web::handleAdminUserDelete); // Удаление пользователя
+        server.createContext("/diagnostic", Web::handleDiagnostic);     // Диагностика
+        server.createContext("/audit/latest", Web::handleAuditLatest);  // Аудит
 
         server.setExecutor(Executors.newFixedThreadPool(100));
         server.start();
@@ -60,6 +62,23 @@ public class Web {
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(DataStore::cleanupCache, 1, 1, TimeUnit.MINUTES);
+
+        ScheduledExecutorService diagScheduler = Executors.newSingleThreadScheduledExecutor();
+        diagScheduler.scheduleAtFixedRate(() -> {
+            try {
+                var health = Diagnostic.getHealth();
+                String status = (String) health.get("status");
+                if (!"OK".equals(status)) {
+                    Audit.warn("system", "ДИАГНОСТИКА_ПРЕДУПРЕЖДЕНИЕ",
+                            "Обнаружены проблемы: " + health, "localhost");
+                }
+            } catch (Exception e) {
+                Audit.error("system", "ОШИБКА_ДИАГНОСТИКИ", e.getMessage(), "-");
+            }
+        }, 1, 5, TimeUnit.MINUTES);
+
+        ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
+        cleanupScheduler.scheduleAtFixedRate(DataStore::cleanupOldHistory, 24, 1, TimeUnit.HOURS);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("⏹ Завершение работы сервера...");
@@ -366,6 +385,54 @@ public class Web {
         Database.recordAlert(sensorId, varName, value, usersStr, snapshot);
 
         HttpUtil.sendJson(ex, "{\"status\":\"ok\"}");
+    }
+
+    static void handleDiagnostic(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null) {
+            HttpUtil.sendError(ex, 401, "unauthorized");
+            return;
+        }
+        if (!Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
+
+        Map<String, Object> health = Diagnostic.getHealth();
+        HttpUtil.sendJson(ex, HttpUtil.toJson(health));
+    }
+
+    static void handleAuditLatest(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        Security.Session s = Security.getSession(ex);
+        if (s == null || !Security.require(s, ex, Security.Permission.MANAGE_SENSORS)) return;
+
+        int limit = 100;
+        String query = ex.getRequestURI().getQuery();
+        if (query != null && query.startsWith("limit=")) {
+            try {
+                limit = Integer.parseInt(query.substring(6));
+            } catch (NumberFormatException ignored) {}
+        }
+        List<String> entries = Audit.getLatestEntries(limit);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < entries.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append("\"").append(escapeJson(entries.get(i))).append("\"");
+        }
+        sb.append("]");
+        HttpUtil.sendJson(ex, sb.toString());
+    }
+
+    private static String escapeJson(String s) {
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
     }
 
     // ==================== АДМИНИСТРИРОВАНИЕ ДАТЧИКОВ ====================

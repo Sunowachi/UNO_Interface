@@ -1576,6 +1576,13 @@
           "showProcessed": false
         }
       ]
+    },
+    {
+      "id": "2",
+      "name": "яйца",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
     }
   ]
 }

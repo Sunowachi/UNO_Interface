@@ -1576,6 +1576,13 @@
           "showProcessed": false
         }
       ]
+    },
+    {
+      "id": "2",
+      "name": "Датчик 2",
+      "vars": [],
+      "deleted": false,
+      "varSettings": []
     }
   ]
 }

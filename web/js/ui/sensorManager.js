@@ -3,7 +3,7 @@ import { hasPermission } from '../utils/permissions.js';
 import { showToast } from './toast.js';
 import { lockSession } from '../session.js';
 
-// ==================== УПРАВЛЕНИЕ ДАТЧИКАМИ (АДМИНИСТРИРОВАНИЕ) ====================
+// ==================== УПРАВЛЕНИЕ ДАТЧИКАМИ ====================
 
 let managerModal = null;
 let sensorsData = [];
@@ -11,6 +11,10 @@ let refreshInterval = null;
 let actionInProgress = false;
 // Временное хранилище паролей для только что созданных пользователей
 const tempPasswords = new Map();
+
+// Состояние сортировки
+let sortColumn = 'sensorId'; // столбец по умолчанию
+let sortDirection = 'asc';    // направление: 'asc' или 'desc'
 
 /** Открыть модальное окно управления датчиками */
 export async function openSensorManager() {
@@ -56,13 +60,106 @@ async function loadSensors(silent = false) {
         }
         if (!res.ok) throw new Error('Ошибка загрузки');
         const newData = await res.json();
-        updateTableWithDiff(newData);
+        sensorsData = newData;
+        applySort(); // применяем текущую сортировку и перерисовываем
     } catch (e) {
         if (!silent) {
             console.error('Ошибка загрузки датчиков:', e);
             showToast('Не удалось загрузить список датчиков');
         }
     }
+}
+
+/** Применить сортировку и перерисовать таблицу */
+function applySort() {
+    const sorted = sortSensors(sensorsData, sortColumn, sortDirection);
+    renderTable(sorted);
+    updateSortIndicators();
+}
+
+/** Естественное сравнение строк (учитывает числа) */
+function naturalCompare(a, b) {
+    const re = /(\d+|\D+)/g;
+    const aParts = String(a).match(re) || [];
+    const bParts = String(b).match(re) || [];
+    const len = Math.min(aParts.length, bParts.length);
+    for (let i = 0; i < len; i++) {
+        const aPart = aParts[i];
+        const bPart = bParts[i];
+        const aNum = parseInt(aPart, 10);
+        const bNum = parseInt(bPart, 10);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            if (aNum !== bNum) return aNum - bNum;
+        } else {
+            const cmp = aPart.localeCompare(bPart, undefined, { sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+        }
+    }
+    return aParts.length - bParts.length;
+}
+
+/** Функция сортировки данных */
+function sortSensors(data, column, direction) {
+    return [...data].sort((a, b) => {
+        let valA, valB;
+        switch(column) {
+            case 'sensorId':
+                valA = a.sensorId;
+                valB = b.sensorId;
+                break;
+            case 'token':
+                valA = a.token || '';
+                valB = b.token || '';
+                break;
+            case 'createdAt':
+                valA = a.createdAt || 0;
+                valB = b.createdAt || 0;
+                break;
+            case 'lastSeen':
+                valA = a.lastSeen || 0;
+                valB = b.lastSeen || 0;
+                break;
+            case 'registerIp':
+                valA = a.registerIp || '';
+                valB = b.registerIp || '';
+                break;
+            case 'deleted':
+                valA = a.deleted ? 1 : 0;
+                valB = b.deleted ? 1 : 0;
+                break;
+            default:
+                return 0;
+        }
+        let cmp;
+        if (typeof valA === 'string' && typeof valB === 'string') {
+            cmp = naturalCompare(valA, valB);
+        } else {
+            if (valA < valB) cmp = -1;
+            else if (valA > valB) cmp = 1;
+            else cmp = 0;
+        }
+        return direction === 'asc' ? cmp : -cmp;
+    });
+}
+
+/** Полная перерисовка таблицы */
+function renderTable(data) {
+    const tbody = document.getElementById('sensorManagerBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    data.forEach(s => tbody.appendChild(createRow(s)));
+}
+
+/** Обновить индикаторы сортировки в заголовках */
+function updateSortIndicators() {
+    const ths = document.querySelectorAll('#sensorManagerModal thead th');
+    ths.forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        const col = th.dataset.column;
+        if (col === sortColumn) {
+            th.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
 }
 
 /** Сравнить старые и новые данные, обновить только изменившиеся строки */
@@ -98,6 +195,7 @@ function updateRowContent(row, newSensor, oldSensor) {
     if (newSensor.deleted) row.classList.add('deleted-sensor');
     else row.classList.remove('deleted-sensor');
 
+    // Обновляем существующий элемент токена, не создавая новый
     const tokenSpan = row.querySelector('.token-mask');
     if (tokenSpan) {
         if (newSensor.token) {
@@ -113,6 +211,7 @@ function updateRowContent(row, newSensor, oldSensor) {
         }
     }
 
+    // Обновляем остальные ячейки
     const cells = row.cells;
     if (cells.length >= 6) {
         cells[2].textContent = newSensor.createdAt ? new Date(newSensor.createdAt).toLocaleString() : '-';
@@ -178,6 +277,29 @@ function createRow(s) {
     tokenSpan.addEventListener('mouseleave', (e) => {
         e.target.textContent = s.token ? '••••••••••••••••' : '—';
     });
+
+    // Обработчик клика для копирования
+    tokenSpan.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const token = tokenSpan.dataset.token;
+        if (!token) return;
+        try {
+            await navigator.clipboard.writeText(token);
+            const message = document.createElement('span');
+            message.className = 'copy-message';
+            message.textContent = 'Скопировано';
+            message.style.cssText = 'margin-left: 8px; color: #4caf50; font-size: 12px; opacity: 1; transition: opacity 0.5s;';
+            tokenCell.appendChild(message);
+            setTimeout(() => {
+                message.style.opacity = '0';
+                setTimeout(() => message.remove(), 500);
+            }, 1500);
+        } catch (err) {
+            console.error('Ошибка копирования:', err);
+            alert('Не удалось скопировать токен');
+        }
+    });
+
     tokenCell.appendChild(tokenSpan);
     row.appendChild(tokenCell);
 
@@ -248,10 +370,8 @@ async function toggleDelete(sensorId, deleted) {
         const sensor = sensorsData.find(s => s.sensorId === sensorId);
         if (sensor) {
             sensor.deleted = deleted;
-            const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
-            if (row) {
-                updateRowContent(row, sensor, { ...sensor, deleted: !deleted });
-            }
+            // После изменения данных применяем сортировку и перерисовываем
+            applySort();
         }
     } catch (e) {
         console.error('Ошибка операции toggleDelete:', e);
@@ -287,9 +407,8 @@ async function permanentDelete(sensorId) {
         }
         showToast('Датчик удалён навсегда');
 
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
-        if (row) row.remove();
         sensorsData = sensorsData.filter(s => s.sensorId !== sensorId);
+        applySort(); // перерисовываем после удаления
     } catch (e) {
         console.error('Ошибка операции permanentDelete:', e);
         showToast('Ошибка: ' + e.message);
@@ -348,8 +467,7 @@ async function registerNewSensor() {
             deleted: false
         };
         sensorsData.push(newSensor);
-        const tbody = document.getElementById('sensorManagerBody');
-        if (tbody) tbody.appendChild(createRow(newSensor));
+        applySort(); // перерисовываем с сортировкой
     } catch (e) {
         console.error('Ошибка регистрации:', e);
         showToast('Ошибка: ' + e.message);
@@ -373,6 +491,25 @@ export function initSensorManager() {
             if (e.target === modal) closeSensorManager();
         });
     }
+
+    // Настройка сортировки по заголовкам
+    const ths = document.querySelectorAll('#sensorManagerModal thead th');
+    const columns = ['sensorId', 'token', 'createdAt', 'lastSeen', 'registerIp', 'deleted'];
+    ths.forEach((th, index) => {
+        if (index >= columns.length) return; // последний столбец "Действия" не сортируем
+        th.dataset.column = columns[index];
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', () => {
+            const col = columns[index];
+            if (sortColumn === col) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = col;
+                sortDirection = 'asc';
+            }
+            applySort();
+        });
+    });
 }
 
 // ==================== УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ====================
