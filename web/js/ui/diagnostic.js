@@ -229,9 +229,9 @@ function renderSensors(div) {
     // Генерируем HTML таблицы
     let html = '<table class="diagnostic-table">';
     html += '<thead><tr>';
-    html += `<th data-column="id" class="sortable ${sensorsSortColumn === 'id' ? 'sort-' + sensorsSortDirection : ''}" style="cursor: pointer;">ID</th>`;
-    html += `<th data-column="lastSeen" class="sortable ${sensorsSortColumn === 'lastSeen' ? 'sort-' + sensorsSortDirection : ''}" style="cursor: pointer;">Последняя активность</th>`;
-    html += `<th data-column="status" class="sortable ${sensorsSortColumn === 'status' ? 'sort-' + sensorsSortDirection : ''}" style="cursor: pointer;">Статус</th>`;
+    html += `<th data-column="id" class="sortable ${sensorsSortColumn === 'id' ? 'sort-' + sensorsSortDirection : ''}">ID</th>`;
+    html += `<th data-column="lastSeen" class="sortable ${sensorsSortColumn === 'lastSeen' ? 'sort-' + sensorsSortDirection : ''}">Последняя активность</th>`;
+    html += `<th data-column="status" class="sortable ${sensorsSortColumn === 'status' ? 'sort-' + sensorsSortDirection : ''}">Статус</th>`;
     html += '</tr></thead><tbody>';
 
     sortedSensors.forEach(s => {

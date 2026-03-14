@@ -6,6 +6,8 @@ import java.util.*;
 
 public class Diagnostic {
 
+    private static final long DIAG_ONLINE_TIMEOUT_MS = 10_000; // 10 секунд
+
     public static Map<String, Object> getHealth() {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("timestamp", System.currentTimeMillis());
@@ -63,9 +65,14 @@ public class Diagnostic {
             s.put("id", e.getKey());
             s.put("lastSeen", e.getValue());
             long age = now - e.getValue();
-            if (age <= DataStore.SENSOR_TTL_MS) s.put("status", "ONLINE");
-            else if (age <= 3 * DataStore.SENSOR_TTL_MS) s.put("status", "STALE");
-            else s.put("status", "DEAD");
+
+            if (age <= DIAG_ONLINE_TIMEOUT_MS) {
+                s.put("status", "ONLINE");
+            } else if (age <= DataStore.SENSOR_TTL_MS) {
+                s.put("status", "STALE");
+            } else {
+                s.put("status", "DEAD");
+            }
             sensorsStatus.add(s);
         }
         report.put("sensors", sensorsStatus);

@@ -348,6 +348,10 @@ th.sort-desc::after {
 .status-stale { color: #ff9800; }
 .status-dead { color: #f44336; }
 
+th.sortable {
+    cursor: pointer;
+}
+
 .audit-log {
     max-height: 400px;
     overflow-y: auto;
