@@ -42,7 +42,7 @@ public class Security {
                         throw new IllegalStateException("Файл reg.key пуст");
                     }
                 } catch (IOException e) {
-                    throw new IllegalStateException("Не удалось прочитать файл с ключом регистрации датчиков: " + keyFile.toAbsolutePath(), e);
+                    throw new IllegalStateException("Не удалось прочитать файл с ключом регистрации контроллеров: " + keyFile.toAbsolutePath(), e);
                 }
             } else {
                 throw new IllegalStateException("SENSOR_REGISTER_KEY не задан ни в переменной окружения среды разработки, ни в файле reg.key");

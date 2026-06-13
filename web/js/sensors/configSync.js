@@ -16,7 +16,7 @@ export async function syncConfigInitial() {
 
     for (const [sensorId, varSet] of Object.entries(ipMap)) {
         if (config.sensors.length >= MAX_SENSORS) {
-            console.warn('Достигнут лимит датчиков');
+            console.warn('Достигнут лимит контроллеров');
             break;
         }
 
@@ -59,7 +59,7 @@ export async function syncNewSensors() {
 
     for (const [sensorId, varSet] of Object.entries(ipMap)) {
         if (config.sensors.length >= MAX_SENSORS) {
-            console.warn('Достигнут лимит датчиков');
+            console.warn('Достигнут лимит контроллеров');
             break;
         }
 
@@ -96,9 +96,9 @@ export async function syncNewSensors() {
     if (updated) {
         if (hasPermission(PERMISSIONS.SAVE_CONFIG)) {
             scheduleSave();
-            showToast('✅ Добавлены новые датчики');
+            showToast('✅ Добавлены новые контроллеры');
         } else {
-            showToast('⚠️ Найдены новые датчики (нет прав на сохранение)');
+            showToast('⚠️ Найдены новые контроллеры (нет прав на сохранение)');
         }
         updateSensorPanel(true);
         updateDevicePanel(true);

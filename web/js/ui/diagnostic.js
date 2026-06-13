@@ -126,7 +126,7 @@ function renderDataStore(div) {
     html += `<tr><td>Размер очереди</td><td>${ds.queueSize} / ${ds.queueLimit} (${queuePercent}%)</td></tr>`;
     html += `<tr><td>Отброшено точек</td><td>${ds.droppedPoints}</td></tr>`;
     html += `<tr><td>Активных метрик</td><td>${ds.activeMetrics}</td></tr>`;
-    html += `<tr><td>Активных датчиков</td><td>${ds.activeSensors}</td></tr>`;
+    html += `<tr><td>Активных контроллеров</td><td>${ds.activeSensors}</td></tr>`;
     html += '</table>';
     div.innerHTML = html;
 }
@@ -219,7 +219,7 @@ function handleSensorsHeaderClick(column) {
 function renderSensors(div) {
     const sensors = diagData.sensors || [];
     if (sensors.length === 0) {
-        div.innerHTML = '<p>Нет данных о датчиках</p>';
+        div.innerHTML = '<p>Нет данных о контроллерах</p>';
         return;
     }
 

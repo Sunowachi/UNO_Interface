@@ -162,7 +162,7 @@ function addVariableRowWithValues(sensorId, varName) {
     const row = document.createElement('div');
     row.className = 'export-var-row';
     row.innerHTML = `
-        <input type="text" placeholder="ID датчика" class="export-sensor-id" value="${sensorId}" autocomplete="off">
+        <input type="text" placeholder="ID контроллера" class="export-sensor-id" value="${sensorId}" autocomplete="off">
         <input type="text" placeholder="Переменная" class="export-var-name" value="${varName}" autocomplete="off">
         <button class="btn btn-small remove-var-row" type="button">✖</button>
     `;
@@ -195,7 +195,7 @@ function addVariableRow() {
     const row = document.createElement('div');
     row.className = 'export-var-row';
     row.innerHTML = `
-        <input type="text" placeholder="ID датчика" class="export-sensor-id" autocomplete="off">
+        <input type="text" placeholder="ID контроллера" class="export-sensor-id" autocomplete="off">
         <input type="text" placeholder="Переменная" class="export-var-name" autocomplete="off">
         <button class="btn btn-small remove-var-row" type="button">✖</button>
     `;
@@ -253,7 +253,7 @@ async function handleDownload() {
 
     const rows = container.querySelectorAll('.export-var-row');
     if (rows.length === 0) {
-        showToast('Добавьте хотя бы один датчик');
+        showToast('Добавьте хотя бы один контроллер и переменную');
         return;
     }
 

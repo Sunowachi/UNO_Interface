@@ -114,7 +114,7 @@ export function updateAddButtonVisibility() {
             addBtn = document.createElement('button');
             addBtn.id = 'addSensorBtn';
             addBtn.className = 'btn btn-full';
-            addBtn.innerHTML = '➕ Добавить датчик';
+            addBtn.innerHTML = '➕ Добавить контроллер';
             addBtn.addEventListener('click', onAddSensorClick);
             footer.appendChild(addBtn);
         }
@@ -128,7 +128,7 @@ export function updateAddButtonVisibility() {
             manageBtn = document.createElement('button');
             manageBtn.id = 'manageSensorsBtn';
             manageBtn.className = 'btn btn-full';
-            manageBtn.innerHTML = '⚙️ Регистрация датчиков';
+            manageBtn.innerHTML = '⚙️ Регистрация контроллеров';
             manageBtn.addEventListener('click', () => {
                 import('./sensorManager.js').then(m => m.openSensorManager());
             });
@@ -184,7 +184,7 @@ export function updateSensorPanel(forceRebuild = false) {
     if (visibleSensors.length === 0) {
         list.innerHTML = '';
         const li = document.createElement('li');
-        li.textContent = 'Нет настроенных датчиков';
+        li.textContent = 'Нет настроенных контроллеров';
         li.style.color = '#777';
         list.appendChild(li);
         setCurrentSensor(null);
@@ -243,7 +243,7 @@ export function updateSensorPanel(forceRebuild = false) {
             const editBtn = document.createElement('button');
             editBtn.textContent = '✏️';
             editBtn.style.cssText = 'border: none; background: transparent; cursor: pointer;';
-            editBtn.title = 'Редактировать датчик';
+            editBtn.title = 'Редактировать контроллер';
             editBtn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 openEditModal(sCfg.id);
@@ -254,7 +254,7 @@ export function updateSensorPanel(forceRebuild = false) {
             const refIcon = document.createElement('span');
             refIcon.className = 'sensor-ref-icon';
             refIcon.textContent = '🔗';
-            refIcon.title = 'Импортирует данные других датчиков';
+            refIcon.title = 'Импортирует данные других контроллеров';
             li.appendChild(refIcon);
         }
 

@@ -24,7 +24,7 @@ export async function openSensorManager() {
     }
     managerModal = document.getElementById('sensorManagerModal');
     if (!managerModal) {
-        console.error('Модальное окно управления датчиками не найдено');
+        console.error('Модальное окно управления контроллерами не найдено');
         return;
     }
     await loadSensors();
@@ -64,8 +64,8 @@ async function loadSensors(silent = false) {
         applySort(); // применяем текущую сортировку и перерисовываем
     } catch (e) {
         if (!silent) {
-            console.error('Ошибка загрузки датчиков:', e);
-            showToast('Не удалось загрузить список датчиков');
+            console.error('Ошибка загрузки контроллеров:', e);
+            showToast('Не удалось загрузить список контроллеров');
         }
     }
 }
@@ -207,7 +207,7 @@ function updateRowContent(row, newSensor, oldSensor) {
         } else {
             tokenSpan.textContent = '—';
             tokenSpan.dataset.token = '';
-            tokenSpan.title = 'Токен не сохранён (старый датчик)';
+            tokenSpan.title = 'Токен не сохранён (старый контроллер)';
         }
     }
 
@@ -268,7 +268,7 @@ function createRow(s) {
         tokenSpan.title = 'Наведите для показа токена';
     } else {
         tokenSpan.textContent = '—';
-        tokenSpan.title = 'Токен не сохранён (старый датчик)';
+        tokenSpan.title = 'Токен не сохранён (старый контроллер)';
     }
     tokenSpan.addEventListener('mouseenter', (e) => {
         const token = e.target.dataset.token;
@@ -365,7 +365,7 @@ async function toggleDelete(sensorId, deleted) {
             const text = await res.text();
             throw new Error(`Ошибка ${res.status}: ${text}`);
         }
-        showToast(deleted ? 'Датчик удалён' : 'Датчик восстановлен');
+        showToast(deleted ? 'Контроллер удалён' : 'Контроллер восстановлен');
 
         const sensor = sensorsData.find(s => s.sensorId === sensorId);
         if (sensor) {
@@ -385,7 +385,7 @@ async function toggleDelete(sensorId, deleted) {
 /** Полное удаление датчика из БД */
 async function permanentDelete(sensorId) {
     if (actionInProgress) return;
-    if (!confirm(`Вы уверены, что хотите навсегда удалить датчик ${sensorId}? Это действие необратимо.`)) return;
+    if (!confirm(`Вы уверены, что хотите навсегда удалить контроллер ${sensorId}? Это действие необратимо.`)) return;
     actionInProgress = true;
     try {
         const res = await fetch('/admin/sensor/delete-permanent', {
@@ -405,7 +405,7 @@ async function permanentDelete(sensorId) {
             const text = await res.text();
             throw new Error(`Ошибка ${res.status}: ${text}`);
         }
-        showToast('Датчик удалён навсегда');
+        showToast('Контроллер удалён навсегда');
 
         sensorsData = sensorsData.filter(s => s.sensorId !== sensorId);
         applySort(); // перерисовываем после удаления
@@ -423,7 +423,7 @@ async function registerNewSensor() {
     const input = document.getElementById('newSensorId');
     const sensorId = input.value.trim();
     if (!sensorId) {
-        showToast('Введите ID датчика');
+        showToast('Введите ID контроллера');
         return;
     }
     if (!/^[a-zA-Z0-9_-]{3,64}$/.test(sensorId)) {
@@ -447,7 +447,7 @@ async function registerNewSensor() {
             return;
         }
         if (res.status === 409) {
-            showToast('Датчик с таким ID уже существует');
+            showToast('Контроллер с таким ID уже существует');
             return;
         }
         if (!res.ok) {
@@ -455,7 +455,7 @@ async function registerNewSensor() {
             throw new Error(`Ошибка ${res.status}: ${text}`);
         }
         const data = await res.json();
-        showToast(`✅ Датчик зарегистрирован!`);
+        showToast(`✅ Контроллер зарегистрирован!`);
         input.value = '';
 
         const newSensor = {

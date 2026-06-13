@@ -35,7 +35,7 @@ export function openEditModal(id) {
 
     let sCfg = config.sensors.find(s => String(s.id) === String(id));
     if (!sCfg) {
-        sCfg = { id, name: 'Датчик ' + id, vars: '', deleted: false };
+        sCfg = { id, name: 'Контроллер ' + id, vars: '', deleted: false };
         config.sensors.push(sCfg);
     }
 
@@ -58,7 +58,7 @@ export function openEditModal(id) {
         const hint = document.createElement('small');
         hint.id = 'sensorVarsHint';
         hint.style.cssText = 'color: var(--color-text-secondary); display: block; margin-top: 4px;';
-        hint.textContent = 'Для импорта данных из другого датчика используйте формат ID_переменная (например, Sensor1_temp)';
+        hint.textContent = 'Для импорта данных из другого контроллера используйте формат ID_переменная (например, Sensor1_temp)';
         sensorVarsInput.parentNode.insertBefore(hint, sensorVarsInput.nextSibling);
     }
 
@@ -129,7 +129,7 @@ export function buildVarSettingsUI(sCfg) {
             const sourceInfo = document.createElement('span');
             sourceInfo.className = 'var-source-info';
             sourceInfo.textContent = `↳ от ${sourceName}`;
-            sourceInfo.title = `Настройки унаследованы от датчика «${sourceName}»`;
+            sourceInfo.title = `Настройки унаследованы от контроллера «${sourceName}»`;
 
             const refIcon = document.createElement('span');
             refIcon.className = 'var-ref-icon';
@@ -150,7 +150,7 @@ export function buildVarSettingsUI(sCfg) {
             varSpan.textContent = varName;
             varSpan.className = 'var-name-label';
             varSpan.setAttribute('autocomplete', 'off');
-            varSpan.title = 'Имя переменной (из данных датчика)';
+            varSpan.title = 'Имя переменной (из данных контроллера)';
 
             const labelInput = document.createElement('input');
             labelInput.type = 'text';
@@ -324,7 +324,7 @@ export function buildVarSettingsUI(sCfg) {
                 const refIcon = document.createElement('span');
                 refIcon.className = 'var-ref-icon';
                 refIcon.textContent = '🔗';
-                refIcon.title = 'Настройки унаследованы от исходного датчика';
+                refIcon.title = 'Настройки унаследованы от исходного контроллера';
                 row.appendChild(refIcon);
             }
 
@@ -356,7 +356,7 @@ export async function onAddSensorClick() {
     });
     const newId = maxId + 1;
 
-    const newSensor = { id: newId, name: 'Датчик ' + newId, vars: '', deleted: false };
+    const newSensor = { id: newId, name: 'Контроллер ' + newId, vars: '', deleted: false };
     config.sensors.push(newSensor);
     setCurrentSensor(newId);
 
@@ -381,7 +381,7 @@ export async function onSaveSensorClick() {
     let newId = (sensorIdInput?.value.trim() || String(sCfg.id));
 
     if (!/^[a-zA-Z0-9_-]+$/.test(newId)) {
-        alert('ID датчика может содержать только буквы, цифры, "_" и "-"');
+        alert('ID контроллера может содержать только буквы, цифры, "_" и "-"');
         return;
     }
 
@@ -391,7 +391,7 @@ export async function onSaveSensorClick() {
 
     const conflict = config.sensors.find(s => String(s.id) === newId && s !== sCfg);
     if (conflict) {
-        alert(`❌ Датчик с ID «${newId}» уже существует. Укажите уникальный ID.`);
+        alert(`❌ Контроллер с ID «${newId}» уже существует. Укажите уникальный ID.`);
         return;
     }
 
@@ -404,8 +404,8 @@ export async function onSaveSensorClick() {
     const sensorVarsInput = document.getElementById('sensorVars');
 
     sCfg.name = sensorNameInput
-        ? (sensorNameInput.value.trim() || ('Датчик ' + newId))
-        : ('Датчик ' + newId);
+        ? (sensorNameInput.value.trim() || ('Контроллер ' + newId))
+        : ('Контроллер ' + newId);
 
     const rawVars = sensorVarsInput ? sensorVarsInput.value.trim() : '';
     if (!/^[a-zA-Z0-9_,\s-]*$/.test(rawVars)) {
@@ -423,7 +423,7 @@ export async function onSaveSensorClick() {
             }
             const refSensorId = parts[0];
             if (!sensorExists(refSensorId)) {
-                alert(`Датчик "${refSensorId}" не найден. Создайте его или исправьте ссылку.`);
+                alert(`Контроллер "${refSensorId}" не найден. Создайте его или исправьте ссылку.`);
                 return;
             }
         }
@@ -514,7 +514,7 @@ export async function onDeleteSensorClick() {
     if (editingId == null) return;
     const idx = config.sensors.findIndex(s => String(s.id) === String(editingId));
     if (idx === -1) return;
-    const name = config.sensors[idx].name || ('Датчик ' + editingId);
+    const name = config.sensors[idx].name || ('Контроллер ' + editingId);
     if (!confirm(`Удалить «${name}»?`)) return;
 
     config.sensors.splice(idx, 1);

@@ -480,7 +480,7 @@ public class Database {
                 result.add(row);
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Ошибка получения списка датчиков", e);
+            throw new RuntimeException("Ошибка получения списка контроллеров", e);
         } finally {
             release(c);
         }

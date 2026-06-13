@@ -17,9 +17,9 @@
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "°C",
-          "lowLimit": 15,
-          "warnLimit": 26,
-          "alarmLimit": 38,
+          "lowLimit": null,
+          "warnLimit": 28,
+          "alarmLimit": 32,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true

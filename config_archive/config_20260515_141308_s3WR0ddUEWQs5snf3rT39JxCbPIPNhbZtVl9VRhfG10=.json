@@ -17,9 +17,9 @@
           "color": "#FF5252",
           "rawColor": "#B0BEC5",
           "unit": "°C",
-          "lowLimit": 15,
-          "warnLimit": 26,
-          "alarmLimit": 38,
+          "lowLimit": null,
+          "warnLimit": 28,
+          "alarmLimit": 32,
           "processing": "moving_avg",
           "showRaw": true,
           "showProcessed": true
@@ -144,15 +144,15 @@
         {
           "var": "vibration",
           "label": "Вибрация",
-          "color": "#26C6DA",
+          "color": "#FF5252",
           "rawColor": "#B0BEC5",
-          "unit": "mm/s",
+          "unit": "",
           "lowLimit": null,
           "warnLimit": null,
           "alarmLimit": null,
-          "processing": "moving_avg",
+          "processing": "none",
           "showRaw": true,
-          "showProcessed": true
+          "showProcessed": false
         },
         {
           "var": "temp",

@@ -13,7 +13,7 @@
         <!-- Верхняя панель с заголовком и кнопкой выхода -->
         <div class="top-bar">
             <div class="title-group">
-                <h1>Показания датчиков</h1>
+                <h1>Показания контроллеров</h1>
                 <button id="logoutBtn" class="btn btn-secondary logout-btn" title="Выйти из аккаунта" hidden>Выйти</button>
             </div>
         </div>
@@ -46,7 +46,7 @@
             <!-- ========== ПАНЕЛЬ УПРАВЛЕНИЯ ДАТЧИКАМИ ========== -->
             <div class="card" id="sensorPanel">
                 <div class="panel-header">
-                    <h3>Датчики</h3>
+                    <h3>Контроллеры</h3>
                 </div>
                 <div class="sensor-list-container">
                     <ul id="sensorList" class="sensor-list"></ul>
@@ -67,15 +67,15 @@
     <!-- Окно редактирования датчика -->
     <div id="editModalBackdrop" class="modal-backdrop" autocomplete="off">
         <div class="modal">
-            <h3>Редактирование датчика</h3>
+            <h3>Редактирование контроллера</h3>
             <div class="modal-content-scroll">
                 <label>
-                    ID датчика:<br>
+                    ID контроллера:<br>
                     <input id="sensorId" class="input-full" autocomplete="off">
                 </label>
                 <br><br>
                 <label>
-                    Название датчика:<br>
+                    Название контроллера:<br>
                     <input id="sensorName" class="input-full" autocomplete="off">
                 </label>
                 <br><br>
@@ -140,7 +140,7 @@
                 <!-- Кнопки управления строками -->
                 <div class="export-buttons-row">
                     <button id="populateFromDevicesBtn" class="btn btn-small btn-secondary" type="button">📋 Загрузить из устройств</button>
-                    <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить датчик/переменную</button>
+                    <button id="addExportVarRow" class="btn btn-small btn-secondary" type="button">➕ Добавить контроллер/переменную</button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -167,16 +167,16 @@
     <!-- Модальное окно управления датчиками (администрирование) -->
     <div id="sensorManagerModal" class="modal-backdrop">
         <div class="modal modal-large">
-            <h3>Управление датчиками</h3>
+            <h3>Управление контроллерами</h3>
             <div class="modal-content-scroll">
                 <div class="sensor-manager-controls">
-                    <input type="text" id="newSensorId" placeholder="ID нового датчика" class="input-full" autocomplete="off">
+                    <input type="text" id="newSensorId" placeholder="ID нового контроллера" class="input-full" autocomplete="off">
                     <button id="registerSensorBtn" class="btn btn-primary">Зарегистрировать</button>
                 </div>
                 <table class="sensor-manager-table">
                     <thead>
                     <tr>
-                        <th>ID датчика</th>
+                        <th>ID контроллера</th>
                         <th>Токен</th>
                         <th>Создан</th>
                         <th>Последняя активность</th>
@@ -239,7 +239,7 @@
                 <button class="tab-button" data-tab="datastore">DataStore</button>
                 <button class="tab-button" data-tab="disk">Диск</button>
                 <button class="tab-button" data-tab="system">Система</button>
-                <button class="tab-button" data-tab="sensors">Датчики</button>
+                <button class="tab-button" data-tab="sensors">Контроллеры</button>
                 <button class="tab-button" data-tab="audit">Аудит</button>
             </div>
             <div class="modal-content-scroll" id="diagnosticContent">

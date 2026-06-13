@@ -1,0 +1,30 @@
+==================================================== 
+Запуск скрипта 18.05.2026 14:00:50,68 
+==================================================== 
+"Начало выполнения скрипта" 
+"Проверка наличия java (для запуска)..." 
+"java найдена. Версия:" 
+java version "25.0.1" 2025-10-21 LTS
+Java(TM) SE Runtime Environment (build 25.0.1+8-LTS-27)
+Java HotSpot(TM) 64-Bit Server VM (build 25.0.1+8-LTS-27, mixed mode, sharing)
+"Вывод java -version:" 
+"Проверка наличия javac (компилятора)..." 
+"javac найден. Версия:" 
+javac 25.0.1
+"Проверка папки lib..." 
+"  Добавлен JAR: lib\postgresql-42.7.8.jar" 
+"Сбор списка исходных файлов Java..." 
+"Найдены исходные файлы (первые 5):" 
+"C:\Users\theda\OneDrive\Desktop\ВКР\Program\Java_Interface\MonitoriX\src\Audit.java" 
+"C:\Users\theda\OneDrive\Desktop\ВКР\Program\Java_Interface\MonitoriX\src\ComtradeExporter.java" 
+"C:\Users\theda\OneDrive\Desktop\ВКР\Program\Java_Interface\MonitoriX\src\Config.java" 
+"C:\Users\theda\OneDrive\Desktop\ВКР\Program\Java_Interface\MonitoriX\src\Database.java" 
+"C:\Users\theda\OneDrive\Desktop\ВКР\Program\Java_Interface\MonitoriX\src\DataStore.java" 
+"Компиляция Java файлов..." 
+"Компиляция успешно завершена." 
+"Запуск приложения (main class: Web)..." 
+"Classpath: classes;lib\postgresql-42.7.8.jar" 
+==================================================== 
+Запуск Java-процесса: 
+java -cp "classes;lib\postgresql-42.7.8.jar" Web 
+==================================================== 
